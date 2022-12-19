@@ -1,0 +1,5 @@
+/build/
+*.d
+*.o
+/strfry
+/strfry-db/*.mdb

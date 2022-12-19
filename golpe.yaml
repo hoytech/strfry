@@ -1,0 +1,110 @@
+appName: strfry
+
+quadrable: true
+
+flatBuffers: |
+    include "../fbs/nostr-index.fbs";
+
+tables:
+  Event:
+    tableId: 1
+
+    primaryKey: quadId
+
+    fields:
+      - name: quadId
+      - name: receivedAt # microseconds
+      - name: flat
+        type: ubytes
+        nestedFlat: NostrIndex.Event
+
+    indices:
+      created_at:
+        integer: true
+      id:
+        comparator: StringUint64
+      pubkey:
+        comparator: StringUint64
+      kind:
+        comparator: Uint64Uint64
+      pubkeyKind:
+        comparator: StringUint64Uint64
+      tag:
+        comparator: StringUint64
+        multi: true
+      deletion: # eventId, pubkey
+        multi: true
+
+    indexPrelude: |
+        auto *flat = v.flat_nested();
+        created_at = flat->created_at();
+        uint64_t indexTime = *created_at;
+
+        id = makeKey_StringUint64(sv(flat->id()), indexTime);
+        pubkey = makeKey_StringUint64(sv(flat->pubkey()), indexTime);
+        kind = makeKey_Uint64Uint64(flat->kind(), indexTime);
+        pubkeyKind = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), indexTime);
+
+        for (const auto &tagPair : *(flat->tags())) {
+            auto tagName = (char)tagPair->key();
+            auto tagVal = sv(tagPair->val());
+            tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
+            if (flat->kind() == 5 && tagName == 'e') deletion.push_back(std::string(tagVal) + std::string(sv(flat->pubkey())));
+        }
+
+config:
+  - name: db
+    default: "./strfry-db/"
+    noReload: true
+
+  - name: relay__port
+    default: 7777
+    noReload: true
+  - name: relay__bind
+    default: "127.0.0.1"
+    noReload: true
+
+  - name: relay__info__name
+    default: "strfry default"
+  - name: relay__info__description
+    default: "This is a strfry instance."
+  - name: relay__info__pubkey
+    default: "unset"
+  - name: relay__info__contact
+    default: "unset"
+
+  - name: relay__numThreads__ingester
+    default: 3
+    noReload: true
+  - name: relay__numThreads__reqWorker
+    default: 3
+    noReload: true
+  - name: relay__numThreads__reqMonitor
+    default: 3
+    noReload: true
+  - name: relay__numThreads__yesstr
+    default: 1
+    noReload: true
+
+  - name: relay__maxWebsocketPayloadSize
+    default: 131072
+    noReload: true
+  - name: relay__queryTimesliceBudgetMicroseconds
+    default: 10000
+  - name: relay__maxFilterLimit
+    default: 500
+
+  - name: events__rejectEventsNewerThanSeconds
+    default: 900 # 15 mins
+  - name: events__rejectEventsOlderThanSeconds
+    default: 604800 # 1 week
+  - name: events__rejectEphemeralEventsOlderThanSeconds
+    default: 60
+  - name: events__ephemeralEventsLifetimeSeconds
+    default: 300
+  - name: events__maxEventSize
+    default: 65536
+  - name: events__maxNumTags
+    default: 250
+  - name: events__maxTagValSize
+    default: 128

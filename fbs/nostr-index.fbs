@@ -1,0 +1,17 @@
+namespace NostrIndex;
+
+table Tag {
+    key: uint8;
+    val: [ubyte];
+}
+
+table Event {
+    id: [ubyte];
+    pubkey: [ubyte];
+    created_at: uint64;
+    kind: uint64;
+    tags: [Tag];
+}
+
+table Empty {}
+root_type Empty;
