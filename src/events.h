@@ -1,6 +1,5 @@
 #pragma once
 
-#include <openssl/sha.h>
 #include <secp256k1_schnorrsig.h>
 
 #include "golpe.h"

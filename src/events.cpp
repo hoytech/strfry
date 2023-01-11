@@ -1,5 +1,6 @@
-#include "events.h"
+#include <openssl/sha.h>
 
+#include "events.h"
 
 
 std::string nostrJsonToFlat(const tao::json::value &v) {
@@ -62,12 +63,9 @@ std::string nostrHash(const tao::json::value &origJson) {
     std::string encoded = tao::json::to_string(arr);
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, encoded.data(), encoded.size());
-    SHA256_Final(hash, &sha256);
+    SHA256(reinterpret_cast<unsigned char*>(encoded.data()), encoded.size(), hash);
 
-    return std::string(((char*)hash), SHA256_DIGEST_LENGTH);
+    return std::string(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
 }
 
 bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view hash, std::string_view pubkey) {
