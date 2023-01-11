@@ -6,10 +6,14 @@ features
     * way to close sync request
     * limit on number of concurrent sync requests
     * full-db scan limited by since/until
-  config for compression
+  bool values in config
+    config for compression
+    config for TCP keepalive
+  db versioning
+  document config options, detailed default config file
   less verbose default logging
-  nice new config "units" feature, is 1d instead of 86400
-  make it easier for a thread to setup a quadrable object
+  nice new config "units" feature, ie 1d instead of 86400
+  make it easier for a thread to setup a quadrable env
   opt: PubkeyKind scans could be done index-only
 
 rate limits
