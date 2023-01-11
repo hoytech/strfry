@@ -117,7 +117,7 @@ strfry is built on the embedded [LMDB](https://www.symas.com/lmdb) database (usi
 
 Database records are serialised with [Flatbuffers](https://google.github.io/flatbuffers/) serialisation, which allows fast and zero-copy access to individual fields within the records. A [RasgueaDB](https://github.com/hoytech/rasgueadb) layer is used for maintaining indices and executing queries.
 
-The query engine is quite a bit less flexible than a general-purpose SQL engine, however the types of queries that can be performed via the nostr protocol are fairly constrained, so we can ensure that almost all queries have good index support. All possible queries plans are determined at compile-time, so there is no SQL generation/parsing overhead, or risk of SQL injection.
+The query engine is quite a bit less flexible than a general-purpose SQL engine, however the types of queries that can be performed via the nostr protocol are fairly constrained, so we can ensure that almost all queries have good index support. All possible query plans are determined at compile-time, so there is no SQL generation/parsing overhead, or risk of SQL injection.
 
 When an event is inserted, indexable data (id, pubkey, tags, kind, and created_at) is loaded into a flatbuffers object. Signatures and non-indexed tags are removed, along with recommended relay fields, etc, to keep the record size minimal (and therefore improve cache usage). The full event's raw JSON is stored separately.
 
@@ -153,7 +153,7 @@ The Websocket thread does however handle compression and TLS, if configured. In 
 
 If supported by the client, compression can reduce bandwidth consumption and improve latency.
 
-Compression can run in two modes, either "per-message" or "sliding-window". Per-message uses much less memory, but it cannot take advantage of cross-message redundancy. Sliding-window uses more memory for each client, but the compression is typically better since nostr messages contain serially redundancy (subIds, repeated pubkeys and event IDs in subsequent messages, etc).
+Compression can run in two modes, either "per-message" or "sliding-window". Per-message uses much less memory, but it cannot take advantage of cross-message redundancy. Sliding-window uses more memory for each client, but the compression is typically better since nostr messages often contain serial redundancy (subIds, repeated pubkeys and event IDs in subsequent messages, etc).
 
 The CPU usage of compression is typically small enough to make it worth it. However, strfry also supports running multiple independent strfry instances on the same machine (using the same DB backing store). This can distribute the compression overhead over several threads, according to the kernel's `REUSE_PORT` policy.
 
@@ -236,7 +236,7 @@ Whenever a new event is processed, all of its fields are looked up in the variou
 
 For example, for each prefix in the `authors` field in a filter, an entry is added to the `allAuthors` monitor set. When a new event is subsequently detected, the `pubkey` is looked up in `allAuthors` according to a binary search. Then the data-structure is scanned until it stops seeing records that are prefix matches against the `pubkey`. All of these matching records are pointers to corresponding `Filter`s of the REQs that have subscribed to this author. The filters must then be processed to determine if the event satisfies the other parameters of each filter (`since`/`until`/etc).
 
-After comparing the event against each filter detected via the inverted index, that filter is marked as "up-to-date" with this event's ID, whether the filter matched or not. This prevents needlessly re-comparing this index against the same event in the future (in case one of the *other* index lookups matches it). If a filter *does* match, then the entire filter group is marked as up-to-date. This prevents sending the same event multiple times in case multiple filters in a filter group match, and also prevents needlessly comparing other filters in the group against an event that has already been sent.
+After comparing the event against each filter detected via the inverted index, that filter is marked as "up-to-date" with this event's ID, whether the filter matched or not. This prevents needlessly re-comparing this filter against the same event in the future (in case one of the *other* index lookups matches it). If a filter *does* match, then the entire filter group is marked as up-to-date. This prevents sending the same event multiple times in case multiple filters in a filter group match, and also prevents needlessly comparing other filters in the group against an event that has already been sent.
 
 After an event has been processed, all the matching connections and subscription IDs are sent to the Websocket thread along with a single copy of the event's JSON. This prevents intermediate memory bloat that would occur if a copy was created for each subscription.
 
