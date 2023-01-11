@@ -1,16 +1,26 @@
 namespace NostrIndex;
 
-table Tag {
+struct Fixed32Bytes {
+    val: [ubyte:32];
+}
+
+table TagGeneral {
     key: uint8;
     val: [ubyte];
 }
 
+table TagFixed32 {
+    key: uint8;
+    val: Fixed32Bytes;
+}
+
 table Event {
-    id: [ubyte];
-    pubkey: [ubyte];
+    id: Fixed32Bytes;
+    pubkey: Fixed32Bytes;
     created_at: uint64;
     kind: uint64;
-    tags: [Tag];
+    tagsGeneral: [TagGeneral];
+    tagsFixed32: [TagFixed32];
 }
 
 table Empty {}

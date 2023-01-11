@@ -30,6 +30,14 @@ struct ActiveMonitors : NonCopyable {
     std::map<uint64_t, MonitorSet> allKinds;
     MonitorSet allOthers;
 
+    std::string tagSpecBuf = std::string(256, '\0');
+    const std::string &getTagSpec(uint8_t k, std::string_view val) {
+        tagSpecBuf.clear();
+        tagSpecBuf += (char)k;
+        tagSpecBuf += val;
+        return tagSpecBuf;
+    }
+
 
   public:
     void addSub(lmdb::txn &txn, Subscription &&sub, uint64_t currEventId) {
@@ -124,10 +132,15 @@ struct ActiveMonitors : NonCopyable {
             }));
         }
 
-        for (const auto &tag : *flat->tags()) {
-            // FIXME: can avoid this allocation:
-            auto tagSpec = std::string(1, (char)tag->key()) + std::string(sv(tag->val()));
+        for (const auto &tag : *flat->tagsFixed32()) {
+            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
+            processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
+                return tagSpec == val;
+            }));
+        }
 
+        for (const auto &tag : *flat->tagsGeneral()) {
+            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
             processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
                 return tagSpec == val;
             }));
@@ -174,7 +187,7 @@ struct ActiveMonitors : NonCopyable {
             } else if (f.tags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
-                        std::string tagSpec = std::string(1, tagName) + filterSet.at(i);
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto res = allTags.try_emplace(tagSpec);
                         res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                     }
@@ -207,7 +220,7 @@ struct ActiveMonitors : NonCopyable {
             } else if (f.tags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
-                        std::string tagSpec = std::string(1, tagName) + filterSet.at(i);
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto &monSet = allTags.at(tagSpec);
                         monSet.erase(&f);
                         if (monSet.empty()) allTags.erase(tagSpec);

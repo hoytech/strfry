@@ -5,6 +5,11 @@ quadrable: true
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
 
+includes: |
+    inline std::string_view sv(const NostrIndex::Fixed32Bytes *f) {
+        return std::string_view((const char *)f->val()->data(), 32);
+    }
+
 tables:
   Event:
     tableId: 1
@@ -45,7 +50,13 @@ tables:
         kind = makeKey_Uint64Uint64(flat->kind(), indexTime);
         pubkeyKind = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), indexTime);
 
-        for (const auto &tagPair : *(flat->tags())) {
+        for (const auto &tagPair : *(flat->tagsGeneral())) {
+            auto tagName = (char)tagPair->key();
+            auto tagVal = sv(tagPair->val());
+            tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
+        }
+
+        for (const auto &tagPair : *(flat->tagsFixed32())) {
             auto tagName = (char)tagPair->key();
             auto tagVal = sv(tagPair->val());
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));

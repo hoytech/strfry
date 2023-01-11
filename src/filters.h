@@ -190,11 +190,21 @@ struct NostrFilter {
         for (const auto &[tag, filt] : tags) {
             bool foundMatch = false;
 
-            for (const auto &tagPair : *(ev->tags())) {
+            for (const auto &tagPair : *(ev->tagsFixed32())) {
                 auto eventTag = tagPair->key();
                 if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
                     foundMatch = true;
                     break;
+                }
+            }
+
+            if (!foundMatch) {
+                for (const auto &tagPair : *(ev->tagsGeneral())) {
+                    auto eventTag = tagPair->key();
+                    if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
+                        foundMatch = true;
+                        break;
+                    }
                 }
             }
 

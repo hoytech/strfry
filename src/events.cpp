@@ -8,18 +8,17 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
 
     // Extract values from JSON, add strings to builder
 
-    auto loadHexStr = [&](std::string_view k, uint64_t size){
-        auto s = from_hex(v.at(k).get_string(), false);
-        if (s.size() != size) throw herr("unexpected size of hex data");
-        return builder.CreateVector((uint8_t*)s.data(), s.size());
-    };
-
-    auto idPtr = loadHexStr("id", 32);
-    auto pubkeyPtr = loadHexStr("pubkey", 32);
+    auto id = from_hex(v.at("id").get_string(), false);
+    auto pubkey = from_hex(v.at("pubkey").get_string(), false);
     uint64_t created_at = v.at("created_at").get_unsigned();
     uint64_t kind = v.at("kind").get_unsigned();
 
-    std::vector<flatbuffers::Offset<NostrIndex::Tag>> tagPtrs;
+    if (id.size() != 32) throw herr("unexpected id size");
+    if (pubkey.size() != 32) throw herr("unexpected pubkey size");
+
+    std::vector<flatbuffers::Offset<NostrIndex::TagGeneral>> tagsGeneral;
+    std::vector<flatbuffers::Offset<NostrIndex::TagFixed32>> tagsFixed32;
+
     if (v.at("tags").get_array().size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
     for (auto &tagArr : v.at("tags").get_array()) {
         auto &tag = tagArr.get_array();
@@ -29,20 +28,35 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
         if (tagName.size() != 1) continue; // only single-char tags need indexing
 
         auto tagVal = tag.at(1).get_string();
-        if (tagVal.size() < 1 || tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too small/large: ", tagVal.size());
+
         if (tagName == "e" || tagName == "p") {
             tagVal = from_hex(tagVal, false);
-            if (tagVal.size() != 32) throw herr("unexpected size for e/p tag");
-        }
-        auto tagValPtr = builder.CreateVector((uint8_t*)tagVal.data(), tagVal.size());
+            if (tagVal.size() != 32) throw herr("unexpected size for fixed-size tag");
 
-        tagPtrs.push_back(NostrIndex::CreateTag(builder, (uint8_t)tagName[0], tagValPtr));
+            tagsFixed32.emplace_back(NostrIndex::CreateTagFixed32(builder,
+                (uint8_t)tagName[0],
+                (NostrIndex::Fixed32Bytes*)tagVal.data()
+            ));
+        } else {
+            if (tagVal.size() < 1 || tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too small/large: ", tagVal.size());
+
+            tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
+                (uint8_t)tagName[0],
+                builder.CreateVector((uint8_t*)tagVal.data(), tagVal.size())
+            ));
+        }
     }
-    auto tagsPtr = builder.CreateVector<flatbuffers::Offset<NostrIndex::Tag>>(tagPtrs);
 
     // Create flatbuffer
 
-    auto eventPtr = NostrIndex::CreateEvent(builder, idPtr, pubkeyPtr, created_at, kind, tagsPtr);
+    auto eventPtr = NostrIndex::CreateEvent(builder,
+        (NostrIndex::Fixed32Bytes*)id.data(),
+        (NostrIndex::Fixed32Bytes*)pubkey.data(),
+        created_at,
+        kind,
+        builder.CreateVector<flatbuffers::Offset<NostrIndex::TagGeneral>>(tagsGeneral),
+        builder.CreateVector<flatbuffers::Offset<NostrIndex::TagFixed32>>(tagsFixed32)
+    );
 
     builder.Finish(eventPtr);
 
@@ -212,7 +226,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
         if (flat->kind() == 5) {
             // Deletion event, delete all referenced events
-            for (const auto &tagPair : *(flat->tags())) {
+            for (const auto &tagPair : *(flat->tagsFixed32())) {
                 if (tagPair->key() == 'e') {
                     auto otherEv = lookupEventById(txn, sv(tagPair->val()));
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
