@@ -14,7 +14,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         // Prepare messages
 
-        std::deque<EventToWrite> newEvents;
+        std::vector<EventToWrite> newEvents;
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {

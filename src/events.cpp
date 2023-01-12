@@ -166,22 +166,22 @@ std::string_view getEventJson(lmdb::txn &txn, uint64_t quadId) {
 
 
 
-void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::deque<EventToWrite> &evs) {
+void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs) {
+    std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) { return a.quadKey < b.quadKey; });
+
     auto changes = qdb.change();
 
     std::vector<uint64_t> eventIdsToDelete;
-    std::set<quadrable::Key> seenAlready;
 
-    for (auto &ev : evs) {
+    for (size_t i = 0; i < evs.size(); i++) {
+        auto &ev = evs[i];
+
         const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(ev.flatStr.data());
-        auto quadKey = flatEventToQuadrableKey(flat);
 
-        if (lookupEventById(txn, sv(flat->id())) || seenAlready.contains(quadKey)) {
+        if (lookupEventById(txn, sv(flat->id())) || (i != 0 && ev.quadKey == evs[i-1].quadKey)) {
             ev.status = EventWriteStatus::Duplicate;
             continue;
         }
-
-        seenAlready.insert(quadKey);
 
         if (env.lookup_Event__deletion(txn, std::string(sv(flat->id())) + std::string(sv(flat->pubkey())))) {
             ev.status = EventWriteStatus::Deleted;
@@ -227,7 +227,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::deque<EventToWr
         }
 
         if (ev.status == EventWriteStatus::Pending) {
-            changes.put(quadKey, ev.jsonStr, &ev.nodeId);
+            changes.put(ev.quadKey, ev.jsonStr, &ev.nodeId);
         }
     }
 

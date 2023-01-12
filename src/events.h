@@ -72,9 +72,15 @@ struct EventToWrite {
     std::string jsonStr;
     uint64_t receivedAt;
     void *userData = nullptr;
+    quadrable::Key quadKey;
     uint64_t nodeId = 0;
     EventWriteStatus status = EventWriteStatus::Pending;
+
+    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), userData(userData) {
+        const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
+        quadKey = flatEventToQuadrableKey(flat);
+    }
 };
 
 
-void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::deque<EventToWrite> &evs);
+void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs);

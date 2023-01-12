@@ -35,7 +35,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     std::string line;
     uint64_t processed = 0, added = 0, rejected = 0, dups = 0;
-    std::deque<EventToWrite> newEvents;
+    std::vector<EventToWrite> newEvents;
 
     auto logStatus = [&]{
         LI << "Processed " << processed << " lines. " << added << " added, " << rejected << " rejected, " << dups << " dups";

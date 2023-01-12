@@ -70,7 +70,7 @@ struct WriterPipeline {
                 // Collect a certain amount of records in a batch, push the rest back into the inbox
                 // Pre-filter out dups in a read-only txn as an optimisation
 
-                std::deque<EventToWrite> newEventsToProc;
+                std::vector<EventToWrite> newEventsToProc;
 
                 {
                     auto txn = env.txn_ro();
