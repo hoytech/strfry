@@ -89,6 +89,9 @@ config:
   - name: relay__maxWebsocketPayloadSize
     default: 131072
     noReload: true
+  - name: relay__autoPingSeconds
+    default: 55
+    noReload: true
   - name: relay__queryTimesliceBudgetMicroseconds
     default: 10000
   - name: relay__maxFilterLimit
