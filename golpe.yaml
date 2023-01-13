@@ -54,24 +54,49 @@ tables:
 
 config:
   - name: db
+    desc: "Directory that contains strfry database"
     default: "./strfry-db/"
     noReload: true
 
-  - name: relay__port
-    default: 7777
-    noReload: true
   - name: relay__bind
+    desc: "Interface to listen on. Use 0.0.0.0 to listen on all interfaces"
     default: "127.0.0.1"
+    noReload: true
+  - name: relay__port
+    desc: "Port to open for the nostr websocket protocol"
+    default: 7777
     noReload: true
 
   - name: relay__info__name
+    desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
     default: "strfry default"
   - name: relay__info__description
+    desc: "NIP-11: Detailed information about relay, free-form"
     default: "This is a strfry instance."
   - name: relay__info__pubkey
+    desc: "NIP-11: Administrative nostr pubkey, for contact purposes"
     default: "unset"
   - name: relay__info__contact
+    desc: "NIP-11: Alternative administrative contact (email, website, etc)"
     default: "unset"
+
+  - name: relay__maxWebsocketPayloadSize
+    desc: "Maximum accepted incoming websocket frame size (should be larger than max event and yesstr msg)"
+    default: 131072
+    noReload: true
+  - name: relay__autoPingSeconds
+    desc: "Websocket-level PING message frequency (should be less than any reverse proxy idle timeouts)"
+    default: 55
+    noReload: true
+  - name: relay__enableTcpKeepalive
+    desc: "If TCP keep-alive should be enabled (detect dropped connections to upstream reverse proxy)"
+    default: false
+  - name: relay__queryTimesliceBudgetMicroseconds
+    desc: "How much uninterrupted CPU time a REQ query should get during its DB scan"
+    default: 10000
+  - name: relay__maxFilterLimit
+    desc: "Maximum records that can be returned per filter"
+    default: 500
 
   - name: relay__numThreads__ingester
     default: 3
@@ -86,30 +111,24 @@ config:
     default: 1
     noReload: true
 
-  - name: relay__maxWebsocketPayloadSize
-    default: 131072
-    noReload: true
-  - name: relay__autoPingSeconds
-    default: 55
-    noReload: true
-  - name: relay__enableTcpKeepalive
-    default: false
-  - name: relay__queryTimesliceBudgetMicroseconds
-    default: 10000
-  - name: relay__maxFilterLimit
-    default: 500
-
+  - name: events__maxEventSize
+    desc: "Maximum size of normalised JSON, in bytes"
+    default: 65536
   - name: events__rejectEventsNewerThanSeconds
+    desc: "Events newer than this will be rejected"
     default: 900 # 15 mins
   - name: events__rejectEventsOlderThanSeconds
-    default: 604800 # 1 week
+    desc: "Events older than this will be rejected"
+    default: 94608000 # 3 years
   - name: events__rejectEphemeralEventsOlderThanSeconds
+    desc: "Ephemeral events older than this will be rejected"
     default: 60
   - name: events__ephemeralEventsLifetimeSeconds
+    desc: "Ephemeral events will be deleted from the DB when older than this"
     default: 300
-  - name: events__maxEventSize
-    default: 65536
   - name: events__maxNumTags
+    desc: "Maximum number of tags allowed"
     default: 250
   - name: events__maxTagValSize
+    desc: "Maximum size for tag values, in bytes"
     default: 128
