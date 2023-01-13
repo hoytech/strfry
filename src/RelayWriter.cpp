@@ -41,6 +41,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 written = true;
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";
+                written = true;
             } else if (newEvent.status == EventWriteStatus::Replaced) {
                 message = "replaced: have newer event";
             } else if (newEvent.status == EventWriteStatus::Deleted) {

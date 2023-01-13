@@ -85,7 +85,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, secp256k
         auto existing = lookupEventById(txn, sv(flat->id()));
         if (existing) {
             LI << "Duplicate event, skipping";
-            sendOKResponse(connId, to_hex(sv(flat->id())), false, "duplicate: have this event");
+            sendOKResponse(connId, to_hex(sv(flat->id())), true, "duplicate: have this event");
             return;
         }
     }
