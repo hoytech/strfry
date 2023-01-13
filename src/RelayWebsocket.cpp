@@ -2,6 +2,9 @@
 
 #include "RelayServer.h"
 
+#include "app_git_version.h"
+
+
 
 static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content) {
     std::string output = "HTTP/1.1 200 OK\r\n";
@@ -95,7 +98,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 { "contact", cfg().relay__info__contact },
                 { "supported_nips", tao::json::value::array({ 1, 9, 11, 12, 15, 16, 20, 22 }) },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
-                { "version", GOLPE_GIT_VER },
+                { "version", APP_GIT_VERSION },
             })));
             ver = cfg().version();
         }
