@@ -1,6 +1,6 @@
 appName: strfry
-
 quadrable: true
+onAppStartup: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
@@ -11,6 +11,15 @@ includes: |
     }
 
 tables:
+  ## DB meta-data. Single entry, with id = 1
+  Meta:
+    tableId: 2
+
+    fields:
+      - name: dbVersion
+      - name: endianness
+
+  ## Stored nostr events
   Event:
     tableId: 1
 
