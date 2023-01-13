@@ -82,7 +82,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         ws->setUserData((void*)c);
         connIdToConnection.emplace(connId, c);
 
-        {
+        if (cfg().relay__enableTcpKeepalive) {
             int optval = 1;
             if (setsockopt(ws->getFd(), SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))) {
                 LW << "Failed to enable TCP keepalive: " << strerror(errno);

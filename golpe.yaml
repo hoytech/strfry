@@ -92,6 +92,8 @@ config:
   - name: relay__autoPingSeconds
     default: 55
     noReload: true
+  - name: relay__enableTcpKeepalive
+    default: false
   - name: relay__queryTimesliceBudgetMicroseconds
     default: 10000
   - name: relay__maxFilterLimit
