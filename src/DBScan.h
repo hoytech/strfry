@@ -57,7 +57,7 @@ struct DBScan {
     DBScan(const NostrFilter &f_) : f(f_) {
         remainingLimit = f.limit;
 
-        if (f.ids.size()) {
+        if (f.ids) {
             LI << "ID Scan";
 
             scanState = IdScan{};
@@ -65,20 +65,20 @@ struct DBScan {
             indexDbi = env.dbi_Event__id;
 
             isComplete = [&, state]{
-                return state->index >= f.ids.size();
+                return state->index >= f.ids->size();
             };
             nextFilterItem = [&, state]{
                 state->index++;
             };
             resetResume = [&, state]{
-                state->prefix = f.ids.at(state->index);
+                state->prefix = f.ids->at(state->index);
                 resumeKey = padBytes(state->prefix, 32 + 8, '\xFF');
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool&){
                 return k.starts_with(state->prefix);
             };
-        } else if (f.authors.size() && f.kinds.size()) {
+        } else if (f.authors && f.kinds) {
             LI << "PubkeyKind Scan";
 
             scanState = PubkeyKindScan{};
@@ -86,18 +86,18 @@ struct DBScan {
             indexDbi = env.dbi_Event__pubkeyKind;
 
             isComplete = [&, state]{
-                return state->indexAuthor >= f.authors.size();
+                return state->indexAuthor >= f.authors->size();
             };
             nextFilterItem = [&, state]{
                 state->indexKind++;
-                if (state->indexKind >= f.kinds.size()) {
+                if (state->indexKind >= f.kinds->size()) {
                     state->indexAuthor++;
                     state->indexKind = 0;
                 }
             };
             resetResume = [&, state]{
-                state->prefix = f.authors.at(state->indexAuthor);
-                if (state->prefix.size() == 32) state->prefix += lmdb::to_sv<uint64_t>(f.kinds.at(state->indexKind));
+                state->prefix = f.authors->at(state->indexAuthor);
+                if (state->prefix.size() == 32) state->prefix += lmdb::to_sv<uint64_t>(f.kinds->at(state->indexKind));
                 resumeKey = padBytes(state->prefix, 32 + 8 + 8, '\xFF');
                 resumeVal = MAX_U64;
             };
@@ -106,14 +106,14 @@ struct DBScan {
                 if (state->prefix.size() == 32 + 8) return true;
 
                 ParsedKey_StringUint64Uint64 parsedKey(k);
-                if (parsedKey.n1 <= f.kinds.at(state->indexKind)) return true;
+                if (parsedKey.n1 <= f.kinds->at(state->indexKind)) return true;
 
-                resumeKey = makeKey_StringUint64Uint64(parsedKey.s, f.kinds.at(state->indexKind), MAX_U64);
+                resumeKey = makeKey_StringUint64Uint64(parsedKey.s, f.kinds->at(state->indexKind), MAX_U64);
                 resumeVal = MAX_U64;
                 skipBack = true;
                 return false;
             };
-        } else if (f.authors.size()) {
+        } else if (f.authors) {
             LI << "Pubkey Scan";
 
             scanState = PubkeyScan{};
@@ -121,13 +121,13 @@ struct DBScan {
             indexDbi = env.dbi_Event__pubkey;
 
             isComplete = [&, state]{
-                return state->index >= f.authors.size();
+                return state->index >= f.authors->size();
             };
             nextFilterItem = [&, state]{
                 state->index++;
             };
             resetResume = [&, state]{
-                state->prefix = f.authors.at(state->index);
+                state->prefix = f.authors->at(state->index);
                 resumeKey = padBytes(state->prefix, 32 + 8, '\xFF');
                 resumeVal = MAX_U64;
             };
@@ -160,7 +160,7 @@ struct DBScan {
             keyMatch = [&, state](std::string_view k, bool&){
                 return k.substr(0, state->search.size()) == state->search;
             };
-        } else if (f.kinds.size()) {
+        } else if (f.kinds) {
             LI << "Kind Scan";
 
             scanState = KindScan{};
@@ -168,13 +168,13 @@ struct DBScan {
             indexDbi = env.dbi_Event__kind;
 
             isComplete = [&, state]{
-                return state->index >= f.kinds.size();
+                return state->index >= f.kinds->size();
             };
             nextFilterItem = [&, state]{
                 state->index++;
             };
             resetResume = [&, state]{
-                state->kind = f.kinds.at(state->index);
+                state->kind = f.kinds->at(state->index);
                 resumeKey = std::string(lmdb::to_sv<uint64_t>(state->kind)) + std::string(8, '\xFF');
                 resumeVal = MAX_U64;
             };

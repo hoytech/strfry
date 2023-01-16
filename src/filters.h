@@ -15,11 +15,9 @@ struct FilterSetBytes {
     std::vector<Item> items;
     std::string buf;
 
-    FilterSetBytes() {}
-
     // Sizes are post-hex decode 
 
-    void init(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
+    FilterSetBytes(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
         std::vector<std::string> arr;
 
         uint64_t totalSize = 0;
@@ -31,8 +29,6 @@ struct FilterSetBytes {
             if (itemSize > maxSize) throw herr("filter item too large");
             totalSize += itemSize;
         }
-
-        if (arr.size() == 0) throw herr("empty filter item");
 
         std::sort(arr.begin(), arr.end());
 
@@ -90,14 +86,10 @@ struct FilterSetBytes {
 struct FilterSetUint {
     std::vector<uint64_t> items;
 
-    FilterSetUint() {}
-
-    void init(const tao::json::value &arr) {
+    FilterSetUint(const tao::json::value &arr) {
         for (const auto &i : arr.get_array()) {
             items.push_back(i.get_unsigned());
         }
-
-        if (items.size() == 0) throw herr("empty filter item");
 
         std::sort(items.begin(), items.end());
 
@@ -119,39 +111,44 @@ struct FilterSetUint {
 };
 
 struct NostrFilter {
-    FilterSetBytes ids;
-    FilterSetBytes authors;
-    FilterSetUint kinds;
+    std::optional<FilterSetBytes> ids;
+    std::optional<FilterSetBytes> authors;
+    std::optional<FilterSetUint> kinds;
     std::map<char, FilterSetBytes> tags;
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
     uint64_t limit = MAX_U64;
+    bool neverMatch = false;
     bool indexOnlyScans = false;
 
     explicit NostrFilter(const tao::json::value &filterObj) {
         uint64_t numMajorFields = 0;
 
         for (const auto &[k, v] : filterObj.get_object()) {
+            if (v.is_array() && v.get_array().size() == 0) {
+                neverMatch = true;
+                break;
+            }
+
             if (k == "ids") {
-                ids.init(v, true, 1, 32);
+                ids.emplace(v, true, 1, 32);
                 numMajorFields++;
             } else if (k == "authors") {
-                authors.init(v, true, 1, 32);
+                authors.emplace(v, true, 1, 32);
                 numMajorFields++;
             } else if (k == "kinds") {
-                kinds.init(v);
+                kinds.emplace(v);
                 numMajorFields++;
             } else if (k.starts_with('#')) {
                 numMajorFields++;
                 if (k.size() == 2) {
                     char tag = k[1];
-                    auto [it, _] = tags.emplace(tag, FilterSetBytes{});
 
                     if (tag == 'p' || tag == 'e') {
-                        it->second.init(v, true, 32, 32);
+                        tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
                     } else {
-                        it->second.init(v, false, 1, cfg().events__maxTagValSize);
+                        tags.emplace(tag, FilterSetBytes(v, false, 1, cfg().events__maxTagValSize));
                     }
                 } else {
                     throw herr("unindexed tag filter");
@@ -182,11 +179,13 @@ struct NostrFilter {
     }
 
     bool doesMatch(const NostrIndex::Event *ev) const {
+        if (neverMatch) return false;
+
         if (!doesMatchTimes(ev->created_at())) return false;
 
-        if (ids.size() && !ids.doesMatch(sv(ev->id()))) return false;
-        if (authors.size() && !authors.doesMatch(sv(ev->pubkey()))) return false;
-        if (kinds.size() && !kinds.doesMatch(ev->kind())) return false;
+        if (ids && !ids->doesMatch(sv(ev->id()))) return false;
+        if (authors && !authors->doesMatch(sv(ev->pubkey()))) return false;
+        if (kinds && !kinds->doesMatch(ev->kind())) return false;
 
         for (const auto &[tag, filt] : tags) {
             bool foundMatch = false;
@@ -216,6 +215,7 @@ struct NostrFilterGroup {
 
         for (size_t i = 2; i < arr.size(); i++) {
             filters.emplace_back(arr[i]);
+            if (filters.back().neverMatch) filters.pop_back();
         }
     }
 

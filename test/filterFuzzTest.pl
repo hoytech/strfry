@@ -96,31 +96,36 @@ sub genRandomFilterGroup {
 
         while (!keys %$f) {
             if (rand() < .15) {
-                for (1..(rand()*10) + 1) {
+                $f->{ids} = [];
+                for (1..(rand()*10)) {
                     push @{$f->{ids}}, randPrefix($ids->[int(rand() * @$ids)]);
                 }
             }
 
             if (rand() < .3) {
-                for (1..(rand()*5) + 1) {
+                $f->{authors} = [];
+                for (1..(rand()*5)) {
                     push @{$f->{authors}}, randPrefix($pubkeys->[int(rand() * @$pubkeys)]);
                 }
             }
 
             if (rand() < .2) {
-                for (1..(rand()*5) + 1) {
+                $f->{kinds} = [];
+                for (1..(rand()*5)) {
                     push @{$f->{kinds}}, 0+$kinds->[int(rand() * @$kinds)];
                 }
             }
 
             if (rand() < .2) {
-                for (1..(rand()*10) + 1) {
+                $f->{'#e'} = [];
+                for (1..(rand()*10)) {
                     push @{$f->{'#e'}}, $ids->[int(rand() * @$ids)];
                 }
             }
 
             if (rand() < .2) {
-                for (1..(rand()*5) + 1) {
+                $f->{'#p'} = [];
+                for (1..(rand()*5)) {
                     push @{$f->{'#p'}}, $pubkeys->[int(rand() * @$pubkeys)];
                 }
             }

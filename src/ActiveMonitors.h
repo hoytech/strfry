@@ -161,14 +161,14 @@ struct ActiveMonitors : NonCopyable {
 
     void installLookups(Monitor *m, uint64_t currEventId) {
         for (auto &f : m->sub.filterGroup.filters) {
-            if (f.ids.size()) {
-                for (size_t i = 0; i < f.ids.size(); i++) {
-                    auto res = allIds.try_emplace(f.ids.at(i));
+            if (f.ids) {
+                for (size_t i = 0; i < f.ids->size(); i++) {
+                    auto res = allIds.try_emplace(f.ids->at(i));
                     res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                 }
-            } else if (f.authors.size()) {
-                for (size_t i = 0; i < f.authors.size(); i++) {
-                    auto res = allAuthors.try_emplace(f.authors.at(i));
+            } else if (f.authors) {
+                for (size_t i = 0; i < f.authors->size(); i++) {
+                    auto res = allAuthors.try_emplace(f.authors->at(i));
                     res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                 }
             } else if (f.tags.size()) {
@@ -179,9 +179,9 @@ struct ActiveMonitors : NonCopyable {
                         res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                     }
                 }
-            } else if (f.kinds.size()) {
-                for (size_t i = 0; i < f.kinds.size(); i++) {
-                    auto res = allKinds.try_emplace(f.kinds.at(i));
+            } else if (f.kinds) {
+                for (size_t i = 0; i < f.kinds->size(); i++) {
+                    auto res = allKinds.try_emplace(f.kinds->at(i));
                     res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                 }
             } else {
@@ -192,17 +192,17 @@ struct ActiveMonitors : NonCopyable {
 
     void uninstallLookups(Monitor *m) {
         for (auto &f : m->sub.filterGroup.filters) {
-            if (f.ids.size()) {
-                for (size_t i = 0; i < f.ids.size(); i++) {
-                    auto &monSet = allIds.at(f.ids.at(i));
+            if (f.ids) {
+                for (size_t i = 0; i < f.ids->size(); i++) {
+                    auto &monSet = allIds.at(f.ids->at(i));
                     monSet.erase(&f);
-                    if (monSet.empty()) allIds.erase(f.ids.at(i));
+                    if (monSet.empty()) allIds.erase(f.ids->at(i));
                 }
-            } else if (f.authors.size()) {
-                for (size_t i = 0; i < f.authors.size(); i++) {
-                    auto &monSet = allAuthors.at(f.authors.at(i));
+            } else if (f.authors) {
+                for (size_t i = 0; i < f.authors->size(); i++) {
+                    auto &monSet = allAuthors.at(f.authors->at(i));
                     monSet.erase(&f);
-                    if (monSet.empty()) allAuthors.erase(f.authors.at(i));
+                    if (monSet.empty()) allAuthors.erase(f.authors->at(i));
                 }
             } else if (f.tags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
@@ -213,11 +213,11 @@ struct ActiveMonitors : NonCopyable {
                         if (monSet.empty()) allTags.erase(tagSpec);
                     }
                 }
-            } else if (f.kinds.size()) {
-                for (size_t i = 0; i < f.kinds.size(); i++) {
-                    auto &monSet = allKinds.at(f.kinds.at(i));
+            } else if (f.kinds) {
+                for (size_t i = 0; i < f.kinds->size(); i++) {
+                    auto &monSet = allKinds.at(f.kinds->at(i));
                     monSet.erase(&f);
-                    if (monSet.empty()) allKinds.erase(f.kinds.at(i));
+                    if (monSet.empty()) allKinds.erase(f.kinds->at(i));
                 }
             } else {
                 allOthers.erase(&f);
