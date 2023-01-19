@@ -11,6 +11,8 @@ strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nos
 
 **NOTE**: This project is still in development/testing phase, so you may not want to use it in production yet.
 
+If you are using strfry, please [join our telegram chat](https://t.me/strfry_users). Hopefully soon we'll migrate this to nostr.
+
 
 ## Syncing
 
