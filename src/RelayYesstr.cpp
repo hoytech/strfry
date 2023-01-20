@@ -39,6 +39,8 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
             conns[connId].try_emplace(reqId);
             auto &s = conns[connId][reqId];
 
+            LI << "Yesstr sync. filter: '" << filterStr << "'";
+
             if (filterStr == "{}") {
                 qdb->checkout("events");
                 uint64_t nodeId = qdb->getHeadNodeId(txn);
@@ -50,8 +52,6 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
             } else {
                 // FIXME: The following blocks the whole thread for the query duration. Should interleave it
                 // with other requests like RelayReqWorker does.
-
-                LI << "Yesstr sync: Running filter: " << filterStr;
 
                 std::vector<uint64_t> quadEventIds;
                 auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr));
@@ -97,7 +97,6 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
 
             qdb->withMemStore(s->m, [&]{
                 qdb->writeToMemStore = true;
-                LI << "ZZZ NODE " << qdb->getHeadNodeId(txn);
                 resps = qdb->handleSyncRequests(txn, qdb->getHeadNodeId(txn), reqs, 100'000);
             });
 
@@ -137,7 +136,11 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
                 const auto *req = parseYesstrRequest(msg->yesstrMessage); // validated by ingester
                 const auto *reqSync = req->payload_as<Yesstr::RequestSync>();
 
-                states.handleRequest(txn, msg->connId, req->requestId(), sv(reqSync->filter()), sv(reqSync->reqsEncoded()));
+                try {
+                    states.handleRequest(txn, msg->connId, req->requestId(), sv(reqSync->filter()), sv(reqSync->reqsEncoded()));
+                } catch (std::exception &e) {
+                    sendNoticeError(msg->connId, std::string("yesstr failure: ") + e.what());
+                }
             } else if (auto msg = std::get_if<MsgYesstr::CloseConn>(&newMsg.msg)) {
                 states.closeConn(msg->connId);
             }

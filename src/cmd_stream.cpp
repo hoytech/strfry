@@ -42,7 +42,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
         }
     };
 
-    ws.onMessage = [&](auto msg, size_t){
+    ws.onMessage = [&](auto msg, uWS::OpCode, size_t){
         auto origJson = tao::json::from_string(msg);
 
         if (origJson.is_array()) {

@@ -120,8 +120,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
     std::string url = args["<url>"].asString();
+
     std::string filterStr;
     if (args["--filter"]) filterStr = args["--filter"].asString();
+    else filterStr = "{}";
+
     std::string dir = args["--dir"] ? args["--dir"].asString() : "down";
     if (dir != "up" && dir != "down" && dir != "both") throw herr("invalid direction: ", dir, ". Should be one of up/down/both");
     if (dir != "down") throw herr("only down currently supported"); // FIXME
@@ -147,8 +150,16 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     if (filterStr.size()) {
         std::vector<uint64_t> quadEventIds;
 
-        std::string filterStr = args["--filter"].asString();
-        auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr));
+        tao::json::value filterJson;
+
+        try {
+            filterJson = tao::json::from_string(filterStr);
+        } catch (std::exception &e) {
+            LE << "Couldn't parse filter JSON: " << filterStr;
+            ::exit(1);
+        }
+
+        auto filterGroup = NostrFilterGroup::unwrapped(filterJson);
 
         Subscription sub(1, "junkSub", filterGroup);
 
@@ -196,11 +207,16 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         controller->sendRequests(txn, filterStr);
     };
 
-    ws.onMessage = [&](auto msg, size_t compressedSize){
+    ws.onMessage = [&](auto msg, uWS::OpCode opCode, size_t compressedSize){
         auto txn = env.txn_ro();
 
         if (!controller) {
             LW << "No sync active, ignoring message";
+            return;
+        }
+
+        if (opCode == uWS::OpCode::TEXT) {
+            LW << "Unexpected non-yesstr message from relay: " << msg;
             return;
         }
 
@@ -211,6 +227,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             LI << "Syncing done, writing/sending events";
             controller->finish(txn,
                 [&](std::string_view newLeaf){
+                    // FIXME: relay could crash client here by sending invalid JSON
                     writer.inbox.push_move(tao::json::from_string(std::string(newLeaf)));
                 },
                 [&](std::string_view){

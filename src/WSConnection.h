@@ -21,7 +21,7 @@ class WSConnection {
     WSConnection(const std::string &url) : url(url) {}
 
     std::function<void()> onConnect;
-    std::function<void(std::string_view, size_t)> onMessage;
+    std::function<void(std::string_view, uWS::OpCode, size_t)> onMessage;
     std::function<void()> onTrigger;
     bool reconnect = true;
     uint64_t reconnectDelayMilliseconds = 5'000;
@@ -101,7 +101,7 @@ class WSConnection {
             if (!onMessage) return;
 
             try {
-                onMessage(std::string_view(message, length), compressedSize);
+                onMessage(std::string_view(message, length), opCode, compressedSize);
             } catch (std::exception &e) {
                 LW << "onMessage failure: " << e.what();
             }
