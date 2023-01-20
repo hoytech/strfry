@@ -6,6 +6,7 @@ features
     * way to close sync request
     * limit on number of concurrent sync requests
     * full-db scan limited by since/until
+    * `strfry sync` command always takes at least 1 second due to batching delay. figure out better way to flush
   bool values in config
     config for compression
     config for TCP keepalive
