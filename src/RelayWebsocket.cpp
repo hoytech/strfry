@@ -46,7 +46,7 @@ static std::string renderSize(uint64_t si) {
         unit = 'T';
     } while(0);
 
-    ::snprintf(buf, sizeof(buf), "%.2f %c", s, unit);
+    ::snprintf(buf, sizeof(buf), "%.2f%c", s, unit);
     return std::string(buf);
 }
 
@@ -125,7 +125,14 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     hubGroup->onConnection([&](uWS::WebSocket<uWS::SERVER> *ws, uWS::HttpRequest req) {
         std::string addr = ws->getAddress().address;
         uint64_t connId = nextConnectionId++;
-        LI << "[" << connId << "] Connect from " << addr;
+
+        bool compEnabled, compSlidingWindow;
+        ws->getCompressionState(compEnabled, compSlidingWindow);
+        LI << "[" << connId << "] Connect from " << addr
+           << " compression=" << (compEnabled ? 'Y' : 'N')
+           << " sliding=" << (compSlidingWindow ? 'Y' : 'N')
+        ;
+
         Connection *c = new Connection(ws, connId);
         c->ipAddr = addr;
         ws->setUserData((void*)c);

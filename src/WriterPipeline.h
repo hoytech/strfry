@@ -29,7 +29,7 @@ struct WriterPipeline {
 
                 for (auto &m : msgs) {
                     if (m.is_null()) {
-                        writerInbox.push_move({ "", "", 0 });
+                        writerInbox.push_move({});
                         break;
                     }
 
