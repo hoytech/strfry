@@ -20,7 +20,7 @@ static std::string preGenerateHttpResponse(const std::string &contentType, const
 
 
 static std::string renderSize(uint64_t si) {
-    if (si < 1024) return std::to_string(si) + " b";
+    if (si < 1024) return std::to_string(si) + "b";
 
     double s = si;
     char buf[128];
