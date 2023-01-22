@@ -37,7 +37,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             bool written = false;
 
             if (newEvent.status == EventWriteStatus::Written) {
-                LI << "Inserted event. id=" << eventIdHex << " qdbNodeId=" << newEvent.nodeId;
+                LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 written = true;
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";

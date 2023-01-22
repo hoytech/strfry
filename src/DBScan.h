@@ -232,18 +232,18 @@ struct DBScan {
                 }
 
                 bool sent = false;
-                uint64_t quadId = lmdb::from_sv<uint64_t>(v);
+                uint64_t levId = lmdb::from_sv<uint64_t>(v);
 
                 if (f.indexOnlyScans) {
                     if (f.doesMatchTimes(created)) {
-                        handleEvent(quadId);
+                        handleEvent(levId);
                         sent = true;
                     }
                 } else {
-                    auto view = env.lookup_Event(txn, quadId);
+                    auto view = env.lookup_Event(txn, levId);
                     if (!view) throw herr("missing event from index, corrupt DB?");
                     if (f.doesMatch(view->flat_nested())) {
-                        handleEvent(quadId);
+                        handleEvent(levId);
                         sent = true;
                     }
                 }
@@ -298,16 +298,16 @@ struct DBScanQuery : NonCopyable {
         while (filterGroupIndex < sub.filterGroup.size()) {
             if (!scanner) scanner = std::make_unique<DBScan>(sub.filterGroup.filters[filterGroupIndex]);
 
-            bool complete = scanner->scan(txn, [&](uint64_t quadId){
+            bool complete = scanner->scan(txn, [&](uint64_t levId){
                 // If this event came in after our query began, don't send it. It will be sent after the EOSE.
-                if (quadId > sub.latestEventId) return;
+                if (levId > sub.latestEventId) return;
 
                 // We already sent this event
-                if (alreadySentEvents.find(quadId) != alreadySentEvents.end()) return;
-                alreadySentEvents.insert(quadId);
+                if (alreadySentEvents.find(levId) != alreadySentEvents.end()) return;
+                alreadySentEvents.insert(levId);
 
                 currScanRecordsFound++;
-                cb(sub, quadId);
+                cb(sub, levId);
             }, [&]{
                 currScanRecordsTraversed++;
                 return hoytech::curr_time_us() - startTime > timeBudgetMicroseconds;

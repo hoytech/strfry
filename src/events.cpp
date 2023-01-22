@@ -158,22 +158,22 @@ std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn
     return output;
 }
 
-uint64_t getMostRecentEventId(lmdb::txn &txn) {
-    uint64_t output = 0;
+uint64_t getMostRecentLevId(lmdb::txn &txn) {
+    uint64_t levId = 0;
 
     env.foreach_Event(txn, [&](auto &ev){
-        output = ev.primaryKeyId;
+        levId = ev.primaryKeyId;
         return false;
     }, true);
 
-    return output;
+    return levId;
 }
 
-std::string_view getEventJson(lmdb::txn &txn, uint64_t quadId) {
+std::string_view getEventJson(lmdb::txn &txn, uint64_t levId) {
     std::string_view raw;
-    bool found = env.dbiQuadrable_nodesLeaf.get(txn, lmdb::to_sv<uint64_t>(quadId), raw);
+    bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), raw);
     if (!found) throw herr("couldn't find leaf node in quadrable, corrupted DB?");
-    return raw.substr(8 + 32 + 32);
+    return raw.substr(1);
 }
 
 
@@ -183,7 +183,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
     auto changes = qdb.change();
 
-    std::vector<uint64_t> eventIdsToDelete;
+    std::vector<uint64_t> levIdsToDelete;
 
     for (size_t i = 0; i < evs.size(); i++) {
         auto &ev = evs[i];
@@ -202,13 +202,13 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
         if (isReplaceableEvent(flat->kind())) {
             auto searchKey = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), MAX_U64);
-            uint64_t otherEventId = 0;
+            uint64_t otherLevId = 0;
 
             env.generic_foreachFull(txn, env.dbi_Event__pubkeyKind, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                 ParsedKey_StringUint64Uint64 parsedKey(k);
                 if (parsedKey.s == sv(flat->pubkey()) && parsedKey.n1 == flat->kind()) {
                     if (parsedKey.n2 < flat->created_at()) {
-                        otherEventId = lmdb::from_sv<uint64_t>(v);
+                        otherLevId = lmdb::from_sv<uint64_t>(v);
                     } else {
                         ev.status = EventWriteStatus::Replaced;
                     }
@@ -216,11 +216,11 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 return false;
             }, true);
 
-            if (otherEventId) {
-                auto otherEv = env.lookup_Event(txn, otherEventId);
+            if (otherLevId) {
+                auto otherEv = env.lookup_Event(txn, otherLevId);
                 if (!otherEv) throw herr("missing event from index, corrupt DB?");
                 changes.del(flatEventToQuadrableKey(otherEv->flat_nested()));
-                eventIdsToDelete.push_back(otherEventId);
+                levIdsToDelete.push_back(otherLevId);
             }
         }
 
@@ -232,26 +232,33 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
                         LI << "Deleting event. id=" << to_hex(sv(tagPair->val()));
                         changes.del(flatEventToQuadrableKey(otherEv->flat_nested()));
-                        eventIdsToDelete.push_back(otherEv->primaryKeyId);
+                        levIdsToDelete.push_back(otherEv->primaryKeyId);
                     }
                 }
             }
         }
 
-        if (ev.status == EventWriteStatus::Pending) {
-            changes.put(ev.quadKey, ev.jsonStr, &ev.nodeId);
-        }
+        if (ev.status == EventWriteStatus::Pending) changes.put(ev.quadKey, "");
     }
 
     changes.apply(txn);
 
-    for (auto eventId : eventIdsToDelete) {
-        env.delete_Event(txn, eventId);
+    for (auto levId : levIdsToDelete) {
+        env.delete_Event(txn, levId);
+        env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
     }
+
+    std::string tmpBuf;
 
     for (auto &ev : evs) {
         if (ev.status == EventWriteStatus::Pending) {
-            env.insert_Event(txn, ev.nodeId, ev.receivedAt, ev.flatStr);
+            ev.levId = env.insert_Event(txn, ev.receivedAt, ev.flatStr);
+
+            tmpBuf.clear();
+            tmpBuf += '\x00';
+            tmpBuf += ev.jsonStr;
+            env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
+
             ev.status = EventWriteStatus::Written;
         }
     }

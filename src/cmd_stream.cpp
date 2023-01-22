@@ -80,7 +80,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
 
     {
         auto txn = env.txn_ro();
-        currEventId = getMostRecentEventId(txn);
+        currEventId = getMostRecentLevId(txn);
     }
 
     ws.onTrigger = [&]{

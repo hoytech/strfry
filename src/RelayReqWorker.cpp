@@ -9,7 +9,7 @@ struct ActiveQueries : NonCopyable {
     std::deque<DBScanQuery*> running;
 
     void addSub(lmdb::txn &txn, Subscription &&sub) {
-        sub.latestEventId = getMostRecentEventId(txn);
+        sub.latestEventId = getMostRecentLevId(txn);
 
         {
             auto *existing = findQuery(sub.connId, sub.subId);
@@ -63,8 +63,8 @@ struct ActiveQueries : NonCopyable {
             return;
         }
 
-        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t quadId){
-            server->sendEvent(sub.connId, sub.subId, getEventJson(txn, quadId));
+        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
+            server->sendEvent(sub.connId, sub.subId, getEventJson(txn, levId));
         });
 
         if (complete) {

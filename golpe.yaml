@@ -13,20 +13,14 @@ includes: |
 tables:
   ## DB meta-data. Single entry, with id = 1
   Meta:
-    tableId: 2
-
     fields:
       - name: dbVersion
       - name: endianness
 
-  ## Stored nostr events
+  ## Meta-info of nostr events, suitable for indexing
+  ## Primary key is auto-incremented, called "levId" for Local EVent ID
   Event:
-    tableId: 1
-
-    primaryKey: quadId
-
     fields:
-      - name: quadId
       - name: receivedAt # microseconds
       - name: flat
         type: ubytes
@@ -71,6 +65,20 @@ tables:
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
             if (flat->kind() == 5 && tagName == 'e') deletion.push_back(std::string(tagVal) + std::string(sv(flat->pubkey())));
         }
+
+  CompressionDictionary:
+    fields:
+      - name: dict
+        type: ubytes
+
+tablesRaw:
+  ## Raw nostr event JSON, possibly compressed
+  ## keys are levIds
+  ## vals are prefixed with a type byte:
+  ##   0: no compression, payload follows
+  ##   1: zstd compression. Followed by Dictionary ID (native endian uint32) then compressed payload
+  EventPayload:
+    flags: 'MDB_INTEGERKEY'
 
 config:
   - name: db

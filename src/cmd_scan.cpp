@@ -35,8 +35,8 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
     auto txn = env.txn_ro();
 
     while (1) {
-        bool complete = query.process(txn, pause ? pause : MAX_U64, metrics, [&](const auto &sub, uint64_t quadId){
-            std::cout << getEventJson(txn, quadId) << "\n";
+        bool complete = query.process(txn, pause ? pause : MAX_U64, metrics, [&](const auto &sub, uint64_t levId){
+            std::cout << getEventJson(txn, levId) << "\n";
         });
 
         if (complete) break;

@@ -22,7 +22,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
         auto txn = env.txn_ro();
 
-        uint64_t latestEventId = getMostRecentEventId(txn);
+        uint64_t latestEventId = getMostRecentLevId(txn);
         if (currEventId > latestEventId) currEventId = latestEventId;
 
         for (auto &newMsg : newMsgs) {
@@ -44,8 +44,8 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                 monitors.closeConn(msg->connId);
             } else if (std::get_if<MsgReqMonitor::DBChange>(&newMsg.msg)) {
                 env.foreach_Event(txn, [&](auto &ev){
-                    monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t quadId){
-                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, quadId)));
+                    monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
+                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, levId)));
                     });
                     return true;
                 }, false, currEventId + 1);

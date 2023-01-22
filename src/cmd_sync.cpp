@@ -148,7 +148,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
 
     if (filterStr.size()) {
-        std::vector<uint64_t> quadEventIds;
+        std::vector<uint64_t> levIds;
 
         tao::json::value filterJson;
 
@@ -167,14 +167,14 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
 
         while (1) {
-            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t quadId){
-                quadEventIds.push_back(quadId);
+            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
+                levIds.push_back(levId);
             });
 
             if (complete) break;
         }
 
-        LI << "Filter matched " << quadEventIds.size() << " local events";
+        LI << "Filter matched " << levIds.size() << " local events";
 
         controller = std::make_unique<SyncController>(&qdb, &ws);
 
@@ -184,8 +184,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
             auto changes = qdb.change();
 
-            for (auto id : quadEventIds) {
-                changes.putReuse(txn, id);
+            for (auto levId : levIds) {
+                changes.putReuse(txn, levId);
             }
 
             changes.apply(txn);

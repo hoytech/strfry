@@ -45,8 +45,8 @@ inline const NostrIndex::Event *flatStrToFlatEvent(std::string_view flatStr) {
 
 
 std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn, std::string_view id);
-uint64_t getMostRecentEventId(lmdb::txn &txn);
-std::string_view getEventJson(lmdb::txn &txn, uint64_t quadId);
+uint64_t getMostRecentLevId(lmdb::txn &txn);
+std::string_view getEventJson(lmdb::txn &txn, uint64_t levId);
 
 inline quadrable::Key flatEventToQuadrableKey(const NostrIndex::Event *flat) {
     return quadrable::Key::fromIntegerAndHash(flat->created_at(), sv(flat->id()).substr(0, 23));
@@ -72,8 +72,8 @@ struct EventToWrite {
     uint64_t receivedAt;
     void *userData = nullptr;
     quadrable::Key quadKey;
-    uint64_t nodeId = 0;
     EventWriteStatus status = EventWriteStatus::Pending;
+    uint64_t levId = 0;
 
     EventToWrite() {}
 
