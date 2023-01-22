@@ -98,6 +98,19 @@ config:
     desc: "Maximum records that can be returned per filter"
     default: 500
 
+  - name: relay__logging__dumpInAll
+    desc: "Dump all incoming messages"
+    default: false
+  - name: relay__logging__dumpInEvents
+    desc: "Dump all incoming EVENT messages"
+    default: false
+  - name: relay__logging__dumpInReqs
+    desc: "Dump all incoming REQ/CLOSE messages"
+    default: false
+  - name: relay__logging__dbScanPerf
+    desc: "Log performance metrics for initial REQ database scans"
+    default: false
+
   - name: relay__numThreads__ingester
     default: 3
     noReload: true

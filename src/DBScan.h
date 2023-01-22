@@ -58,8 +58,6 @@ struct DBScan {
         remainingLimit = f.limit;
 
         if (f.ids) {
-            LI << "ID Scan";
-
             scanState = IdScan{};
             auto *state = std::get_if<IdScan>(&scanState);
             indexDbi = env.dbi_Event__id;
@@ -79,8 +77,6 @@ struct DBScan {
                 return k.starts_with(state->prefix);
             };
         } else if (f.authors && f.kinds) {
-            LI << "PubkeyKind Scan";
-
             scanState = PubkeyKindScan{};
             auto *state = std::get_if<PubkeyKindScan>(&scanState);
             indexDbi = env.dbi_Event__pubkeyKind;
@@ -114,8 +110,6 @@ struct DBScan {
                 return false;
             };
         } else if (f.authors) {
-            LI << "Pubkey Scan";
-
             scanState = PubkeyScan{};
             auto *state = std::get_if<PubkeyScan>(&scanState);
             indexDbi = env.dbi_Event__pubkey;
@@ -135,8 +129,6 @@ struct DBScan {
                 return k.starts_with(state->prefix);
             };
         } else if (f.tags.size()) {
-            LI << "Tag Scan";
-
             scanState = TagScan{f.tags.begin()};
             auto *state = std::get_if<TagScan>(&scanState);
             indexDbi = env.dbi_Event__tag;
@@ -161,8 +153,6 @@ struct DBScan {
                 return k.substr(0, state->search.size()) == state->search;
             };
         } else if (f.kinds) {
-            LI << "Kind Scan";
-
             scanState = KindScan{};
             auto *state = std::get_if<KindScan>(&scanState);
             indexDbi = env.dbi_Event__kind;
@@ -183,8 +173,6 @@ struct DBScan {
                 return parsedKey.n1 == state->kind;
             };
         } else {
-            LI << "CreatedAt Scan";
-
             scanState = CreatedAtScan{};
             auto *state = std::get_if<CreatedAtScan>(&scanState);
             indexDbi = env.dbi_Event__created_at;
@@ -216,7 +204,6 @@ struct DBScan {
                 if (doPause()) {
                     resumeKey = std::string(k);
                     resumeVal = lmdb::from_sv<uint64_t>(v);
-                    LI << "SAVING resumeKey: " << to_hex(resumeKey) << " / " << resumeVal;
                     pause = true;
                     return false;
                 }
@@ -295,10 +282,17 @@ struct DBScanQuery : NonCopyable {
     bool dead = false;
     std::unordered_set<uint64_t> alreadySentEvents; // FIXME: flat_set here, or roaring bitmap/judy/whatever
 
+    uint64_t currScanTime = 0;
+    uint64_t currScanSaveRestores = 0;
+    uint64_t currScanRecordsTraversed = 0;
+    uint64_t currScanRecordsFound = 0;
+
+    uint64_t totalScanTime = 0;
+
     DBScanQuery(Subscription &sub_) : sub(std::move(sub_)) {}
 
     // If scan is complete, returns true
-    bool process(lmdb::txn &txn, uint64_t timeBudgetMicroseconds, std::function<void(const Subscription &, uint64_t)> cb) {
+    bool process(lmdb::txn &txn, uint64_t timeBudgetMicroseconds, bool logMetrics, std::function<void(const Subscription &, uint64_t)> cb) {
         uint64_t startTime = hoytech::curr_time_us();
 
         while (filterGroupIndex < sub.filterGroup.size()) {
@@ -312,15 +306,61 @@ struct DBScanQuery : NonCopyable {
                 if (alreadySentEvents.find(quadId) != alreadySentEvents.end()) return;
                 alreadySentEvents.insert(quadId);
 
+                currScanRecordsFound++;
                 cb(sub, quadId);
             }, [&]{
+                currScanRecordsTraversed++;
                 return hoytech::curr_time_us() - startTime > timeBudgetMicroseconds;
             });
 
-            if (!complete) return false;
+            currScanTime += hoytech::curr_time_us() - startTime;
+
+            if (!complete) {
+                currScanSaveRestores++;
+                return false;
+            }
+
+            totalScanTime += currScanTime;
+
+            if (logMetrics) {
+                std::string scanType = "?";
+
+                if (std::get_if<DBScan::IdScan>(&scanner->scanState)) {
+                    scanType = "Id";
+                } else if (std::get_if<DBScan::PubkeyKindScan>(&scanner->scanState)) {
+                    scanType = "PubkeyKind";
+                } else if (std::get_if<DBScan::PubkeyScan>(&scanner->scanState)) {
+                    scanType = "Pubkey";
+                } else if (std::get_if<DBScan::TagScan>(&scanner->scanState)) {
+                    scanType = "Tag";
+                } else if (std::get_if<DBScan::KindScan>(&scanner->scanState)) {
+                    scanType = "Kind";
+                } else if (std::get_if<DBScan::CreatedAtScan>(&scanner->scanState)) {
+                    scanType = "CreatedAt";
+                }
+
+                LI << "[" << sub.connId << "] REQ='" << sub.subId.sv() << "'"
+                   << " scan=" << scanType
+                   << " indexOnly=" << scanner->f.indexOnlyScans
+                   << " time=" << currScanTime << "us"
+                   << " saveRestores=" << currScanSaveRestores
+                   << " recsFound=" << currScanRecordsFound
+                   << " recsScanned=" << currScanRecordsTraversed
+                ;
+            }
 
             filterGroupIndex++;
             scanner.reset();
+            currScanTime = 0;
+            currScanSaveRestores = 0;
+            currScanRecordsTraversed = 0;
+            currScanRecordsFound = 0;
+        }
+
+        if (logMetrics) {
+            LI << "[" << sub.connId << "] REQ='" << sub.subId.sv() << "'"
+               << " totalTime=" << totalScanTime << "us"
+            ;
         }
 
         return true;

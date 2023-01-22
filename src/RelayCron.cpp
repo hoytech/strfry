@@ -45,7 +45,7 @@ void RelayServer::cleanupOldEvents() {
     }
 
     if (expiredEvents.size() > 0) {
-        LI << "Deleting " << expiredEvents.size() << " old events";
+        LI << "Deleting " << expiredEvents.size() << " ephemeral events";
 
         auto txn = env.txn_rw();
 

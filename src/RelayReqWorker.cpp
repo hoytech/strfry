@@ -63,7 +63,7 @@ struct ActiveQueries : NonCopyable {
             return;
         }
 
-        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, [&](const auto &sub, uint64_t quadId){
+        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t quadId){
             server->sendEvent(sub.connId, sub.subId, getEventJson(txn, quadId));
         });
 

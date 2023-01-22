@@ -17,6 +17,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                     if (msg->payload.starts_with('[')) {
                         auto payload = tao::json::from_string(msg->payload);
 
+                        if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAll: " << msg->payload; 
+
                         if (!payload.is_array()) throw herr("message is not an array");
                         auto &arr = payload.get_array();
                         if (arr.size() < 2) throw herr("bad message");
@@ -24,6 +26,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         auto &cmd = arr[0].get_string();
 
                         if (cmd == "EVENT") {
+                            if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
+
                             try {
                                 ingesterProcessEvent(txn, msg->connId, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
@@ -31,12 +35,16 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 LI << "Rejected invalid event: " << e.what();
                             }
                         } else if (cmd == "REQ") {
+                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
+
                             try {
                                 ingesterProcessReq(txn, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
                             }
                         } else if (cmd == "CLOSE") {
+                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
+
                             try {
                                 ingesterProcessClose(txn, msg->connId, arr);
                             } catch (std::exception &e) {

@@ -167,7 +167,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
 
         while (1) {
-            bool complete = query.process(txn, MAX_U64, [&](const auto &sub, uint64_t quadId){
+            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t quadId){
                 quadEventIds.push_back(quadId);
             });
 

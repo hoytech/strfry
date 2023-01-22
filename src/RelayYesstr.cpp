@@ -59,7 +59,7 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
                 DBScanQuery query(sub);
 
                 while (1) {
-                    bool complete = query.process(txn, MAX_U64, [&](const auto &sub, uint64_t quadId){
+                    bool complete = query.process(txn, MAX_U64, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t quadId){
                         quadEventIds.push_back(quadId);
                     });
 

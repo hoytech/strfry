@@ -10,7 +10,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      scan [--pause=<pause>] <filter>
+      scan [--pause=<pause>] [--metrics] <filter>
 )";
 
 
@@ -19,6 +19,9 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
 
     uint64_t pause = 0;
     if (args["--pause"]) pause = args["--pause"].asLong();
+
+    bool metrics = false;
+    if (args["--metrics"]) metrics = true;
 
 
     std::string filterStr = args["<filter>"].asString();
@@ -32,7 +35,7 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
     auto txn = env.txn_ro();
 
     while (1) {
-        bool complete = query.process(txn, pause ? pause : MAX_U64, [&](const auto &sub, uint64_t quadId){
+        bool complete = query.process(txn, pause ? pause : MAX_U64, metrics, [&](const auto &sub, uint64_t quadId){
             std::cout << getEventJson(txn, quadId) << "\n";
         });
 
