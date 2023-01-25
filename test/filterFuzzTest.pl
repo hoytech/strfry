@@ -188,8 +188,8 @@ sub testScan {
     #print JSON::XS->new->pretty(1)->encode($fg);
     print "$fge\n";
 
-    my $resA = `./strfry --config test/strfry.conf export 2>/dev/null | perl test/dumbFilter.pl '$fge' | jq -r .pubkey | sort | sha256sum`;
-    my $resB = `./strfry --config test/strfry.conf scan '$fge' | jq -r .pubkey | sort | sha256sum`;
+    my $resA = `./strfry export 2>/dev/null | perl test/dumbFilter.pl '$fge' | jq -r .pubkey | sort | sha256sum`;
+    my $resB = `./strfry scan '$fge' | jq -r .pubkey | sort | sha256sum`;
 
     print "$resA\n$resB\n";
 
@@ -220,7 +220,7 @@ if ($cmd eq 'scan') {
         print "filt: $fge\n\n";
 
         print "DOING MONS\n";
-        my $pid = open2(my $outfile, my $infile, './strfry --config test/strfry.conf monitor | jq -r .pubkey | sort | sha256sum');
+        my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .pubkey | sort | sha256sum');
         for my $c (@$monCmds) { print $infile encode_json($c), "\n"; }
         close($infile);
 
@@ -231,7 +231,7 @@ if ($cmd eq 'scan') {
         die "monitor cmd died" if $child_exit_status;
 
         print "DOING SCAN\n";
-        my $resB = `./strfry --config test/strfry.conf scan '$fge' 2>/dev/null | jq -r .pubkey | sort | sha256sum`;
+        my $resB = `./strfry scan '$fge' 2>/dev/null | jq -r .pubkey | sort | sha256sum`;
 
         print "$resA\n$resB\n";
 

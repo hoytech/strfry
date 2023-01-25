@@ -14,6 +14,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
     });
 
 
+    Decompressor decomp;
     ActiveMonitors monitors;
     uint64_t currEventId = MAX_U64;
 
@@ -29,7 +30,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
             if (auto msg = std::get_if<MsgReqMonitor::NewSub>(&newMsg.msg)) {
                 env.foreach_Event(txn, [&](auto &ev){
                     if (msg->sub.filterGroup.doesMatch(ev.flat_nested())) {
-                        sendEvent(msg->sub.connId, msg->sub.subId, getEventJson(txn, ev.primaryKeyId));
+                        sendEvent(msg->sub.connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
                     }
 
                     return true;
@@ -45,7 +46,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
             } else if (std::get_if<MsgReqMonitor::DBChange>(&newMsg.msg)) {
                 env.foreach_Event(txn, [&](auto &ev){
                     monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
-                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, levId)));
+                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, decomp, levId)));
                     });
                     return true;
                 }, false, currEventId + 1);

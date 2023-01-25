@@ -168,23 +168,24 @@ struct RelayServer {
         hubTrigger->send();
     }
 
-    void sendToConn(uint64_t connId, std::string &payload) {
-        tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(payload)}});
-        hubTrigger->send();
-    }
-
     void sendToConnBinary(uint64_t connId, std::string &&payload) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendBinary{connId, std::move(payload)}});
         hubTrigger->send();
     }
 
     void sendEvent(uint64_t connId, const SubId &subId, std::string_view evJson) {
-        std::string reply = std::string("[\"EVENT\",\"");
-        reply += subId.sv();
+        auto subIdSv = subId.sv();
+
+        std::string reply;
+        reply.reserve(13 + subIdSv.size() + evJson.size());
+
+        reply += "[\"EVENT\",\"";
+        reply += subIdSv;
         reply += "\",";
         reply += evJson;
         reply += "]";
-        sendToConn(connId, reply);
+
+        sendToConn(connId, std::move(reply));
     }
 
     void sendEventToBatch(RecipientList &&list, std::string &&evJson) {

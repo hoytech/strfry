@@ -122,7 +122,7 @@ struct NostrFilter {
     bool neverMatch = false;
     bool indexOnlyScans = false;
 
-    explicit NostrFilter(const tao::json::value &filterObj) {
+    explicit NostrFilter(const tao::json::value &filterObj, uint64_t maxFilterLimit) {
         uint64_t numMajorFields = 0;
 
         for (const auto &[k, v] : filterObj.get_object()) {
@@ -166,7 +166,7 @@ struct NostrFilter {
 
         if (tags.size() > 2) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
 
-        if (limit > cfg().relay__maxFilterLimit) limit = cfg().relay__maxFilterLimit;
+        if (limit > maxFilterLimit) limit = maxFilterLimit;
 
         indexOnlyScans = numMajorFields <= 1;
         // FIXME: pubkeyKind scan could be serviced index-only too
@@ -219,18 +219,18 @@ struct NostrFilterGroup {
     std::vector<NostrFilter> filters;
 
     // Note that this expects the full array, so the first two items are "REQ" and the subId
-    NostrFilterGroup(const tao::json::value &req) {
+    NostrFilterGroup(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         const auto &arr = req.get_array();
         if (arr.size() < 3) throw herr("too small");
 
         for (size_t i = 2; i < arr.size(); i++) {
-            filters.emplace_back(arr[i]);
+            filters.emplace_back(arr[i], maxFilterLimit);
             if (filters.back().neverMatch) filters.pop_back();
         }
     }
 
     // Hacky! Deserves a refactor
-    static NostrFilterGroup unwrapped(tao::json::value filter) {
+    static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
             filter = tao::json::value::array({ filter });
         }
@@ -241,7 +241,7 @@ struct NostrFilterGroup {
             pretendReqQuery.push_back(e);
         }
 
-        return NostrFilterGroup(pretendReqQuery);
+        return NostrFilterGroup(pretendReqQuery, maxFilterLimit);
     }
 
     bool doesMatch(const NostrIndex::Event *ev) const {

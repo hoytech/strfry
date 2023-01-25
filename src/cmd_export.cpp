@@ -20,6 +20,8 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     if (args["--since"]) since = args["--since"].asLong();
     if (args["--until"]) until = args["--until"].asLong();
 
+    Decompressor decomp;
+
     auto txn = env.txn_ro();
 
     env.generic_foreachFull(txn, env.dbi_Event__created_at, lmdb::to_sv<uint64_t>(since), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
@@ -32,7 +34,7 @@ void cmd_export(const std::vector<std::string> &subArgs) {
             if (isEphemeralEvent(view->flat_nested()->kind())) return true;
         }
 
-        std::cout << getEventJson(txn, view->primaryKeyId) << "\n";
+        std::cout << getEventJson(txn, decomp, view->primaryKeyId) << "\n";
 
         return true;
     });

@@ -1,6 +1,5 @@
-#include <stdio.h>
-
 #include "RelayServer.h"
+#include "render.h"
 
 #include "app_git_version.h"
 
@@ -18,46 +17,6 @@ static std::string preGenerateHttpResponse(const std::string &contentType, const
     return output;
 };
 
-
-static std::string renderSize(uint64_t si) {
-    if (si < 1024) return std::to_string(si) + "b";
-
-    double s = si;
-    char buf[128];
-    char unit;
-
-    do {
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'K';
-            break;
-        }
-
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'M';
-            break;
-        }
-
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'G';
-            break;
-        }
-
-        s /= 1024;
-        unit = 'T';
-    } while(0);
-
-    ::snprintf(buf, sizeof(buf), "%.2f%c", s, unit);
-    return std::string(buf);
-}
-
-static std::string renderPercent(double p) {
-    char buf[128];
-    ::snprintf(buf, sizeof(buf), "%.1f%%", p * 100);
-    return std::string(buf);
-}
 
 
 void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
@@ -198,15 +157,18 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgWebsocket::SendBinary>(&newMsg.msg)) {
                 doSend(msg->connId, msg->payload, uWS::OpCode::BINARY);
             } else if (auto msg = std::get_if<MsgWebsocket::SendEventToBatch>(&newMsg.msg)) {
-                for (auto &item : msg->list) {
-                    tempBuf.clear();
-                    tempBuf += "[\"EVENT\",\"";
-                    tempBuf += item.subId.sv();
-                    tempBuf += "\",";
-                    tempBuf += msg->evJson;
-                    tempBuf += "]";
+                tempBuf.reserve(13 + MAX_SUBID_SIZE + msg->evJson.size());
+                tempBuf.resize(10 + MAX_SUBID_SIZE);
+                tempBuf += "\",";
+                tempBuf += msg->evJson;
+                tempBuf += "]";
 
-                    doSend(item.connId, tempBuf, uWS::OpCode::TEXT);
+                for (auto &item : msg->list) {
+                    auto subIdSv = item.subId.sv();
+                    auto *p = tempBuf.data() + MAX_SUBID_SIZE - subIdSv.size();
+                    memcpy(p, "[\"EVENT\",\"", 10);
+                    memcpy(p + 10, subIdSv.data(), subIdSv.size());
+                    doSend(item.connId, std::string_view(p, 13 + subIdSv.size() + msg->evJson.size()), uWS::OpCode::TEXT);
                 }
             }
         }

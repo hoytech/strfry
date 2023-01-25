@@ -34,6 +34,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     std::unordered_set<std::string> downloadedIds;
     WriterPipeline writer;
     WSConnection ws(url);
+    Decompressor decomp;
 
     ws.onConnect = [&]{
         if (dir == "down" || dir == "both") {
@@ -98,7 +99,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
             }
 
             std::string msg = std::string("[\"EVENT\",");
-            msg += getEventJson(txn, ev.primaryKeyId);
+            msg += getEventJson(txn, decomp, ev.primaryKeyId);
             msg += "]";
 
             ws.send(msg);

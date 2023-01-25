@@ -169,12 +169,43 @@ uint64_t getMostRecentLevId(lmdb::txn &txn) {
     return levId;
 }
 
-std::string_view getEventJson(lmdb::txn &txn, uint64_t levId) {
-    std::string_view raw;
-    bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), raw);
-    if (!found) throw herr("couldn't find leaf node in quadrable, corrupted DB?");
-    return raw.substr(1);
+
+// Return result validity same as getEventJson(), see below
+
+std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::string_view raw, uint32_t *outDictId, size_t *outCompressedSize) {
+    if (raw.size() == 0) throw herr("empty event in EventPayload");
+
+    if (raw[0] == '\x00') {
+        if (outDictId) *outDictId = 0;
+        return raw.substr(1);
+    } else if (raw[0] == '\x01') {
+        raw = raw.substr(1);
+        if (raw.size() < 4) throw herr("EventPayload record too short to read dictId");
+        uint32_t dictId = lmdb::from_sv<uint32_t>(raw.substr(0, 4));
+        raw = raw.substr(4);
+
+        decomp.reserve(cfg().events__maxEventSize);
+        std::string_view buf = decomp.decompress(txn, dictId, raw);
+
+        if (outDictId) *outDictId = dictId;
+        if (outCompressedSize) *outCompressedSize = raw.size();
+        return buf;
+    } else {
+        throw("Unexpected first byte in EventPayload");
+    }
 }
+
+// Return result only valid until on of: next call to getEventJson/decodeEventPayload, write on or closing of txn, or any action on decomp object
+
+std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId) {
+    std::string_view raw;
+
+    bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), raw);
+    if (!found) throw herr("couldn't find event in EventPayload, corrupted DB?");
+
+    return decodeEventPayload(txn, decomp, raw, nullptr, nullptr);
+}
+
 
 
 

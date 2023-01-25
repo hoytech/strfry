@@ -4,6 +4,7 @@
 
 
 struct ActiveQueries : NonCopyable {
+    Decompressor decomp;
     using ConnQueries = std::map<SubId, DBScanQuery*>;
     std::map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
     std::deque<DBScanQuery*> running;
@@ -63,8 +64,12 @@ struct ActiveQueries : NonCopyable {
             return;
         }
 
+        auto cursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
+
         bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
-            server->sendEvent(sub.connId, sub.subId, getEventJson(txn, levId));
+            std::string_view key = lmdb::to_sv<uint64_t>(levId), val;
+            if (!cursor.get(key, val, MDB_SET_KEY)) throw herr("couldn't find event in EventPayload, corrupted DB?");
+            server->sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, val, nullptr, nullptr));
         });
 
         if (complete) {
