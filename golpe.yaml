@@ -140,15 +140,19 @@ config:
     default: false
 
   - name: relay__numThreads__ingester
+    desc: Ingester threads: route incoming requests, validate events/sigs
     default: 3
     noReload: true
   - name: relay__numThreads__reqWorker
+    desc: reqWorker threads: Handle initial DB scan for events
     default: 3
     noReload: true
   - name: relay__numThreads__reqMonitor
+    desc: reqMonitor threads: Handle filtering of new events
     default: 3
     noReload: true
   - name: relay__numThreads__yesstr
+    desc: yesstr threads: Experimental yesstr protocol
     default: 1
     noReload: true
 
