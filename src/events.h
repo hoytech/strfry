@@ -51,7 +51,9 @@ std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::s
 std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId);
 
 inline quadrable::Key flatEventToQuadrableKey(const NostrIndex::Event *flat) {
-    return quadrable::Key::fromIntegerAndHash(flat->created_at(), sv(flat->id()).substr(0, 23));
+    uint64_t timestamp = flat->created_at();
+    if (timestamp > MAX_TIMESTAMP) throw herr("timestamp is too large to encode in quadrable key");
+    return quadrable::Key::fromIntegerAndHash(timestamp, sv(flat->id()).substr(0, 27));
 }
 
 

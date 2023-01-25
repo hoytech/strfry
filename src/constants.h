@@ -1,3 +1,4 @@
 #pragma once
 
-const size_t MAX_SUBID_SIZE = 63;
+const size_t MAX_SUBID_SIZE = 63; // Statically allocated size in SubId
+const uint64_t MAX_TIMESTAMP = 17179869184; // Safety limit to ensure it can fit in quadrable key. Good until year 2514.

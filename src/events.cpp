@@ -119,7 +119,7 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
     uint64_t latest = now + cfg().events__rejectEventsNewerThanSeconds;
 
     if (ts < earliest) throw herr("created_at too early");
-    if (ts > latest) throw herr("created_at too late");
+    if (ts > latest || ts > MAX_TIMESTAMP) throw herr("created_at too late");
 }
 
 void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &flatStr, std::string &jsonStr) {
