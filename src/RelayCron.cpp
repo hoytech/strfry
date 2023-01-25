@@ -52,11 +52,8 @@ void RelayServer::cleanupOldEvents() {
         for (auto levId : expiredLevIds) {
             auto view = env.lookup_Event(txn, levId);
             if (!view) continue; // Deleted in between transactions
-
+            deleteEvent(txn, changes, *view);
             numDeleted++;
-            changes.del(flatEventToQuadrableKey(view->flat_nested()));
-            env.delete_Event(txn, levId);
-            env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
         }
 
         changes.apply(txn);
