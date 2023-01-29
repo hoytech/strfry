@@ -168,8 +168,7 @@ struct NostrFilter {
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 
-        indexOnlyScans = numMajorFields <= 1;
-        // FIXME: pubkeyKind scan could be serviced index-only too
+        indexOnlyScans = (numMajorFields <= 1) || (numMajorFields == 2 && authors && kinds);
     }
 
     bool doesMatchTimes(uint64_t created) const {
