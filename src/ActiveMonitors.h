@@ -15,19 +15,19 @@ struct ActiveMonitors : NonCopyable {
         Monitor(Subscription &sub_) : sub(std::move(sub_)) {}
     };
 
-    using ConnMonitor = std::map<SubId, Monitor>;
-    std::map<uint64_t, ConnMonitor> conns; // connId -> subId -> Monitor
+    using ConnMonitor = flat_hash_map<SubId, Monitor>;
+    flat_hash_map<uint64_t, ConnMonitor> conns; // connId -> subId -> Monitor
 
     struct MonitorItem {
         Monitor *mon;
         uint64_t latestEventId;
     };
 
-    using MonitorSet = std::map<NostrFilter*, MonitorItem>; // FIXME: flat_map here
-    std::map<std::string, MonitorSet> allIds;
-    std::map<std::string, MonitorSet> allAuthors;
-    std::map<std::string, MonitorSet> allTags;
-    std::map<uint64_t, MonitorSet> allKinds;
+    using MonitorSet = flat_hash_map<NostrFilter*, MonitorItem>;
+    btree_map<std::string, MonitorSet> allIds;
+    btree_map<std::string, MonitorSet> allAuthors;
+    btree_map<std::string, MonitorSet> allTags;
+    btree_map<uint64_t, MonitorSet> allKinds;
     MonitorSet allOthers;
 
     std::string tagSpecBuf = std::string(256, '\0');
@@ -92,7 +92,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsPrefix = [&](std::map<std::string, MonitorSet> &m, const std::string &key, std::function<bool(const std::string&)> matches){
+        auto processMonitorsPrefix = [&](btree_map<std::string, MonitorSet> &m, const std::string &key, std::function<bool(const std::string&)> matches){
             auto it = m.lower_bound(key.substr(0, 1));
 
             if (it == m.end()) return;
@@ -103,7 +103,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsExact = [&]<typename T>(std::map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
+        auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
             auto it = m.upper_bound(key);
 
             if (it == m.begin()) return;

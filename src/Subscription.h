@@ -1,5 +1,7 @@
 #pragma once
 
+#include <parallel_hashmap/phmap_utils.h>
+
 #include "filters.h"
 
 
@@ -28,10 +30,19 @@ struct SubId {
     std::string str() const {
         return std::string(sv());
     }
+
+    bool operator==(const SubId &o) const {
+        return o.sv() == sv();
+    }
 };
 
-inline bool operator <(const SubId &s1, const SubId &s2) {
-    return s1.sv() < s2.sv();
+namespace std {
+    // inject specialization of std::hash
+    template<> struct hash<SubId> {
+        std::size_t operator()(SubId const &p) const {
+            return phmap::HashState().combine(0, p.sv());
+        }
+    };
 }
 
 

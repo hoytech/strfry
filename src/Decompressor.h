@@ -3,7 +3,6 @@
 #include <zstd.h>
 #include <zdict.h>
 
-#include <unordered_map>
 #include <mutex>
 
 #include "golpe.h"
@@ -11,7 +10,7 @@
 
 struct DictionaryBroker {
     std::mutex mutex;
-    std::unordered_map<uint32_t, ZSTD_DDict*> dicts;
+    flat_hash_map<uint32_t, ZSTD_DDict*> dicts;
 
     ZSTD_DDict *getDict(lmdb::txn &txn, uint32_t dictId) {
         std::lock_guard<std::mutex> guard(mutex);
@@ -34,7 +33,7 @@ extern DictionaryBroker globalDictionaryBroker;
 
 struct Decompressor {
     ZSTD_DCtx *dctx;
-    std::unordered_map<uint32_t, ZSTD_DDict*> dicts;
+    flat_hash_map<uint32_t, ZSTD_DDict*> dicts;
     std::string buffer;
 
     Decompressor() {

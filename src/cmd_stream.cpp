@@ -31,7 +31,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     if (dir != "up" && dir != "down" && dir != "both") throw herr("invalid direction: ", dir, ". Should be one of up/down/both");
 
 
-    std::unordered_set<std::string> downloadedIds;
+    flat_hash_set<std::string> downloadedIds;
     WriterPipeline writer;
     WSConnection ws(url);
     Decompressor decomp;

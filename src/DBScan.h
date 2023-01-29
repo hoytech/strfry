@@ -30,7 +30,7 @@ struct DBScan {
     };
 
     struct TagScan {
-        std::map<char, FilterSetBytes>::const_iterator indexTagName;
+        flat_hash_map<char, FilterSetBytes>::const_iterator indexTagName;
         size_t indexTagVal = 0;
         std::string search;
     };
@@ -295,7 +295,7 @@ struct DBScanQuery : NonCopyable {
 
     size_t filterGroupIndex = 0;
     bool dead = false;
-    std::unordered_set<uint64_t> alreadySentEvents; // FIXME: flat_set here, or roaring bitmap/judy/whatever
+    flat_hash_set<uint64_t> alreadySentEvents;
 
     uint64_t currScanTime = 0;
     uint64_t currScanSaveRestores = 0;

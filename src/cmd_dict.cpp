@@ -71,7 +71,7 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
 
         auto txn = env.txn_ro();
 
-        std::map<uint32_t, uint64_t> dicts;
+        btree_map<uint32_t, uint64_t> dicts;
 
         env.foreach_CompressionDictionary(txn, [&](auto &view){
             auto dictId = view.primaryKeyId;

@@ -1,6 +1,7 @@
 appName: strfry
 quadrable: true
 onAppStartup: true
+useGlobalH: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";

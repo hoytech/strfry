@@ -5,8 +5,8 @@
 
 struct ActiveQueries : NonCopyable {
     Decompressor decomp;
-    using ConnQueries = std::map<SubId, DBScanQuery*>;
-    std::map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
+    using ConnQueries = flat_hash_map<SubId, DBScanQuery*>;
+    flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
     std::deque<DBScanQuery*> running;
 
     void addSub(lmdb::txn &txn, Subscription &&sub) {

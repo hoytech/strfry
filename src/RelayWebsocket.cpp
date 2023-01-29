@@ -40,7 +40,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     uWS::Hub hub;
     uWS::Group<uWS::SERVER> *hubGroup;
-    std::map<uint64_t, Connection*> connIdToConnection;
+    flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
 
     std::string tempBuf;

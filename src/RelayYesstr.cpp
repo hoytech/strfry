@@ -20,7 +20,7 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
     struct SyncStateCollection {
         RelayServer *server;
         quadrable::Quadrable *qdb;
-        std::map<uint64_t, std::map<uint64_t, SyncState>> conns; // connId -> reqId -> SyncState
+        flat_hash_map<uint64_t, flat_hash_map<uint64_t, SyncState>> conns; // connId -> reqId -> SyncState
 
         SyncStateCollection(RelayServer *server_, quadrable::Quadrable *qdb_) : server(server_), qdb(qdb_) {}
 

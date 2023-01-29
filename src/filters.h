@@ -114,7 +114,7 @@ struct NostrFilter {
     std::optional<FilterSetBytes> ids;
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
-    std::map<char, FilterSetBytes> tags;
+    flat_hash_map<char, FilterSetBytes> tags;
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
