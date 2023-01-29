@@ -160,6 +160,7 @@ struct RelayServer {
     void runYesstr(ThreadPool<MsgYesstr>::Thread &thr);
 
     void cleanupOldEvents();
+    void garbageCollect();
 
     // Utils (can be called by any thread)
 

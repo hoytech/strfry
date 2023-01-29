@@ -48,6 +48,10 @@ void RelayServer::run() {
         cleanupOldEvents();
     });
 
+    cron.repeat(60 * 60 * 1'000'000UL, [&]{
+        garbageCollect();
+    });
+
     cron.setupCb = []{ setThreadName("cron"); };
 
     cron.run();

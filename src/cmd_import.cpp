@@ -5,6 +5,7 @@
 
 #include "events.h"
 #include "filters.h"
+#include "gc.h"
 
 
 static const char USAGE[] =
@@ -59,6 +60,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
         logStatus();
         LI << "Committing " << numCommits << " records";
+
         txn.commit();
 
         txn = env.txn_rw();
@@ -90,6 +92,8 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     }
 
     flushChanges();
+
+    quadrableGarbageCollect(qdb, 2);
 
     txn.commit();
 }

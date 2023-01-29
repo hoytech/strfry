@@ -4,7 +4,7 @@
 #include <docopt.h>
 #include "golpe.h"
 
-#include "render.h"
+#include "gc.h"
 
 
 static const char USAGE[] =
@@ -39,29 +39,6 @@ void cmd_compact(const std::vector<std::string> &subArgs) {
         }
         qdb.checkout("events");
 
-        quadrable::Quadrable::GarbageCollector gc(qdb);
-
-        {
-            auto txn = env.txn_ro();
-            gc.markAllHeads(txn);
-        }
-
-        {
-            auto txn = env.txn_rw();
-
-            auto stats = gc.sweep(txn);
-            /*
-            auto stats = gc.sweep(txn, [&](uint64_t nodeId){
-                quadrable::Quadrable::ParsedNode node(&qdb, txn, nodeId);
-                if (!node.isBranch()) throw herr("unexpected quadrable node type during gc: ", (int)node.nodeType);
-                return true;
-            });
-            */
-
-            txn.commit();
-
-            LI << "Total nodes: " << stats.total;
-            LI << "Collected:   " << stats.collected << " (" << renderPercent((double)stats.collected / stats.total) << ")";
-        }
+        quadrableGarbageCollect(qdb, 2);
     }
 }

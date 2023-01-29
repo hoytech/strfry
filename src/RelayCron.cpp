@@ -1,5 +1,7 @@
 #include "RelayServer.h"
 
+#include "gc.h"
+
 
 void RelayServer::cleanupOldEvents() {
     std::vector<uint64_t> expiredLevIds;
@@ -62,4 +64,15 @@ void RelayServer::cleanupOldEvents() {
 
         if (numDeleted) LI << "Deleted " << numDeleted << " ephemeral events";
     }
+}
+
+void RelayServer::garbageCollect() {
+    quadrable::Quadrable qdb;
+    {
+        auto txn = env.txn_ro();
+        qdb.init(txn);
+    }
+    qdb.checkout("events");
+
+    quadrableGarbageCollect(qdb, 1);
 }
