@@ -127,6 +127,15 @@ config:
     desc: "Maximum records that can be returned per filter"
     default: 500
 
+  - name: relay__compression__enabled
+    desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"
+    default: true
+    noReload: true
+  - name: relay__compression__slidingWindow
+    desc: "Maintain a sliding window buffer for each connection. Improves compression, but uses more memory"
+    default: true
+    noReload: true
+
   - name: relay__logging__dumpInAll
     desc: "Dump all incoming messages"
     default: false
