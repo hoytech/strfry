@@ -2,6 +2,7 @@ appName: strfry
 quadrable: true
 onAppStartup: true
 useGlobalH: true
+customLMDBSetup: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
@@ -83,8 +84,17 @@ tablesRaw:
 
 config:
   - name: db
-    desc: "Directory that contains strfry database"
+    desc: "Directory that contains the strfry LMDB database"
     default: "./strfry-db/"
+    noReload: true
+
+  - name: dbParams__maxreaders
+    desc: "Maximum number of threads/processes that can simultaneously have LMDB transactions open"
+    default: 256
+    noReload: true
+  - name: dbParams__mapsize
+    desc: "Size of mmap() to use when loading LMDB (does *not* correspond to disk-space used, default is 10TB)"
+    default: 10995116277760
     noReload: true
 
   - name: relay__bind
