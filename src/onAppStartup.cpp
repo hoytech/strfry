@@ -1,8 +1,13 @@
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <string.h>
+#include <errno.h>
+
 #include "golpe.h"
 
 const size_t CURR_DB_VERSION = 1;
 
-void onAppStartup(lmdb::txn &txn, const std::string &cmd) {
+static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     auto dbTooOld = [&](uint64_t ver) {
         LE << "Database version too old: " << ver << ". Expected version " << CURR_DB_VERSION;
         LE << "You should 'strfry export' your events, delete (or move) the DB files, and 'strfry import' them";
@@ -46,4 +51,22 @@ void onAppStartup(lmdb::txn &txn, const std::string &cmd) {
     if (s->dbVersion() > CURR_DB_VERSION) {
         dbTooNew(s->dbVersion());
     }
+}
+
+static void setRLimits() {
+    if (!cfg().relay__nofiles) return;
+    struct rlimit curr;
+
+    if (getrlimit(RLIMIT_NOFILE, &curr)) throw herr("couldn't call getrlimit: ", strerror(errno));
+
+    if (cfg().relay__nofiles > curr.rlim_max) throw herr("Unable to set NOFILES limit to ", cfg().relay__nofiles, ", exceeds max of ", curr.rlim_max);
+
+    curr.rlim_cur = cfg().relay__nofiles;
+
+    if (setrlimit(RLIMIT_NOFILE, &curr)) throw herr("Failed setting NOFILES limit to ", cfg().relay__nofiles, ": ", strerror(errno));
+}
+
+void onAppStartup(lmdb::txn &txn, const std::string &cmd) {
+    dbCheck(txn, cmd);
+    setRLimits();
 }

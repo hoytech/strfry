@@ -105,6 +105,10 @@ config:
     desc: "Port to open for the nostr websocket protocol"
     default: 7777
     noReload: true
+  - name: relay__nofiles
+    desc: "Set OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)"
+    default: 1000000
+    noReload: true
 
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
