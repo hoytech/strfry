@@ -11,12 +11,18 @@ features
   make it easier for a thread to setup a quadrable env
 
 rate limits
+  ! event writes per second per ip
   slow-reader detection and back-pressure
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
-  event writes per second per ip
   max number of concurrent REQs per connection/ip
   ? limit on total number of events from a DBScan, not just per filter
+
+event sources
+
+multiple sync connections in one process/config
+
+relay block-list events
 
 misc
   periodic reaping of disconnected sockets
