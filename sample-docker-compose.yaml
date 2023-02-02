@@ -1,0 +1,8 @@
+services:
+  strfry-nostr-relay:
+    build: .
+    volumes:
+      - /path/to/strfry.conf:/etc/strfry.conf
+      - /path/to/strfry-db:/app/strfry-db
+    ports:
+      - "7777:7777"
