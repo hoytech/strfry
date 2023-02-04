@@ -25,5 +25,6 @@ multiple sync connections in one process/config
 relay block-list events
 
 misc
+  ! when disk is full it should log warning but not crash
   periodic reaping of disconnected sockets
   ? websocket-level pings
