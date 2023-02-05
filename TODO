@@ -1,3 +1,12 @@
+0.1 release
+  event sources
+  rate limits
+  NIP-40 expiration
+  NIP-33 param replaceable events
+  fix sync
+  when disk is full it should log warning but not crash
+  ensure DB upgrade flow works
+
 features
   finish syncing
     * logging of bytes up/down
@@ -9,22 +18,17 @@ features
     * `strfry sync` command always takes at least 1 second due to batching delay. figure out better way to flush
   less verbose default logging
   make it easier for a thread to setup a quadrable env
+  multiple sync connections in one process/config
+  relay block-list events
+  NIP-42 AUTH
+  procmail-like API for event filtering
 
 rate limits
   ! event writes per second per ip
   slow-reader detection and back-pressure
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
-  max number of concurrent REQs per connection/ip
   ? limit on total number of events from a DBScan, not just per filter
 
-event sources
-
-multiple sync connections in one process/config
-
-relay block-list events
-
 misc
-  ! when disk is full it should log warning but not crash
-  periodic reaping of disconnected sockets
-  ? websocket-level pings
+  ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
