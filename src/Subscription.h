@@ -6,11 +6,11 @@
 
 
 struct SubId {
-    char buf[64];
+    char buf[72];
 
     SubId(std::string_view val) {
-        static_assert(MAX_SUBID_SIZE == 63, "MAX_SUBID_SIZE mismatch");
-        if (val.size() > 63) throw herr("subscription id too long");
+        static_assert(MAX_SUBID_SIZE == 71, "MAX_SUBID_SIZE mismatch");
+        if (val.size() > 71) throw herr("subscription id too long");
         if (val.size() == 0) throw herr("subscription id too short");
 
         auto badChar = [](char c){
