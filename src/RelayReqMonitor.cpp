@@ -28,9 +28,11 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgReqMonitor::NewSub>(&newMsg.msg)) {
+                auto connId = msg->sub.connId;
+
                 env.foreach_Event(txn, [&](auto &ev){
                     if (msg->sub.filterGroup.doesMatch(ev.flat_nested())) {
-                        sendEvent(msg->sub.connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
+                        sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
                     }
 
                     return true;
@@ -38,7 +40,9 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
                 msg->sub.latestEventId = latestEventId;
 
-                monitors.addSub(txn, std::move(msg->sub), latestEventId);
+                if (!monitors.addSub(txn, std::move(msg->sub), latestEventId)) {
+                    sendNoticeError(connId, std::string("too many concurrent REQs"));
+                }
             } else if (auto msg = std::get_if<MsgReqMonitor::RemoveSub>(&newMsg.msg)) {
                 monitors.removeSub(msg->connId, msg->subId);
             } else if (auto msg = std::get_if<MsgReqMonitor::CloseConn>(&newMsg.msg)) {

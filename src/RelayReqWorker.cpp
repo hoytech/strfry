@@ -9,7 +9,7 @@ struct ActiveQueries : NonCopyable {
     flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
     std::deque<DBScanQuery*> running;
 
-    void addSub(lmdb::txn &txn, Subscription &&sub) {
+    bool addSub(lmdb::txn &txn, Subscription &&sub) {
         sub.latestEventId = getMostRecentLevId(txn);
 
         {
@@ -20,10 +20,16 @@ struct ActiveQueries : NonCopyable {
         auto res = conns.try_emplace(sub.connId);
         auto &connQueries = res.first->second;
 
+        if (connQueries.size() >= cfg().relay__maxSubsPerConnection) {
+            return false;
+        }
+
         DBScanQuery *q = new DBScanQuery(sub);
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);
+
+        return true;
     }
 
     DBScanQuery *findQuery(uint64_t connId, const SubId &subId) {
@@ -98,7 +104,12 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgReqWorker::NewSub>(&newMsg.msg)) {
-                queries.addSub(txn, std::move(msg->sub));
+                auto connId = msg->sub.connId;
+
+                if (!queries.addSub(txn, std::move(msg->sub))) {
+                    sendNoticeError(connId, std::string("too many concurrent REQs"));
+                }
+
                 queries.process(this, txn);
             } else if (auto msg = std::get_if<MsgReqWorker::RemoveSub>(&newMsg.msg)) {
                 queries.removeSub(msg->connId, msg->subId);

@@ -40,7 +40,7 @@ struct ActiveMonitors : NonCopyable {
 
 
   public:
-    void addSub(lmdb::txn &txn, Subscription &&sub, uint64_t currEventId) {
+    bool addSub(lmdb::txn &txn, Subscription &&sub, uint64_t currEventId) {
         if (sub.latestEventId != currEventId) throw herr("sub not up to date");
 
         {
@@ -51,10 +51,15 @@ struct ActiveMonitors : NonCopyable {
         auto res = conns.try_emplace(sub.connId);
         auto &connMonitors = res.first->second;
 
+        if (connMonitors.size() >= cfg().relay__maxSubsPerConnection) {
+            return false;
+        }
+
         auto subId = sub.subId;
         auto *m = &connMonitors.try_emplace(subId, sub).first->second;
 
         installLookups(m, currEventId);
+        return true;
     }
 
     void removeSub(uint64_t connId, const SubId &subId) {
