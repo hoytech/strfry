@@ -197,7 +197,7 @@ config:
     default: 300
   - name: events__maxNumTags
     desc: "Maximum number of tags allowed"
-    default: 250
+    default: 2000
   - name: events__maxTagValSize
     desc: "Maximum size for tag values, in bytes"
-    default: 255
+    default: 1024
