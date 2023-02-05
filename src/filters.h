@@ -23,14 +23,11 @@ struct FilterSetBytes {
 
         std::vector<std::string> arr;
 
-        uint64_t totalSize = 0;
-
         for (const auto &i : arrHex.get_array()) {
             arr.emplace_back(hexDecode ? from_hex(i.get_string(), false) : i.get_string());
             size_t itemSize = arr.back().size();
             if (itemSize < minSize) throw herr("filter item too small");
             if (itemSize > maxSize) throw herr("filter item too large");
-            totalSize += itemSize;
         }
 
         std::sort(arr.begin(), arr.end());
