@@ -7,9 +7,10 @@
 
 struct FilterSetBytes {
     struct Item {
-        uint16_t offset;
-        uint8_t size;
+        uint32_t offset;
+        uint16_t size;
         uint8_t firstByte;
+        uint8_t padding;
     };
 
     std::vector<Item> items;
@@ -18,6 +19,8 @@ struct FilterSetBytes {
     // Sizes are post-hex decode 
 
     FilterSetBytes(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
+        if (maxSize > std::numeric_limits<uint16_t>::max()) throw herr("filter maxSize too big");
+
         std::vector<std::string> arr;
 
         uint64_t totalSize = 0;
@@ -34,11 +37,11 @@ struct FilterSetBytes {
 
         for (const auto &item : arr) {
             if (items.size() > 0 && item.starts_with(at(items.size() - 1))) continue; // remove duplicates and redundant prefixes
-            items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), (uint8_t)item[0] });
+            items.emplace_back(Item{ (uint32_t)buf.size(), (uint16_t)item.size(), (uint8_t)item[0] });
             buf += item;
         }
 
-        if (buf.size() > 65535) throw herr("total filter items too large");
+        if (buf.size() > 1'000'000) throw herr("total filter items too large");
     }
 
     std::string at(size_t n) const {
