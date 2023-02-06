@@ -19,7 +19,7 @@ The goal is to have:
 
 The remainder of the document assumes a plain VPS.
 
-Vultr 
+Vultr - $12/mo
 - High performance Intel
 - 1 vCPU
 - 2048 MB Ram
@@ -114,9 +114,14 @@ Put the following file at /etc/systemd/system/strfry.service
 
         [Service]
         User=strfry
-        ExecStart=/usr/bin/local/strfry relay
-        Restart=always
-        RestartSec=10
+        ExecStart=/usr/local/bin/strfry relay
+        Restart=on-failure
+        RestartSec=5
+        ProtectHome=yes
+        NoNewPrivileges=yes
+        ProtectSystem=full
+        LimitNOFILE=65536
+        LimitCORE=1000000000
 
         [Install]
         WantedBy=multi-user.target
