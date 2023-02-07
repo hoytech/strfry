@@ -5,7 +5,8 @@
 
 #include "golpe.h"
 
-const size_t CURR_DB_VERSION = 1;
+#include "constants.h"
+
 
 static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     auto dbTooOld = [&](uint64_t ver) {
