@@ -6,6 +6,7 @@
   fix sync
   when disk is full it should log warning but not crash
   ensure DB upgrade flow works
+  ? why isn't the LMDB mapping CLOEXEC
 
 features
   finish syncing

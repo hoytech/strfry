@@ -1,8 +1,12 @@
 #include "RelayServer.h"
 
+#include "PluginWritePolicy.h"
+
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
     auto qdb = getQdbInstance();
+
+    PluginWritePolicy writePolicy;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -14,6 +18,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
+                if (!writePolicy.acceptEvent(msg->jsonStr, msg->receivedAt, sourceType, msg->ipAddr)) continue;
                 newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
             }
         }
