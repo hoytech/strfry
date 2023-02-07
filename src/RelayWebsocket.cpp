@@ -92,20 +92,19 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     });
 
     hubGroup->onConnection([&](uWS::WebSocket<uWS::SERVER> *ws, uWS::HttpRequest req) {
-        std::string addr = ws->getAddress().address;
         uint64_t connId = nextConnectionId++;
+
+        Connection *c = new Connection(ws, connId);
+        c->ipAddr = ws->getAddressBytes();
+        ws->setUserData((void*)c);
+        connIdToConnection.emplace(connId, c);
 
         bool compEnabled, compSlidingWindow;
         ws->getCompressionState(compEnabled, compSlidingWindow);
-        LI << "[" << connId << "] Connect from " << addr
+        LI << "[" << connId << "] Connect from " << renderIP(c->ipAddr)
            << " compression=" << (compEnabled ? 'Y' : 'N')
            << " sliding=" << (compSlidingWindow ? 'Y' : 'N')
         ;
-
-        Connection *c = new Connection(ws, connId);
-        c->ipAddr = addr;
-        ws->setUserData((void*)c);
-        connIdToConnection.emplace(connId, c);
 
         if (cfg().relay__enableTcpKeepalive) {
             int optval = 1;
@@ -122,7 +121,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         auto upComp = renderPercent(1.0 - (double)c->stats.bytesUpCompressed / c->stats.bytesUp);
         auto downComp = renderPercent(1.0 - (double)c->stats.bytesDownCompressed / c->stats.bytesDown);
 
-        LI << "[" << connId << "] Disconnect from " << c->ipAddr
+        LI << "[" << connId << "] Disconnect from " << renderIP(c->ipAddr)
            << " UP: " << renderSize(c->stats.bytesUp) << " (" << upComp << " compressed)"
            << " DN: " << renderSize(c->stats.bytesDown) << " (" << downComp << " compressed)"
         ;
@@ -139,7 +138,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         c.stats.bytesDown += length;
         c.stats.bytesDownCompressed += compressedSize;
 
-        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, std::string(message, length), ws->getAddressBytes()}});
+        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, c.ipAddr, std::string(message, length)}});
     });
 
 
