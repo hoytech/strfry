@@ -276,7 +276,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
         }
 
         if (ev.status == EventWriteStatus::Pending) {
-            ev.levId = env.insert_Event(txn, ev.receivedAt, ev.flatStr);
+            ev.levId = env.insert_Event(txn, ev.receivedAt, ev.flatStr, (uint64_t)ev.sourceType, ev.sourceInfo);
 
             tmpBuf.clear();
             tmpBuf += '\x00';

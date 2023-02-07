@@ -139,7 +139,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         c.stats.bytesDown += length;
         c.stats.bytesDownCompressed += compressedSize;
 
-        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, std::string(message, length)}});
+        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, std::string(message, length), ws->getAddressBytes()}});
     });
 
 

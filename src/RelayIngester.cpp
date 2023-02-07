@@ -29,7 +29,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
 
                             try {
-                                ingesterProcessEvent(txn, msg->connId, secpCtx, arr[1], writerMsgs);
+                                ingesterProcessEvent(txn, msg->connId, msg->ipAddr, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
                                 sendOKResponse(msg->connId, arr[1].at("id").get_string(), false, std::string("invalid: ") + e.what());
                                 LI << "Rejected invalid event: " << e.what();
@@ -82,7 +82,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     }
 }
 
-void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output) {
+void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output) {
     std::string flatStr, jsonStr;
 
     parseAndVerifyEvent(origJson, secpCtx, true, true, flatStr, jsonStr);
@@ -98,7 +98,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, secp256k
         }
     }
 
-    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, hoytech::curr_time_us(), std::move(flatStr), std::move(jsonStr)}});
+    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), hoytech::curr_time_us(), std::move(flatStr), std::move(jsonStr)}});
 }
 
 void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {

@@ -228,7 +228,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             controller->finish(txn,
                 [&](std::string_view newLeaf){
                     // FIXME: relay could crash client here by sending invalid JSON
-                    writer.inbox.push_move(tao::json::from_string(std::string(newLeaf)));
+                    writer.inbox.push_move(WriterPipelineInput{ tao::json::from_string(std::string(newLeaf)), EventSourceType::Sync, url });
                 },
                 [&](std::string_view){
                 }

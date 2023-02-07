@@ -27,6 +27,9 @@ tables:
       - name: flat
         type: ubytes
         nestedFlat: NostrIndex.Event
+      - name: sourceType
+      - name: sourceInfo
+        type: ubytes
 
     indices:
       created_at:

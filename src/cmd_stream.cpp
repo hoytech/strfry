@@ -64,7 +64,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     if (origJson.get_array().size() < 3) throw herr("array too short");
                     auto &evJson = origJson.at(2);
                     downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
-                    writer.inbox.push_move(std::move(evJson));
+                    writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
                 } else {
                     LW << "Unexpected EVENT";
                 }

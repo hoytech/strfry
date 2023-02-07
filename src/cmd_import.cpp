@@ -86,7 +86,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
             continue;
         }
 
-        newEvents.emplace_back(std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us());
+        newEvents.emplace_back(std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us(), EventSourceType::Import, "");
 
         if (newEvents.size() >= 10'000) flushChanges();
     }

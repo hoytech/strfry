@@ -59,6 +59,15 @@ inline quadrable::Key flatEventToQuadrableKey(const NostrIndex::Event *flat) {
 
 
 
+enum class EventSourceType {
+    None = 0,
+    IP4 = 1,
+    IP6 = 2,
+    Import = 3,
+    Stream = 4,
+    Sync = 5,
+};
+
 
 
 enum class EventWriteStatus {
@@ -74,6 +83,8 @@ struct EventToWrite {
     std::string flatStr;
     std::string jsonStr;
     uint64_t receivedAt;
+    EventSourceType sourceType;
+    std::string sourceInfo;
     void *userData = nullptr;
     quadrable::Key quadKey;
     EventWriteStatus status = EventWriteStatus::Pending;
@@ -81,7 +92,7 @@ struct EventToWrite {
 
     EventToWrite() {}
 
-    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), userData(userData) {
+    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string sourceInfo, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), sourceType(sourceType), sourceInfo(sourceInfo), userData(userData) {
         const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
         quadKey = flatEventToQuadrableKey(flat);
     }
