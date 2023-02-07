@@ -1,5 +1,4 @@
 appName: strfry
-quadrable: true
 onAppStartup: true
 useGlobalH: true
 customLMDBSetup: true

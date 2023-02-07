@@ -67,7 +67,24 @@ static void setRLimits() {
     if (setrlimit(RLIMIT_NOFILE, &curr)) throw herr("Failed setting NOFILES limit to ", cfg().relay__nofiles, ": ", strerror(errno));
 }
 
+
+
+quadrable::Quadrable getQdbInstance(lmdb::txn &txn) {
+    quadrable::Quadrable qdb;
+    qdb.init(txn);
+    qdb.checkout("events");
+    return qdb;
+}
+
+quadrable::Quadrable getQdbInstance() {
+    auto txn = env.txn_ro();
+    return getQdbInstance(txn);
+}
+
 void onAppStartup(lmdb::txn &txn, const std::string &cmd) {
     dbCheck(txn, cmd);
+
     setRLimits();
+
+    (void)getQdbInstance(txn);
 }

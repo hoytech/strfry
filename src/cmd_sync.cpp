@@ -133,18 +133,10 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::unique_ptr<SyncController> controller;
     WriterPipeline writer;
     WSConnection ws(url);
-
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
-
+    auto qdb = getQdbInstance();
 
 
     ws.reconnect = false;
-
 
 
     if (filterStr.size()) {

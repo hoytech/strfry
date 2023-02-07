@@ -32,12 +32,7 @@ void cmd_compact(const std::vector<std::string> &subArgs) {
             env.copy_fd(::fileno(f));
         }
     } else if (args["quad-gc"].asBool()) {
-        quadrable::Quadrable qdb;
-        {
-            auto txn = env.txn_ro();
-            qdb.init(txn);
-        }
-        qdb.checkout("events");
+        auto qdb = getQdbInstance();
 
         quadrableGarbageCollect(qdb, 2);
     }

@@ -23,12 +23,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
 
     auto txn = env.txn_rw();
 

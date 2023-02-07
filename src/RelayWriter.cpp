@@ -2,12 +2,7 @@
 
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();

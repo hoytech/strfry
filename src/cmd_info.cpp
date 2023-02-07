@@ -14,12 +14,7 @@ R"(
 void cmd_info(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
 
     auto txn = env.txn_ro();
 

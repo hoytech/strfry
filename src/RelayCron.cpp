@@ -42,11 +42,9 @@ void RelayServer::cleanupOldEvents() {
     }
 
     if (expiredLevIds.size() > 0) {
-        auto txn = env.txn_rw();
+        auto qdb = getQdbInstance();
 
-        quadrable::Quadrable qdb;
-        qdb.init(txn);
-        qdb.checkout("events");
+        auto txn = env.txn_rw();
 
         uint64_t numDeleted = 0;
         auto changes = qdb.change();
@@ -67,12 +65,7 @@ void RelayServer::cleanupOldEvents() {
 }
 
 void RelayServer::garbageCollect() {
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
 
     quadrableGarbageCollect(qdb, 1);
 }

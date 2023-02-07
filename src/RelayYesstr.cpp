@@ -6,12 +6,7 @@
 
 
 void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-
+    auto qdb = getQdbInstance();
 
     struct SyncState {
         quadrable::MemStore m;

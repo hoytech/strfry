@@ -58,12 +58,7 @@ struct WriterPipeline {
         writerThread = std::thread([&]() {
             setThreadName("Writer");
 
-            quadrable::Quadrable qdb;
-            {
-                auto txn = env.txn_ro();
-                qdb.init(txn);
-            }
-            qdb.checkout("events");
+            auto qdb = getQdbInstance();
 
             while (1) {
                 // Debounce
