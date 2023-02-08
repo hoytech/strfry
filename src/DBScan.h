@@ -187,7 +187,7 @@ struct DBScan {
         } else {
             scanState = CreatedAtScan{};
             auto *state = std::get_if<CreatedAtScan>(&scanState);
-            indexDbi = env.dbi_Event__created_at;
+            indexDbi = env.dbi_Event__createdAt;
 
             isComplete = [&, state]{
                 return state->done;

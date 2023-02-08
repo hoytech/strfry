@@ -73,14 +73,15 @@ struct PluginWritePolicy {
                 }
             }
 
-            if (!running) setupPlugin();
-
-            auto json = tao::json::from_string(jsonStr);
+            if (!running) {
+                setupPlugin();
+                sendLookbackEvents();
+            }
 
             auto request = tao::json::value({
                 { "type", "new" },
-                { "event", json },
-                { "receivedAt", receivedAt },
+                { "event", tao::json::from_string(jsonStr) },
+                { "receivedAt", receivedAt / 1000000 },
                 { "sourceType", eventSourceTypeToStr(sourceType) },
                 { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
             });
@@ -88,7 +89,7 @@ struct PluginWritePolicy {
             std::string output = tao::json::to_string(request);
             output += "\n";
 
-            ::fwrite(output.data(), output.size(), 1, running->w);
+            if (::fwrite(output.data(), 1, output.size(), running->w) != output.size()) throw herr("error writing to plugin");
 
             tao::json::value response;
 
@@ -102,7 +103,8 @@ struct PluginWritePolicy {
                     LW << "Got unparseable line from write policy plugin: " << buf;
                     continue;
                 }
-                // FIXME: verify id
+
+                if (response.at("id").get_string() != request.at("event").at("id").get_string()) throw herr("id mismatch");
 
                 break;
             }
@@ -174,5 +176,41 @@ struct PluginWritePolicy {
         if (ret) throw herr("posix_spawn failed when to invoke '", path, "': ", strerror(errno));
 
         running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path);
+    }
+
+    void sendLookbackEvents() {
+        if (cfg().relay__writePolicy__lookbackSeconds == 0) return;
+
+        Decompressor decomp;
+        auto now = hoytech::curr_time_us();
+
+        uint64_t start = now - (cfg().relay__writePolicy__lookbackSeconds * 1'000'000);
+
+        auto txn = env.txn_ro();
+
+        env.generic_foreachFull(txn, env.dbi_Event__receivedAt, lmdb::to_sv<uint64_t>(start), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
+            if (lmdb::from_sv<uint64_t>(k) > now) return false;
+
+            auto ev = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
+            if (!ev) throw herr("unable to look up event, corrupt DB?");
+
+            auto sourceType = (EventSourceType)ev->sourceType();
+            std::string_view sourceInfo = ev->sourceInfo();
+
+            auto request = tao::json::value({
+                { "type", "lookback" },
+                { "event", tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId)) },
+                { "receivedAt", ev->receivedAt() / 1000000 },
+                { "sourceType", eventSourceTypeToStr(sourceType) },
+                { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
+            });
+
+            std::string output = tao::json::to_string(request);
+            output += "\n";
+
+            if (::fwrite(output.data(), 1, output.size(), running->w) != output.size()) throw herr("error writing to plugin");
+
+            return true;
+        });
     }
 };

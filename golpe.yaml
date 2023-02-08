@@ -31,7 +31,9 @@ tables:
         type: ubytes
 
     indices:
-      created_at:
+      createdAt:
+        integer: true
+      receivedAt:
         integer: true
       id:
         comparator: StringUint64
@@ -54,8 +56,9 @@ tables:
 
     indexPrelude: |
         auto *flat = v.flat_nested();
-        created_at = flat->created_at();
-        uint64_t indexTime = *created_at;
+        createdAt = flat->created_at();
+        uint64_t indexTime = *createdAt;
+        receivedAt = v.receivedAt();
 
         id = makeKey_StringUint64(sv(flat->id()), indexTime);
         pubkey = makeKey_StringUint64(sv(flat->pubkey()), indexTime);
@@ -164,11 +167,11 @@ config:
     default: 20
 
   - name: relay__writePolicy__plugin
-    desc: ""
+    desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
     default: ""
   - name: relay__writePolicy__lookbackSeconds
-    desc: ""
-    default: 21600
+    desc: "Number of seconds to search backwards for lookback events when starting the writePolicy plugin (0 for no lookback)"
+    default: 0
 
   - name: relay__compression__enabled
     desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"

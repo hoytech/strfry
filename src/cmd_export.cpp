@@ -24,7 +24,7 @@ void cmd_export(const std::vector<std::string> &subArgs) {
 
     auto txn = env.txn_ro();
 
-    env.generic_foreachFull(txn, env.dbi_Event__created_at, lmdb::to_sv<uint64_t>(since), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
+    env.generic_foreachFull(txn, env.dbi_Event__createdAt, lmdb::to_sv<uint64_t>(since), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
         if (lmdb::from_sv<uint64_t>(k) > until) return false;
 
         auto view = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
