@@ -9,7 +9,6 @@
 
 #include "DBScan.h"
 #include "events.h"
-#include "render.h"
 
 
 static const char USAGE[] =

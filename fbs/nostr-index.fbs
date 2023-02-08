@@ -21,6 +21,7 @@ table Event {
     kind: uint64;
     tagsGeneral: [TagGeneral];
     tagsFixed32: [TagFixed32];
+    expiration: uint64;
 }
 
 table Empty {}

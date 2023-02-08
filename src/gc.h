@@ -2,8 +2,6 @@
 
 #include "golpe.h"
 
-#include "render.h"
-
 
 inline void quadrableGarbageCollect(quadrable::Quadrable &qdb, int logLevel = 0) {
     quadrable::Quadrable::GarbageCollector<flat_hash_set<uint64_t>> gc(qdb);

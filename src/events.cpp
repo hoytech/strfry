@@ -19,13 +19,14 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
     std::vector<flatbuffers::Offset<NostrIndex::TagGeneral>> tagsGeneral;
     std::vector<flatbuffers::Offset<NostrIndex::TagFixed32>> tagsFixed32;
 
+    uint64_t expiration = 0;
+
     if (v.at("tags").get_array().size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
     for (auto &tagArr : v.at("tags").get_array()) {
         auto &tag = tagArr.get_array();
         if (tag.size() < 2) throw herr("too few fields in tag");
 
         auto tagName = tag.at(0).get_string();
-        if (tagName.size() != 1) continue; // only single-char tags need indexing
 
         auto tagVal = tag.at(1).get_string();
 
@@ -37,8 +38,14 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
                 (uint8_t)tagName[0],
                 (NostrIndex::Fixed32Bytes*)tagVal.data()
             ));
-        } else {
-            if (tagVal.size() < 1 || tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too small/large: ", tagVal.size());
+        } else if (tagName == "expiration") {
+            if (expiration == 0) {
+                expiration = parseUint64(tagVal);
+                if (expiration == 0) expiration = 1; // special value to indicate expiration of 0 was set
+            }
+        } else if (tagName.size() == 1) {
+            if (tagVal.size() == 0) throw herr("tag val empty");
+            if (tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too large: ", tagVal.size());
 
             if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
                 tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
@@ -57,7 +64,8 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
         created_at,
         kind,
         builder.CreateVector<flatbuffers::Offset<NostrIndex::TagGeneral>>(tagsGeneral),
-        builder.CreateVector<flatbuffers::Offset<NostrIndex::TagFixed32>>(tagsFixed32)
+        builder.CreateVector<flatbuffers::Offset<NostrIndex::TagFixed32>>(tagsFixed32),
+        expiration
     );
 
     builder.Finish(eventPtr);
@@ -122,6 +130,8 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
 
     if (ts < earliest) throw herr("created_at too early");
     if (ts > latest || ts > MAX_TIMESTAMP) throw herr("created_at too late");
+
+    if (flat->expiration() != 0 && flat->expiration() <= now) throw herr("event expired");
 }
 
 void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &flatStr, std::string &jsonStr) {

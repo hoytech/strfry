@@ -12,7 +12,10 @@ quadrable::Quadrable getQdbInstance(lmdb::txn &txn);
 quadrable::Quadrable getQdbInstance();
 
 
-std::string renderIP(std::string_view ipBytes);
-
-
 #include "constants.h"
+
+
+std::string renderIP(std::string_view ipBytes);
+std::string renderSize(uint64_t si);
+std::string renderPercent(double p);
+uint64_t parseUint64(const std::string &s);

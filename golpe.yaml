@@ -46,6 +46,9 @@ tables:
         multi: true
       deletion: # eventId, pubkey
         multi: true
+      expiration:
+        integer: true
+        multi: true
 
     indexPrelude: |
         auto *flat = v.flat_nested();
@@ -68,6 +71,10 @@ tables:
             auto tagVal = sv(tagPair->val());
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
             if (flat->kind() == 5 && tagName == 'e') deletion.push_back(std::string(tagVal) + std::string(sv(flat->pubkey())));
+        }
+
+        if (flat->expiration() != 0) {
+            expiration.push_back(flat->expiration());
         }
 
   CompressionDictionary:

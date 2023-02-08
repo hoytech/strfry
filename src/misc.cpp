@@ -1,6 +1,11 @@
 #include <arpa/inet.h>
+#include <stdio.h>
+
+#include <algorithm>
+#include <string>
 
 #include "golpe.h"
+
 
 std::string renderIP(std::string_view ipBytes) {
     char buf[128];
@@ -14,4 +19,59 @@ std::string renderIP(std::string_view ipBytes) {
     }
 
     return std::string(buf);
+}
+
+
+std::string renderSize(uint64_t si) {
+    if (si < 1024) return std::to_string(si) + "b";
+
+    double s = si;
+    char buf[128];
+    char unit;
+
+    do {
+        s /= 1024;
+        if (s < 1024) {
+            unit = 'K';
+            break;
+        }
+
+        s /= 1024;
+        if (s < 1024) {
+            unit = 'M';
+            break;
+        }
+
+        s /= 1024;
+        if (s < 1024) {
+            unit = 'G';
+            break;
+        }
+
+        s /= 1024;
+        unit = 'T';
+    } while(0);
+
+    ::snprintf(buf, sizeof(buf), "%.2f%c", s, unit);
+    return std::string(buf);
+}
+
+
+
+std::string renderPercent(double p) {
+    char buf[128];
+    ::snprintf(buf, sizeof(buf), "%.1f%%", p * 100);
+    return std::string(buf);
+}
+
+
+
+uint64_t parseUint64(const std::string &s) {
+    auto digitChar = [](char c){
+        return c >= '0' && c <= '9';
+    };
+
+    if (!std::all_of(s.begin(), s.end(), digitChar)) throw herr("non-digit character");
+
+    return std::stoull(s);
 }
