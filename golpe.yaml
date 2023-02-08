@@ -125,6 +125,9 @@ config:
     desc: "Set OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)"
     default: 1000000
     noReload: true
+  - name: relay__realIpHeader
+    desc: "HTTP header that contains the client's real IP, before reverse proxying (ie x-real-ip) (MUST be all lower-case)"
+    default: ""
 
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"

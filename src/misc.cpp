@@ -21,6 +21,16 @@ std::string renderIP(std::string_view ipBytes) {
     return std::string(buf);
 }
 
+std::string parseIP(const std::string &ip) {
+    int af = ip.find(':') != std::string::npos ? AF_INET6 : AF_INET;
+    unsigned char buf[16];
+
+    int ret = inet_pton(af, ip.c_str(), &buf[0]);
+    if (ret == 0) return "";
+
+    return std::string((const char*)&buf[0], af == AF_INET6 ? 16 : 4);
+}
+
 
 std::string renderSize(uint64_t si) {
     if (si < 1024) return std::to_string(si) + "b";

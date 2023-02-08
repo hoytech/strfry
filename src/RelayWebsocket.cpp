@@ -94,7 +94,15 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         uint64_t connId = nextConnectionId++;
 
         Connection *c = new Connection(ws, connId);
-        c->ipAddr = ws->getAddressBytes();
+
+        if (cfg().relay__realIpHeader.size()) {
+            auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString();
+            c->ipAddr = parseIP(header);
+            if (c->ipAddr.size() == 0) LW << "Couldn't parse IP from header " << cfg().relay__realIpHeader << ": " << header;
+        }
+
+        if (c->ipAddr.size() == 0) c->ipAddr = ws->getAddressBytes();
+
         ws->setUserData((void*)c);
         connIdToConnection.emplace(connId, c);
 
