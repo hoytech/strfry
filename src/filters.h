@@ -2,8 +2,6 @@
 
 #include "golpe.h"
 
-#include "constants.h"
-
 
 struct FilterSetBytes {
     struct Item {
@@ -18,6 +16,8 @@ struct FilterSetBytes {
     // Sizes are post-hex decode 
 
     FilterSetBytes(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
+        if (maxSize > MAX_INDEXED_TAG_VAL_SIZE) throw herr("maxSize bigger than max indexed tag size");
+
         std::vector<std::string> arr;
 
         for (const auto &i : arrHex.get_array()) {
@@ -145,7 +145,7 @@ struct NostrFilter {
                     if (tag == 'p' || tag == 'e') {
                         tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
                     } else {
-                        tags.emplace(tag, FilterSetBytes(v, false, 1, cfg().events__maxTagValSize));
+                        tags.emplace(tag, FilterSetBytes(v, false, 1, MAX_INDEXED_TAG_VAL_SIZE));
                     }
                 } else {
                     throw herr("unindexed tag filter");

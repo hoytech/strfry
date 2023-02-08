@@ -5,7 +5,6 @@
 #include "golpe.h"
 
 #include "Decompressor.h"
-#include "constants.h"
 
 
 

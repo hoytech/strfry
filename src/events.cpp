@@ -40,10 +40,12 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
         } else {
             if (tagVal.size() < 1 || tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too small/large: ", tagVal.size());
 
-            tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
-                (uint8_t)tagName[0],
-                builder.CreateVector((uint8_t*)tagVal.data(), tagVal.size())
-            ));
+            if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
+                tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
+                    (uint8_t)tagName[0],
+                    builder.CreateVector((uint8_t*)tagVal.data(), tagVal.size())
+                ));
+            }
         }
     }
 

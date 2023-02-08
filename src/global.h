@@ -13,3 +13,6 @@ quadrable::Quadrable getQdbInstance();
 
 
 std::string renderIP(std::string_view ipBytes);
+
+
+#include "constants.h"
