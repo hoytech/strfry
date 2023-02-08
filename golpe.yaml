@@ -160,9 +160,12 @@ config:
     desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
     default: 20
 
-  - name: relay__plugins__writePolicyPath
+  - name: relay__writePolicy__plugin
     desc: ""
     default: ""
+  - name: relay__writePolicy__lookbackSeconds
+    desc: ""
+    default: 21600
 
   - name: relay__compression__enabled
     desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"

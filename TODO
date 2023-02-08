@@ -3,6 +3,7 @@
   when disk is full it should log warning but not crash
   ensure DB upgrade flow works
   disable sync
+  get IP from HTTP header
   ? why isn't the LMDB mapping CLOEXEC
 
 0.2 release

@@ -67,6 +67,15 @@ enum class EventSourceType {
     Sync = 5,
 };
 
+inline std::string eventSourceTypeToStr(EventSourceType t) {
+    if (t == EventSourceType::IP4) return "IP4";
+    else if (t == EventSourceType::IP6) return "IP6";
+    else if (t == EventSourceType::Import) return "Import";
+    else if (t == EventSourceType::Stream) return "Stream";
+    else if (t == EventSourceType::Sync) return "Sync";
+    else return "?";
+}
+
 
 
 enum class EventWriteStatus {

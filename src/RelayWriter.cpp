@@ -18,8 +18,19 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
-                if (!writePolicy.acceptEvent(msg->jsonStr, msg->receivedAt, sourceType, msg->ipAddr)) continue;
-                newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
+                std::string okMsg;
+                auto res = writePolicy.acceptEvent(msg->jsonStr, msg->receivedAt, sourceType, msg->ipAddr, okMsg);
+
+                if (res == WritePolicyResult::Accept) {
+                    newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
+                } else {
+                    auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(msg->flatStr.data());
+                    auto eventIdHex = to_hex(sv(flat->id()));
+
+                    LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
+
+                    sendOKResponse(msg->connId, eventIdHex, res == WritePolicyResult::ShadowReject, okMsg);
+                }
             }
         }
 
