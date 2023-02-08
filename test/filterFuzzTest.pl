@@ -1,3 +1,5 @@
+#!/usr/bin/env perl
+
 use strict;
 use Data::Dumper;
 use JSON::XS;
@@ -202,6 +204,38 @@ sub testScan {
 }
 
 
+sub testMonitor {
+    my $monCmds = shift;
+    my $interestFg = shift;
+
+    my $fge = encode_json($interestFg);
+    print "filt: $fge\n\n";
+
+    print "DOING MONS\n";
+    my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .pubkey | sort | sha256sum');
+    for my $c (@$monCmds) { print $infile encode_json($c), "\n"; }
+    close($infile);
+
+    my $resA = <$outfile>;
+
+    waitpid($pid, 0);
+    my $child_exit_status = $? >> 8;
+    die "monitor cmd died" if $child_exit_status;
+
+    print "DOING SCAN\n";
+    my $resB = `./strfry scan '$fge' 2>/dev/null | jq -r .pubkey | sort | sha256sum`;
+
+    print "$resA\n$resB\n";
+
+    if ($resA eq $resB) {
+        print "-----------MATCH OK-------------\n\n\n";
+    } else {
+        print STDERR "$fge\n";
+        die "MISMATCH";
+    }
+}
+
+
 
 srand($ENV{SEED} || 0);
 
@@ -215,32 +249,7 @@ if ($cmd eq 'scan') {
 } elsif ($cmd eq 'monitor') {
     while (1) {
         my ($monCmds, $interestFg) = genRandomMonitorCmds();
-
-        my $fge = encode_json($interestFg);
-        print "filt: $fge\n\n";
-
-        print "DOING MONS\n";
-        my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .pubkey | sort | sha256sum');
-        for my $c (@$monCmds) { print $infile encode_json($c), "\n"; }
-        close($infile);
-
-        my $resA = <$outfile>;
-
-        waitpid($pid, 0);
-        my $child_exit_status = $? >> 8;
-        die "monitor cmd died" if $child_exit_status;
-
-        print "DOING SCAN\n";
-        my $resB = `./strfry scan '$fge' 2>/dev/null | jq -r .pubkey | sort | sha256sum`;
-
-        print "$resA\n$resB\n";
-
-        if ($resA eq $resB) {
-            print "-----------MATCH OK-------------\n\n\n";
-        } else {
-            print STDERR "$fge\n";
-            die "MISMATCH";
-        }
+        testMonitor($monCmds, $interestFg);
     }
 } else {
     die "unknown cmd: $cmd";

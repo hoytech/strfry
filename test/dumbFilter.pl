@@ -1,8 +1,8 @@
 #!/usr/bin/env perl
 
-use JSON::XS;
-
 use strict;
+
+use JSON::XS;
 
 binmode(STDOUT, ":utf8");
 
