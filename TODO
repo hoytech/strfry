@@ -1,15 +1,12 @@
 0.1 release
-  event sources
-  rate limits
-  NIP-40 expiration
-  NIP-33 param replaceable events
-  fix sync
+  write policy plugin
   when disk is full it should log warning but not crash
   ensure DB upgrade flow works
+  disable sync
   ? why isn't the LMDB mapping CLOEXEC
 
-features
-  finish syncing
+0.2 release
+  fix sync
     * logging of bytes up/down
     * up/both directions
     * error handling and reporting
@@ -17,19 +14,20 @@ features
     * limit on number of concurrent sync requests
     * full-db scan limited by since/until
     * `strfry sync` command always takes at least 1 second due to batching delay. figure out better way to flush
+
+features
   less verbose default logging
-  make it easier for a thread to setup a quadrable env
   multiple sync connections in one process/config
-  relay block-list events
   NIP-42 AUTH
-  procmail-like API for event filtering
+  slow-reader detection and back-pressure
+  ? relay block-list events
 
 rate limits
   ! event writes per second per ip
-  slow-reader detection and back-pressure
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
   ? limit on total number of events from a DBScan, not just per filter
+  ? time limit on DBScan
 
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
