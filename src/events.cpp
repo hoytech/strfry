@@ -253,24 +253,52 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
         if (isReplaceableEvent(flat->kind())) {
             auto searchKey = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), MAX_U64);
-            uint64_t otherLevId = 0;
 
             env.generic_foreachFull(txn, env.dbi_Event__pubkeyKind, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                 ParsedKey_StringUint64Uint64 parsedKey(k);
                 if (parsedKey.s == sv(flat->pubkey()) && parsedKey.n1 == flat->kind()) {
                     if (parsedKey.n2 < flat->created_at()) {
-                        otherLevId = lmdb::from_sv<uint64_t>(v);
+                        auto otherEv = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
+                        if (!otherEv) throw herr("missing event from index, corrupt DB?");
+                        LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv->flat_nested()->pubkey()));
+                        deleteEvent(txn, changes, *otherEv);
                     } else {
                         ev.status = EventWriteStatus::Replaced;
                     }
                 }
                 return false;
             }, true);
+        } else {
+            std::string replace;
 
-            if (otherLevId) {
-                auto otherEv = env.lookup_Event(txn, otherLevId);
-                if (!otherEv) throw herr("missing event from index, corrupt DB?");
-                deleteEvent(txn, changes, *otherEv);
+            for (const auto &tagPair : *(flat->tagsGeneral())) {
+                auto tagName = (char)tagPair->key();
+                if (tagName != 'd') continue;
+                replace = std::string(sv(tagPair->val()));
+                break;
+            }
+
+            if (replace.size()) {
+                auto searchStr = std::string(sv(flat->pubkey())) + replace;
+                auto searchKey = makeKey_StringUint64(searchStr, flat->kind());
+                LI << to_hex(searchKey);
+
+                env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
+                    ParsedKey_StringUint64 parsedKey(k);
+                    if (parsedKey.s == searchStr && parsedKey.n == flat->kind()) {
+                        auto otherEv = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
+                        if (!otherEv) throw herr("missing event from index, corrupt DB?");
+
+                        if (otherEv->flat_nested()->created_at() < flat->created_at()) {
+                            LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv->flat_nested()->pubkey()));
+                            deleteEvent(txn, changes, *otherEv);
+                        } else {
+                            ev.status = EventWriteStatus::Replaced;
+                        }
+                    }
+
+                    return false;
+                }, true);
             }
         }
 
@@ -280,7 +308,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 if (tagPair->key() == 'e') {
                     auto otherEv = lookupEventById(txn, sv(tagPair->val()));
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
-                        LI << "Deleting event. id=" << to_hex(sv(tagPair->val()));
+                        LI << "Deleting event (kind 5). id=" << to_hex(sv(tagPair->val()));
                         deleteEvent(txn, changes, *otherEv);
                     }
                 }

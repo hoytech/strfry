@@ -49,6 +49,8 @@ tables:
       expiration:
         integer: true
         multi: true
+      replace: # pubkey, d-tag, kind
+        multi: true
 
     indexPrelude: |
         auto *flat = v.flat_nested();
@@ -63,7 +65,12 @@ tables:
         for (const auto &tagPair : *(flat->tagsGeneral())) {
             auto tagName = (char)tagPair->key();
             auto tagVal = sv(tagPair->val());
+
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
+
+            if (tagName == 'd' && replace.size() == 0) {
+                replace.push_back(makeKey_StringUint64(std::string(sv(flat->pubkey())) + std::string(tagVal), flat->kind()));
+            }
         }
 
         for (const auto &tagPair : *(flat->tagsFixed32())) {
