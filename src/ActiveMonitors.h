@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "golpe.h"
 
 #include "Subscription.h"
@@ -13,9 +15,10 @@ struct ActiveMonitors : NonCopyable {
         Subscription sub;
 
         Monitor(Subscription &sub_) : sub(std::move(sub_)) {}
+        Monitor(const Monitor&) = delete; // pointers to filters inside sub must be stable because they are stored in MonitorSets
     };
 
-    using ConnMonitor = flat_hash_map<SubId, Monitor>;
+    using ConnMonitor = std::unordered_map<SubId, Monitor>;
     flat_hash_map<uint64_t, ConnMonitor> conns; // connId -> subId -> Monitor
 
     struct MonitorItem {
