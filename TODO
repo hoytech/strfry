@@ -1,11 +1,10 @@
 0.1 release
-  write policy plugin
-  when disk is full it should log warning but not crash
   ensure DB upgrade flow works
+  when disk is full it should log warning but not crash
   disable sync
-  ? why isn't the LMDB mapping CLOEXEC
 
 0.2 release
+  ? why isn't the LMDB mapping CLOEXEC
   fix sync
     * logging of bytes up/down
     * up/both directions
@@ -21,6 +20,7 @@ features
   NIP-42 AUTH
   slow-reader detection and back-pressure
   ? relay block-list events
+  ? if a client disconnects, delete all its pending write messages
 
 rate limits
   ! event writes per second per ip
