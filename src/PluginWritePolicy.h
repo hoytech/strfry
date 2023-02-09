@@ -174,7 +174,7 @@ struct PluginWritePolicy {
         ) throw herr("posix_span_file_actions failed: ", strerror(errno));
 
         auto ret = posix_spawn(&pid, path.c_str(), &file_actions, nullptr, argv, nullptr);
-        if (ret) throw herr("posix_spawn failed when to invoke '", path, "': ", strerror(errno));
+        if (ret) throw herr("posix_spawn failed to invoke '", path, "': ", strerror(errno));
 
         running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path, cfg().relay__writePolicy__lookbackSeconds);
     }
