@@ -1,5 +1,7 @@
 # strfry - a nostr relay
 
+![strfry logo](docs/strfry.svg)
+
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
 * Supports most applicable NIPs: 1, 9, 11, 12, 15, 16, 20, 22
