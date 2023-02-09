@@ -27,11 +27,12 @@ struct PluginWritePolicy {
     struct RunningPlugin {
         pid_t pid;
         std::string currPluginPath;
+        uint64_t lookbackSeconds;
         struct timespec lastModTime;
         FILE *r;
         FILE *w;
 
-        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginPath) : pid(pid), currPluginPath(currPluginPath) {
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginPath, uint64_t lookbackSeconds) : pid(pid), currPluginPath(currPluginPath), lookbackSeconds(lookbackSeconds) {
             r = fdopen(rfd, "r");
             w = fdopen(wfd, "w");
             setlinebuf(w);
@@ -62,7 +63,7 @@ struct PluginWritePolicy {
 
         try {
             if (running) {
-                if (pluginPath != running->currPluginPath) {
+                if (pluginPath != running->currPluginPath || cfg().relay__writePolicy__lookbackSeconds != running->lookbackSeconds) {
                     running.reset();
                 } else {
                     struct stat statbuf;
@@ -175,16 +176,16 @@ struct PluginWritePolicy {
         auto ret = posix_spawn(&pid, path.c_str(), &file_actions, nullptr, argv, nullptr);
         if (ret) throw herr("posix_spawn failed when to invoke '", path, "': ", strerror(errno));
 
-        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path);
+        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path, cfg().relay__writePolicy__lookbackSeconds);
     }
 
     void sendLookbackEvents() {
-        if (cfg().relay__writePolicy__lookbackSeconds == 0) return;
+        if (running->lookbackSeconds == 0) return;
 
         Decompressor decomp;
         auto now = hoytech::curr_time_us();
 
-        uint64_t start = now - (cfg().relay__writePolicy__lookbackSeconds * 1'000'000);
+        uint64_t start = now - (running->lookbackSeconds * 1'000'000);
 
         auto txn = env.txn_ro();
 
