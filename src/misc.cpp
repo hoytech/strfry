@@ -85,3 +85,21 @@ uint64_t parseUint64(const std::string &s) {
 
     return std::stoull(s);
 }
+
+
+
+uint64_t getDBVersion(lmdb::txn &txn) {
+    uint64_t dbVersion;
+
+    {
+        auto s = env.lookup_Meta(txn, 1);
+
+        if (s) {
+            dbVersion = s->dbVersion();
+        } else {
+            dbVersion = 0;
+        }
+    }
+
+    return dbVersion;
+}

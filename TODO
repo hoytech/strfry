@@ -1,5 +1,4 @@
 0.1 release
-  ensure DB upgrade flow works
   when disk is full it should log warning but not crash
   disable sync
 

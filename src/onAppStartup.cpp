@@ -32,7 +32,7 @@ static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
                 return false;
             });
 
-            if (cmd == "export") return;
+            if (cmd == "export" || cmd == "info") return;
             if (eventFound) dbTooOld(0);
         }
 
@@ -43,7 +43,7 @@ static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     if (s->endianness() != 1) throw herr("DB was created on a machine with different endianness");
 
     if (s->dbVersion() < CURR_DB_VERSION) {
-        if (cmd == "export") return;
+        if (cmd == "export" || cmd == "info") return;
         dbTooOld(s->dbVersion());
     }
 

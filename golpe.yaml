@@ -31,7 +31,7 @@ tables:
         type: ubytes
 
     indices:
-      createdAt:
+      created_at:
         integer: true
       receivedAt:
         integer: true
@@ -56,8 +56,8 @@ tables:
 
     indexPrelude: |
         auto *flat = v.flat_nested();
-        createdAt = flat->created_at();
-        uint64_t indexTime = *createdAt;
+        created_at = flat->created_at();
+        uint64_t indexTime = *created_at;
         receivedAt = v.receivedAt();
 
         id = makeKey_StringUint64(sv(flat->id()), indexTime);

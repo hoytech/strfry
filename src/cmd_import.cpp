@@ -39,7 +39,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     };
 
     auto flushChanges = [&]{
-        writeEvents(txn, qdb, newEvents);
+        writeEvents(txn, qdb, newEvents, 0);
 
         uint64_t numCommits = 0;
 

@@ -230,7 +230,7 @@ void deleteEvent(lmdb::txn &txn, quadrable::Quadrable::UpdateSet &changes, defau
 
 
 
-void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs) {
+void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs, uint64_t logLevel) {
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) { return a.quadKey < b.quadKey; });
 
     auto changes = qdb.change();
@@ -260,7 +260,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                     if (parsedKey.n2 < flat->created_at()) {
                         auto otherEv = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
                         if (!otherEv) throw herr("missing event from index, corrupt DB?");
-                        LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv->flat_nested()->pubkey()));
+                        if (logLevel >= 1) LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv->flat_nested()->id()));
                         deleteEvent(txn, changes, *otherEv);
                     } else {
                         ev.status = EventWriteStatus::Replaced;
@@ -281,7 +281,6 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
             if (replace.size()) {
                 auto searchStr = std::string(sv(flat->pubkey())) + replace;
                 auto searchKey = makeKey_StringUint64(searchStr, flat->kind());
-                LI << to_hex(searchKey);
 
                 env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                     ParsedKey_StringUint64 parsedKey(k);
@@ -290,7 +289,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                         if (!otherEv) throw herr("missing event from index, corrupt DB?");
 
                         if (otherEv->flat_nested()->created_at() < flat->created_at()) {
-                            LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv->flat_nested()->pubkey()));
+                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv->flat_nested()->id()));
                             deleteEvent(txn, changes, *otherEv);
                         } else {
                             ev.status = EventWriteStatus::Replaced;
@@ -308,7 +307,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 if (tagPair->key() == 'e') {
                     auto otherEv = lookupEventById(txn, sv(tagPair->val()));
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
-                        LI << "Deleting event (kind 5). id=" << to_hex(sv(tagPair->val()));
+                        if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(sv(tagPair->val()));
                         deleteEvent(txn, changes, *otherEv);
                     }
                 }
