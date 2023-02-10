@@ -29,7 +29,7 @@ Input messages contain the following keys:
 In response to `new` events, the plugin should print a JSONL message (minified JSON followed by a newline). It should contain the following keys:
 
 * `id`: The event ID taken from the `event.id` field of the input message
-* `action`: Either `accept`, `reject`, or `rejectShadow`
+* `action`: Either `accept`, `reject`, or `shadowReject`
 * `msg`: The NIP-20 response message to be sent to the client. Only used for `reject`
 
 
