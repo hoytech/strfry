@@ -4,7 +4,8 @@ WORKDIR /build
 RUN apt update && apt install -y --no-install-recommends \
     git g++ make pkg-config libtool ca-certificates \
     libyaml-perl libtemplate-perl libssl-dev zlib1g-dev \
-    liblmdb-dev libflatbuffers-dev libsecp256k1-dev libb2-dev
+    liblmdb-dev libflatbuffers-dev libsecp256k1-dev libb2-dev \
+    libzstd-dev
 
 COPY . .
 RUN git submodule update --init
@@ -15,7 +16,7 @@ FROM ubuntu:jammy as runner
 WORKDIR /app
 
 RUN apt update && apt install -y --no-install-recommends \
-    liblmdb0 libflatbuffers1 libsecp256k1-0 libb2-1 \
+    liblmdb0 libflatbuffers1 libsecp256k1-0 libb2-1 libzstd1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /build/strfry strfry
