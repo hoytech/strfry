@@ -20,8 +20,7 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
     uint64_t pause = 0;
     if (args["--pause"]) pause = args["--pause"].asLong();
 
-    bool metrics = false;
-    if (args["--metrics"]) metrics = true;
+    bool metrics = args["--metrics"].asBool();
 
     std::string filterStr = args["<filter>"].asString();
 
