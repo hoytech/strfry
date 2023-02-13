@@ -79,9 +79,17 @@ struct PluginWritePolicy {
                 sendLookbackEvents();
             }
 
+            std::ostringstream oss;
+            oss << std::quoted(jsonStr);
+            std::string es = oss.str();
+            es.erase(0, 1);
+            es.erase(es.size() - 1);
+            tao::json::value event = tao::json::from_string(jsonStr);
+
+
             auto request = tao::json::value({
                 { "type", "new" },
-                { "event", tao::json::from_string(jsonStr) },
+                { "event", es },
                 { "receivedAt", receivedAt / 1000000 },
                 { "sourceType", eventSourceTypeToStr(sourceType) },
                 { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
@@ -105,7 +113,7 @@ struct PluginWritePolicy {
                     continue;
                 }
 
-                if (response.at("id").get_string() != request.at("event").at("id").get_string()) throw herr("id mismatch");
+                if (response.at("id").get_string() != event.at("id").get_string()) throw herr("id mismatch");
 
                 break;
             }
