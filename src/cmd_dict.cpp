@@ -44,31 +44,28 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
     Decompressor decomp;
     std::vector<uint64_t> levIds;
 
-    {
-        auto txn = env.txn_ro();
 
-        auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr), MAX_U64);
-        Subscription sub(1, "junkSub", filterGroup);
-        DBScanQuery query(sub);
+    auto txn = env.txn_ro();
 
-        while (1) {
-            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
-                levIds.push_back(levId);
-            });
+    auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr), MAX_U64);
+    Subscription sub(1, "junkSub", filterGroup);
+    DBScanQuery query(sub);
 
-            if (complete) break;
-        }
+    while (1) {
+        bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
+            levIds.push_back(levId);
+        });
 
-        LI << "Filter matched " << levIds.size() << " records";
+        if (complete) break;
     }
+
+    LI << "Filter matched " << levIds.size() << " records";
 
 
     if (args["stats"].asBool()) {
         uint64_t totalSize = 0;
         uint64_t totalCompressedSize = 0;
         uint64_t numCompressed = 0;
-
-        auto txn = env.txn_ro();
 
         btree_map<uint32_t, uint64_t> dicts;
 
@@ -112,22 +109,18 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
         std::string trainingBuf;
         std::vector<size_t> trainingSizes;
 
-        {
-            auto txn = env.txn_ro();
+        if (levIds.size() > limit) {
+            LI << "Randomly selecting " << limit << " records";
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::shuffle(levIds.begin(), levIds.end(), g);
+            levIds.resize(limit);
+        }
 
-            if (levIds.size() > limit) {
-                LI << "Randomly selecting " << limit << " records";
-                std::random_device rd;
-                std::mt19937 g(rd());
-                std::shuffle(levIds.begin(), levIds.end(), g);
-                levIds.resize(limit);
-            }
-
-            for (auto levId : levIds) {
-                std::string json = std::string(getEventJson(txn, decomp, levId));
-                trainingBuf += json;
-                trainingSizes.emplace_back(json.size());
-            }
+        for (auto levId : levIds) {
+            std::string json = std::string(getEventJson(txn, decomp, levId));
+            trainingBuf += json;
+            trainingSizes.emplace_back(json.size());
         }
 
         std::string dict(dictSize, '\0');
@@ -137,19 +130,19 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
         auto ret = ZDICT_trainFromBuffer(dict.data(), dict.size(), trainingBuf.data(), trainingSizes.data(), trainingSizes.size());
         if (ZDICT_isError(ret)) throw herr("zstd training failed: ", ZSTD_getErrorName(ret));
 
-        {
-            auto txn = env.txn_rw();
+        txn.abort();
+        txn = env.txn_rw();
 
-            uint64_t newDictId = env.insert_CompressionDictionary(txn, dict);
+        uint64_t newDictId = env.insert_CompressionDictionary(txn, dict);
 
-            std::cout << "Saved new dictionary, dictId = " << newDictId << std::endl;
+        std::cout << "Saved new dictionary, dictId = " << newDictId << std::endl;
 
-            txn.commit();
-        }
+        txn.commit();
     } else if (args["compress"].asBool()) {
         if (dictId == 0) throw herr("specify --dictId or --decompress");
 
-        auto txn = env.txn_rw();
+        txn.abort();
+        txn = env.txn_rw();
 
         auto view = env.lookup_CompressionDictionary(txn, dictId);
         if (!view) throw herr("couldn't find dictId ", dictId);
@@ -166,7 +159,14 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
         std::string compressedData(500'000, '\0');
 
         for (auto levId : levIds) {
-            auto orig = getEventJson(txn, decomp, levId);
+            std::string_view orig;
+
+            try {
+                orig = getEventJson(txn, decomp, levId);
+            } catch (std::exception &e) {
+                continue;
+            }
+
             auto ret = ZSTD_compress_usingCDict(cctx, compressedData.data(), compressedData.size(), orig.data(), orig.size(), cdict);
             if (ZDICT_isError(ret)) throw herr("zstd compression failed: ", ZSTD_getErrorName(ret));
 
@@ -203,13 +203,20 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
         LI << "Original event sizes: " << origSizes;
         LI << "New event sizes:      " << compressedSizes;
     } else if (args["decompress"].asBool()) {
-        auto txn = env.txn_rw();
+        txn.abort();
+        txn = env.txn_rw();
 
         uint64_t pendingFlush = 0;
         uint64_t processed = 0;
 
         for (auto levId : levIds) {
-            auto orig = getEventJson(txn, decomp, levId);
+            std::string_view orig;
+
+            try {
+                orig = getEventJson(txn, decomp, levId);
+            } catch (std::exception &e) {
+                continue;
+            }
 
             std::string newVal;
 
