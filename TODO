@@ -1,9 +1,12 @@
 0.1 release
   when disk is full it should log warning but not crash
-  disable sync
+  delete expired events
+    * decide what to do about generalised ephemeral events
+  kill plugin if it times out
 
 0.2 release
   ? why isn't the LMDB mapping CLOEXEC
+  plugin for stream
   fix sync
     * logging of bytes up/down
     * up/both directions
@@ -18,6 +21,9 @@ features
   multiple sync connections in one process/config
   NIP-42 AUTH
   slow-reader detection and back-pressure
+  delete command
+    * delete by receivedAt, IP addrs, etc
+    * inverted filter: delete events that *don't* match the provided filter
   ? relay block-list events
   ? if a client disconnects, delete all its pending write messages
 
