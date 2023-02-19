@@ -32,6 +32,10 @@ void RelayServer::run() {
         runYesstr(thr);
     });
 
+    cronThread = std::thread([this]{
+        runCron();
+    });
+
     // Monitor for config file reloads
 
     auto configFileChangeWatcher = hoytech::file_change_monitor(configFile);
@@ -42,19 +46,6 @@ void RelayServer::run() {
         loadConfig(configFile);
     });
 
-    // Cron
-
-    cron.repeat(10 * 1'000'000UL, [&]{
-        cleanupOldEvents();
-    });
-
-    cron.repeat(60 * 60 * 1'000'000UL, [&]{
-        garbageCollect();
-    });
-
-    cron.setupCb = []{ setThreadName("cron"); };
-
-    cron.run();
 
     tpWebsocket.join();
 }
