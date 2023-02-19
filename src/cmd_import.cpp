@@ -11,7 +11,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      import [--show-rejected] [--no-verify] [--no-gc]
+      import [--show-rejected] [--no-verify]
 )";
 
 
@@ -20,7 +20,6 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     bool showRejected = args["--show-rejected"].asBool();
     bool noVerify = args["--no-verify"].asBool();
-    bool noGc = args["--no-gc"].asBool();
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
@@ -90,6 +89,4 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     flushChanges();
 
     txn.commit();
-
-    if (!noGc) quadrableGarbageCollect(qdb, 2);
 }

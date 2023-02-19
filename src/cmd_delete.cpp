@@ -11,7 +11,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      delete [--age=<age>] [--filter=<filter>] [--dry-run] [--no-gc]
+      delete [--age=<age>] [--filter=<filter>] [--dry-run]
 )";
 
 
@@ -25,7 +25,6 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
     if (args["--filter"]) filterStr = args["--filter"].asString();
 
     bool dryRun = args["--dry-run"].asBool();
-    bool noGc = args["--no-gc"].asBool();
 
 
 
@@ -88,6 +87,4 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
 
         txn.commit();
     }
-
-    if (!noGc) quadrableGarbageCollect(qdb, 2);
 }
