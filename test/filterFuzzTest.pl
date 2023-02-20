@@ -8,8 +8,6 @@ use IPC::Open2;
 
 # ./strfry export|perl -MJSON::XS -nE '$z=decode_json($_); for my $t (@{$z->{tags}}) { say $t->[1] if $t->[0] eq "e"}'|sort|uniq -c|sort -rn|head -50|perl -nE '/\d+\s+(\w+)/ && say $1'
 
-# Don't forget to set 'maxFilterLimit = 1000000000000' in config
-
 
 my $kinds = [qw/1 7 4 42 0 30 3 6/];
 
@@ -90,7 +88,9 @@ c1e5e04d92d9bd20701bff4cbdac1cdc317d405035883b7adcf9a6a5308d0f54
 }];
 
 sub genRandomFilterGroup {
-    my $numFilters = (rand()*10)+1;
+    my $useLimit = shift;
+
+    my $numFilters = $useLimit ? 1 : (rand()*10)+1;
 
     my @filters;
     for (1..$numFilters) {
@@ -100,14 +100,14 @@ sub genRandomFilterGroup {
             if (rand() < .15) {
                 $f->{ids} = [];
                 for (1..(rand()*10)) {
-                    push @{$f->{ids}}, randPrefix($ids->[int(rand() * @$ids)]);
+                    push @{$f->{ids}}, randPrefix($ids->[int(rand() * @$ids)], $useLimit);
                 }
             }
 
             if (rand() < .3) {
                 $f->{authors} = [];
                 for (1..(rand()*5)) {
-                    push @{$f->{authors}}, randPrefix($pubkeys->[int(rand() * @$pubkeys)]);
+                    push @{$f->{authors}}, randPrefix($pubkeys->[int(rand() * @$pubkeys)], $useLimit);
                 }
             }
 
@@ -141,6 +141,10 @@ sub genRandomFilterGroup {
             $f->{until} = 1640300802 + int(rand() * 86400*365);
         }
 
+        if ($useLimit) {
+            $f->{limit} = 1 + int(rand() * 1000);
+        }
+
         if ($f->{since} && $f->{until} && $f->{since} > $f->{until}) {
             delete $f->{since};
             delete $f->{until};
@@ -154,7 +158,8 @@ sub genRandomFilterGroup {
 
 sub randPrefix {
     my $v = shift;
-    return $v if rand() < .5;
+    my $noPrefix = shift;
+    return $v if $noPrefix || rand() < .5;
     return substr($v, 0, (int(rand() * 20) + 1) * 2);
 }
 
@@ -190,8 +195,10 @@ sub testScan {
     #print JSON::XS->new->pretty(1)->encode($fg);
     print "$fge\n";
 
-    my $resA = `./strfry export 2>/dev/null | perl test/dumbFilter.pl '$fge' | jq -r .pubkey | sort | sha256sum`;
-    my $resB = `./strfry scan '$fge' | jq -r .pubkey | sort | sha256sum`;
+    my $headCmd = @$fg == 1 && $fg->[0]->{limit} ? "| head -n $fg->[0]->{limit}" : "";
+
+    my $resA = `./strfry export --reverse 2>/dev/null | perl test/dumbFilter.pl '$fge' $headCmd | jq -r .id | sort | sha256sum`;
+    my $resB = `./strfry scan --metrics '$fge' | jq -r .id | sort | sha256sum`;
 
     print "$resA\n$resB\n";
 
@@ -212,7 +219,7 @@ sub testMonitor {
     print "filt: $fge\n\n";
 
     print "DOING MONS\n";
-    my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .pubkey | sort | sha256sum');
+    my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .id | sort | sha256sum');
     for my $c (@$monCmds) { print $infile encode_json($c), "\n"; }
     close($infile);
 
@@ -223,7 +230,7 @@ sub testMonitor {
     die "monitor cmd died" if $child_exit_status;
 
     print "DOING SCAN\n";
-    my $resB = `./strfry scan '$fge' 2>/dev/null | jq -r .pubkey | sort | sha256sum`;
+    my $resB = `./strfry scan '$fge' 2>/dev/null | jq -r .id | sort | sha256sum`;
 
     print "$resA\n$resB\n";
 
@@ -244,6 +251,11 @@ my $cmd = shift;
 if ($cmd eq 'scan') {
     while (1) {
         my $fg = genRandomFilterGroup();
+        testScan($fg);
+    }
+} elsif ($cmd eq 'scan-limit') {
+    while (1) {
+        my $fg = genRandomFilterGroup(1);
         testScan($fg);
     }
 } elsif ($cmd eq 'monitor') {
