@@ -120,7 +120,6 @@ Put the following file at /etc/systemd/system/strfry.service
         ProtectHome=yes
         NoNewPrivileges=yes
         ProtectSystem=full
-        LimitNOFILE=65536
         LimitCORE=1000000000
 
         [Install]
