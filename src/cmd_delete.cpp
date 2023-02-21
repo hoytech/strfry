@@ -3,7 +3,7 @@
 #include <docopt.h>
 #include "golpe.h"
 
-#include "DBScan.h"
+#include "DBQuery.h"
 #include "events.h"
 #include "gc.h"
 
@@ -43,10 +43,7 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
     }
 
 
-    auto filterGroup = NostrFilterGroup::unwrapped(filter, MAX_U64);
-    Subscription sub(1, "junkSub", filterGroup);
-    DBScanQuery query(sub);
-
+    DBQuery query(filter);
 
     btree_set<uint64_t> levIds;
 
@@ -54,7 +51,7 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
 
         while (1) {
-            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
+            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
                 levIds.insert(levId);
             });
 

@@ -9,7 +9,7 @@
 #include "WriterPipeline.h"
 #include "Subscription.h"
 #include "WSConnection.h"
-#include "DBScan.h"
+#include "DBQuery.h"
 #include "filters.h"
 #include "events.h"
 #include "yesstr.h"
@@ -151,15 +151,12 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             ::exit(1);
         }
 
-        auto filterGroup = NostrFilterGroup::unwrapped(filterJson);
+        DBQuery query(filterJson);
 
-        Subscription sub(1, "junkSub", filterGroup);
-
-        DBScanQuery query(sub);
         auto txn = env.txn_ro();
 
         while (1) {
-            bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
+            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
                 levIds.push_back(levId);
             });
 

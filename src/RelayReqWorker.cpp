@@ -1,13 +1,13 @@
 #include "RelayServer.h"
-#include "DBScan.h"
+#include "DBQuery.h"
 
 
 
 struct ActiveQueries : NonCopyable {
     Decompressor decomp;
-    using ConnQueries = flat_hash_map<SubId, DBScanQuery*>;
-    flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
-    std::deque<DBScanQuery*> running;
+    using ConnQueries = flat_hash_map<SubId, DBQuery*>;
+    flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBQuery*
+    std::deque<DBQuery*> running;
 
     bool addSub(lmdb::txn &txn, Subscription &&sub) {
         sub.latestEventId = getMostRecentLevId(txn);
@@ -24,7 +24,7 @@ struct ActiveQueries : NonCopyable {
             return false;
         }
 
-        DBScanQuery *q = new DBScanQuery(sub);
+        DBQuery *q = new DBQuery(sub);
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);
@@ -32,7 +32,7 @@ struct ActiveQueries : NonCopyable {
         return true;
     }
 
-    DBScanQuery *findQuery(uint64_t connId, const SubId &subId) {
+    DBQuery *findQuery(uint64_t connId, const SubId &subId) {
         auto f1 = conns.find(connId);
         if (f1 == conns.end()) return nullptr;
 
@@ -62,7 +62,7 @@ struct ActiveQueries : NonCopyable {
     void process(RelayServer *server, lmdb::txn &txn) {
         if (running.empty()) return;
 
-        DBScanQuery *q = running.front();
+        DBQuery *q = running.front();
         running.pop_front();
 
         if (q->dead) {
@@ -72,11 +72,11 @@ struct ActiveQueries : NonCopyable {
 
         auto cursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
 
-        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
+        bool complete = q->process(txn, [&](const auto &sub, uint64_t levId){
             std::string_view key = lmdb::to_sv<uint64_t>(levId), val;
             if (!cursor.get(key, val, MDB_SET_KEY)) throw herr("couldn't find event in EventPayload, corrupted DB?");
             server->sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, val, nullptr, nullptr));
-        });
+        }, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf);
 
         if (complete) {
             auto connId = q->sub.connId;

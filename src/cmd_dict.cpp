@@ -7,7 +7,7 @@
 #include <docopt.h>
 #include "golpe.h"
 
-#include "DBScan.h"
+#include "DBQuery.h"
 #include "events.h"
 
 
@@ -47,12 +47,10 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
 
     auto txn = env.txn_ro();
 
-    auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr), MAX_U64);
-    Subscription sub(1, "junkSub", filterGroup);
-    DBScanQuery query(sub);
+    DBQuery query(tao::json::from_string(filterStr));
 
     while (1) {
-        bool complete = query.process(txn, MAX_U64, false, [&](const auto &sub, uint64_t levId){
+        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
             levIds.push_back(levId);
         });
 

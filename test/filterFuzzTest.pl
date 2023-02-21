@@ -198,7 +198,7 @@ sub testScan {
     my $headCmd = @$fg == 1 && $fg->[0]->{limit} ? "| head -n $fg->[0]->{limit}" : "";
 
     my $resA = `./strfry export --reverse 2>/dev/null | perl test/dumbFilter.pl '$fge' $headCmd | jq -r .id | sort | sha256sum`;
-    my $resB = `./strfry scan --metrics '$fge' | jq -r .id | sort | sha256sum`;
+    my $resB = `./strfry scan --pause 1 --metrics '$fge' | jq -r .id | sort | sha256sum`;
 
     print "$resA\n$resB\n";
 
