@@ -36,3 +36,4 @@ rate limits
 
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
+  export not dying on SIGPIPE, or not getting SIGPIPE
