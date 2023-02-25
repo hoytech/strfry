@@ -21,6 +21,7 @@ void cmd_monitor(const std::vector<std::string> &subArgs) {
 
     auto txn = env.txn_ro();
 
+    Decompressor decomp;
     ActiveMonitors monitors;
 
     std::string line;
@@ -54,10 +55,10 @@ void cmd_monitor(const std::vector<std::string> &subArgs) {
     }
 
     env.foreach_Event(txn, [&](auto &ev){
-        monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t quadId){
+        monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
             for (auto &r : recipients) {
                 if (r.connId == interestConnId && r.subId.str() == interestSubId) {
-                    std::cout << getEventJson(txn, quadId) << "\n";
+                    std::cout << getEventJson(txn, decomp, levId) << "\n";
                 }
             }
         });

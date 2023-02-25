@@ -1,13 +1,12 @@
 #include "RelayServer.h"
 
+#include "PluginWritePolicy.h"
+
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
+
+    PluginWritePolicy writePolicy;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -18,7 +17,20 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
-                newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, msg);
+                EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
+                std::string okMsg;
+                auto res = writePolicy.acceptEvent(msg->jsonStr, msg->receivedAt, sourceType, msg->ipAddr, okMsg);
+
+                if (res == WritePolicyResult::Accept) {
+                    newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
+                } else {
+                    auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(msg->flatStr.data());
+                    auto eventIdHex = to_hex(sv(flat->id()));
+
+                    LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
+
+                    sendOKResponse(msg->connId, eventIdHex, res == WritePolicyResult::ShadowReject, okMsg);
+                }
             }
         }
 
@@ -37,7 +49,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             bool written = false;
 
             if (newEvent.status == EventWriteStatus::Written) {
-                LI << "Inserted event. id=" << eventIdHex << " qdbNodeId=" << newEvent.nodeId;
+                LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 written = true;
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";

@@ -47,6 +47,7 @@ struct MsgWebsocket : NonCopyable {
 struct MsgIngester : NonCopyable {
     struct ClientMessage {
         uint64_t connId;
+        std::string ipAddr;
         std::string payload;
     };
 
@@ -62,6 +63,7 @@ struct MsgIngester : NonCopyable {
 struct MsgWriter : NonCopyable {
     struct AddEvent {
         uint64_t connId;
+        std::string ipAddr;
         uint64_t receivedAt;
         std::string flatStr;
         std::string jsonStr;
@@ -147,7 +149,7 @@ struct RelayServer {
     void runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr);
 
     void runIngester(ThreadPool<MsgIngester>::Thread &thr);
-    void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
+    void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
     void ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
 
@@ -160,15 +162,11 @@ struct RelayServer {
     void runYesstr(ThreadPool<MsgYesstr>::Thread &thr);
 
     void cleanupOldEvents();
+    void garbageCollect();
 
     // Utils (can be called by any thread)
 
     void sendToConn(uint64_t connId, std::string &&payload) {
-        tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(payload)}});
-        hubTrigger->send();
-    }
-
-    void sendToConn(uint64_t connId, std::string &payload) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(payload)}});
         hubTrigger->send();
     }
@@ -179,12 +177,18 @@ struct RelayServer {
     }
 
     void sendEvent(uint64_t connId, const SubId &subId, std::string_view evJson) {
-        std::string reply = std::string("[\"EVENT\",\"");
-        reply += subId.sv();
+        auto subIdSv = subId.sv();
+
+        std::string reply;
+        reply.reserve(13 + subIdSv.size() + evJson.size());
+
+        reply += "[\"EVENT\",\"";
+        reply += subIdSv;
         reply += "\",";
         reply += evJson;
         reply += "]";
-        sendToConn(connId, reply);
+
+        sendToConn(connId, std::move(reply));
     }
 
     void sendEventToBatch(RecipientList &&list, std::string &&evJson) {

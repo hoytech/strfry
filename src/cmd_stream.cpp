@@ -31,9 +31,10 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     if (dir != "up" && dir != "down" && dir != "both") throw herr("invalid direction: ", dir, ". Should be one of up/down/both");
 
 
-    std::unordered_set<std::string> downloadedIds;
+    flat_hash_set<std::string> downloadedIds;
     WriterPipeline writer;
     WSConnection ws(url);
+    Decompressor decomp;
 
     ws.onConnect = [&]{
         if (dir == "down" || dir == "both") {
@@ -63,7 +64,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     if (origJson.get_array().size() < 3) throw herr("array too short");
                     auto &evJson = origJson.at(2);
                     downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
-                    writer.inbox.push_move(std::move(evJson));
+                    writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
                 } else {
                     LW << "Unexpected EVENT";
                 }
@@ -80,7 +81,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
 
     {
         auto txn = env.txn_ro();
-        currEventId = getMostRecentEventId(txn);
+        currEventId = getMostRecentLevId(txn);
     }
 
     ws.onTrigger = [&]{
@@ -98,7 +99,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
             }
 
             std::string msg = std::string("[\"EVENT\",");
-            msg += getEventJson(txn, ev.primaryKeyId);
+            msg += getEventJson(txn, decomp, ev.primaryKeyId);
             msg += "]";
 
             ws.send(msg);

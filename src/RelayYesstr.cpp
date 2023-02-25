@@ -6,12 +6,7 @@
 
 
 void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-
+    auto qdb = getQdbInstance();
 
     struct SyncState {
         quadrable::MemStore m;
@@ -20,7 +15,7 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
     struct SyncStateCollection {
         RelayServer *server;
         quadrable::Quadrable *qdb;
-        std::map<uint64_t, std::map<uint64_t, SyncState>> conns; // connId -> reqId -> SyncState
+        flat_hash_map<uint64_t, flat_hash_map<uint64_t, SyncState>> conns; // connId -> reqId -> SyncState
 
         SyncStateCollection(RelayServer *server_, quadrable::Quadrable *qdb_) : server(server_), qdb(qdb_) {}
 
@@ -53,20 +48,20 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
                 // FIXME: The following blocks the whole thread for the query duration. Should interleave it
                 // with other requests like RelayReqWorker does.
 
-                std::vector<uint64_t> quadEventIds;
+                std::vector<uint64_t> levIds;
                 auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr));
                 Subscription sub(1, "junkSub", filterGroup);
                 DBScanQuery query(sub);
 
                 while (1) {
-                    bool complete = query.process(txn, MAX_U64, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t quadId){
-                        quadEventIds.push_back(quadId);
+                    bool complete = query.process(txn, MAX_U64, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
+                        levIds.push_back(levId);
                     });
 
                     if (complete) break;
                 }
 
-                LI << "Filter matched " << quadEventIds.size() << " local events";
+                LI << "Filter matched " << levIds.size() << " local events";
 
                 qdb->withMemStore(s.m, [&]{
                     qdb->writeToMemStore = true;
@@ -74,8 +69,8 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
 
                     auto changes = qdb->change();
 
-                    for (auto id : quadEventIds) {
-                        changes.putReuse(txn, id);
+                    for (auto levId : levIds) {
+                        changes.putReuse(txn, levId);
                     }
 
                     changes.apply(txn);

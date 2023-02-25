@@ -5,12 +5,13 @@
 
 #include "events.h"
 #include "filters.h"
+#include "gc.h"
 
 
 static const char USAGE[] =
 R"(
     Usage:
-      import [--show-rejected] [--no-verify]
+      import [--show-rejected] [--no-verify] [--no-gc]
 )";
 
 
@@ -19,15 +20,11 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     bool showRejected = args["--show-rejected"].asBool();
     bool noVerify = args["--no-verify"].asBool();
+    bool noGc = args["--no-gc"].asBool();
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
-    quadrable::Quadrable qdb;
-    {
-        auto txn = env.txn_ro();
-        qdb.init(txn);
-    }
-    qdb.checkout("events");
+    auto qdb = getQdbInstance();
 
     auto txn = env.txn_rw();
 
@@ -42,7 +39,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     };
 
     auto flushChanges = [&]{
-        writeEvents(txn, qdb, newEvents);
+        writeEvents(txn, qdb, newEvents, 0);
 
         uint64_t numCommits = 0;
 
@@ -59,6 +56,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
         logStatus();
         LI << "Committing " << numCommits << " records";
+
         txn.commit();
 
         txn = env.txn_rw();
@@ -84,7 +82,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
             continue;
         }
 
-        newEvents.emplace_back(std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us());
+        newEvents.emplace_back(std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us(), EventSourceType::Import, "");
 
         if (newEvents.size() >= 10'000) flushChanges();
     }
@@ -92,4 +90,6 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     flushChanges();
 
     txn.commit();
+
+    if (!noGc) quadrableGarbageCollect(qdb, 2);
 }

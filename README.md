@@ -1,5 +1,7 @@
 # strfry - a nostr relay
 
+![strfry logo](docs/strfry.svg)
+
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
 * Supports most applicable NIPs: 1, 9, 11, 12, 15, 16, 20, 22
@@ -28,7 +30,7 @@ Either the full set of messages in the DB can be synced, or the results of one o
 
 A C++20 compiler is required, along with a few other common dependencies. On Debian/Ubuntu use these commands:
 
-    sudo apt install -y git build-essential libyaml-perl libtemplate-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libb2-dev
+    sudo apt install -y git build-essential libyaml-perl libtemplate-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libb2-dev libzstd-dev
     git submodule update --init
     make setup-golpe
     make -j4

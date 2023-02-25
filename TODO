@@ -1,5 +1,10 @@
-features
-  finish syncing
+0.1 release
+  when disk is full it should log warning but not crash
+  disable sync
+
+0.2 release
+  ? why isn't the LMDB mapping CLOEXEC
+  fix sync
     * logging of bytes up/down
     * up/both directions
     * error handling and reporting
@@ -7,24 +12,21 @@ features
     * limit on number of concurrent sync requests
     * full-db scan limited by since/until
     * `strfry sync` command always takes at least 1 second due to batching delay. figure out better way to flush
-  bool values in config
-    config for compression
-    config for TCP keepalive
-  db versioning
-  document config options, detailed default config file
+
+features
   less verbose default logging
-  nice new config "units" feature, ie 1d instead of 86400
-  make it easier for a thread to setup a quadrable env
-  opt: PubkeyKind scans could be done index-only
+  multiple sync connections in one process/config
+  NIP-42 AUTH
+  slow-reader detection and back-pressure
+  ? relay block-list events
+  ? if a client disconnects, delete all its pending write messages
 
 rate limits
-  slow-reader detection and back-pressure
+  ! event writes per second per ip
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
-  event writes per second per ip
-  max number of concurrent REQs per connection/ip
   ? limit on total number of events from a DBScan, not just per filter
+  ? time limit on DBScan
 
 misc
-  periodic reaping of disconnected sockets
-  ? websocket-level pings
+  ? periodic reaping of disconnected sockets (maybe autoping is doing this already)

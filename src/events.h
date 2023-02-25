@@ -4,7 +4,7 @@
 
 #include "golpe.h"
 
-#include "constants.h"
+#include "Decompressor.h"
 
 
 
@@ -45,15 +45,36 @@ inline const NostrIndex::Event *flatStrToFlatEvent(std::string_view flatStr) {
 
 
 std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn, std::string_view id);
-uint64_t getMostRecentEventId(lmdb::txn &txn);
-std::string_view getEventJson(lmdb::txn &txn, uint64_t quadId);
+uint64_t getMostRecentLevId(lmdb::txn &txn);
+std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::string_view raw, uint32_t *outDictId, size_t *outCompressedSize);
+std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId);
 
 inline quadrable::Key flatEventToQuadrableKey(const NostrIndex::Event *flat) {
-    return quadrable::Key::fromIntegerAndHash(flat->created_at(), sv(flat->id()).substr(0, 23));
+    uint64_t timestamp = flat->created_at();
+    if (timestamp > MAX_TIMESTAMP) throw herr("timestamp is too large to encode in quadrable key");
+    return quadrable::Key::fromIntegerAndHash(timestamp, sv(flat->id()).substr(0, 27));
 }
 
 
 
+
+enum class EventSourceType {
+    None = 0,
+    IP4 = 1,
+    IP6 = 2,
+    Import = 3,
+    Stream = 4,
+    Sync = 5,
+};
+
+inline std::string eventSourceTypeToStr(EventSourceType t) {
+    if (t == EventSourceType::IP4) return "IP4";
+    else if (t == EventSourceType::IP6) return "IP6";
+    else if (t == EventSourceType::Import) return "Import";
+    else if (t == EventSourceType::Stream) return "Stream";
+    else if (t == EventSourceType::Sync) return "Sync";
+    else return "?";
+}
 
 
 
@@ -70,18 +91,21 @@ struct EventToWrite {
     std::string flatStr;
     std::string jsonStr;
     uint64_t receivedAt;
+    EventSourceType sourceType;
+    std::string sourceInfo;
     void *userData = nullptr;
     quadrable::Key quadKey;
-    uint64_t nodeId = 0;
     EventWriteStatus status = EventWriteStatus::Pending;
+    uint64_t levId = 0;
 
     EventToWrite() {}
 
-    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), userData(userData) {
+    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string sourceInfo, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), sourceType(sourceType), sourceInfo(sourceInfo), userData(userData) {
         const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
         quadKey = flatEventToQuadrableKey(flat);
     }
 };
 
 
-void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs);
+void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs, uint64_t logLevel = 1);
+void deleteEvent(lmdb::txn &txn, quadrable::Quadrable::UpdateSet &changes, defaultDb::environment::View_Event &ev);

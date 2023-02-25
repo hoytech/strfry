@@ -7,9 +7,16 @@
 #include "events.h"
 
 
+struct WriterPipelineInput {
+    tao::json::value eventJson;
+    EventSourceType sourceType;
+    std::string sourceInfo;
+};
+
+
 struct WriterPipeline {
   public:
-    hoytech::protected_queue<tao::json::value> inbox;
+    hoytech::protected_queue<WriterPipelineInput> inbox;
     hoytech::protected_queue<bool> flushInbox;
 
   private:
@@ -28,7 +35,7 @@ struct WriterPipeline {
                 auto msgs = inbox.pop_all();
 
                 for (auto &m : msgs) {
-                    if (m.is_null()) {
+                    if (m.eventJson.is_null()) {
                         writerInbox.push_move({});
                         break;
                     }
@@ -37,13 +44,13 @@ struct WriterPipeline {
                     std::string jsonStr;
 
                     try {
-                        parseAndVerifyEvent(m, secpCtx, true, true, flatStr, jsonStr);
+                        parseAndVerifyEvent(m.eventJson, secpCtx, true, true, flatStr, jsonStr);
                     } catch (std::exception &e) {
-                        LW << "Rejected event: " << m << " reason: " << e.what();
+                        LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
                         continue;
                     }
 
-                    writerInbox.push_move({ std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us() });
+                    writerInbox.push_move({ std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us(), m.sourceType, std::move(m.sourceInfo) });
                 }
             }
         });
@@ -51,12 +58,7 @@ struct WriterPipeline {
         writerThread = std::thread([&]() {
             setThreadName("Writer");
 
-            quadrable::Quadrable qdb;
-            {
-                auto txn = env.txn_ro();
-                qdb.init(txn);
-            }
-            qdb.checkout("events");
+            auto qdb = getQdbInstance();
 
             while (1) {
                 // Debounce
@@ -120,7 +122,7 @@ struct WriterPipeline {
     }
 
     void flush() {
-        inbox.push_move(tao::json::null);
+        inbox.push_move({ tao::json::null, EventSourceType::None, "" });
         flushInbox.wait();
     }
 };

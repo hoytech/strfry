@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 #include "RelayServer.h"
 
 #include "app_git_version.h"
@@ -18,46 +16,6 @@ static std::string preGenerateHttpResponse(const std::string &contentType, const
     return output;
 };
 
-
-static std::string renderSize(uint64_t si) {
-    if (si < 1024) return std::to_string(si) + "b";
-
-    double s = si;
-    char buf[128];
-    char unit;
-
-    do {
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'K';
-            break;
-        }
-
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'M';
-            break;
-        }
-
-        s /= 1024;
-        if (s < 1024) {
-            unit = 'G';
-            break;
-        }
-
-        s /= 1024;
-        unit = 'T';
-    } while(0);
-
-    ::snprintf(buf, sizeof(buf), "%.2f%c", s, unit);
-    return std::string(buf);
-}
-
-static std::string renderPercent(double p) {
-    char buf[128];
-    ::snprintf(buf, sizeof(buf), "%.1f%%", p * 100);
-    return std::string(buf);
-}
 
 
 void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
@@ -81,7 +39,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     uWS::Hub hub;
     uWS::Group<uWS::SERVER> *hubGroup;
-    std::map<uint64_t, Connection*> connIdToConnection;
+    flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
 
     std::string tempBuf;
@@ -110,7 +68,14 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
 
 
-    hubGroup = hub.createGroup<uWS::SERVER>(uWS::PERMESSAGE_DEFLATE | uWS::SLIDING_DEFLATE_WINDOW, cfg().relay__maxWebsocketPayloadSize);
+    {
+        int extensionOptions = 0;
+
+        if (cfg().relay__compression__enabled) extensionOptions |= uWS::PERMESSAGE_DEFLATE;
+        if (cfg().relay__compression__slidingWindow) extensionOptions |= uWS::SLIDING_DEFLATE_WINDOW;
+
+        hubGroup = hub.createGroup<uWS::SERVER>(extensionOptions, cfg().relay__maxWebsocketPayloadSize);
+    }
 
     if (cfg().relay__autoPingSeconds) hubGroup->startAutoPing(cfg().relay__autoPingSeconds * 1'000);
 
@@ -126,20 +91,27 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     });
 
     hubGroup->onConnection([&](uWS::WebSocket<uWS::SERVER> *ws, uWS::HttpRequest req) {
-        std::string addr = ws->getAddress().address;
         uint64_t connId = nextConnectionId++;
+
+        Connection *c = new Connection(ws, connId);
+
+        if (cfg().relay__realIpHeader.size()) {
+            auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString();
+            c->ipAddr = parseIP(header);
+            if (c->ipAddr.size() == 0) LW << "Couldn't parse IP from header " << cfg().relay__realIpHeader << ": " << header;
+        }
+
+        if (c->ipAddr.size() == 0) c->ipAddr = ws->getAddressBytes();
+
+        ws->setUserData((void*)c);
+        connIdToConnection.emplace(connId, c);
 
         bool compEnabled, compSlidingWindow;
         ws->getCompressionState(compEnabled, compSlidingWindow);
-        LI << "[" << connId << "] Connect from " << addr
+        LI << "[" << connId << "] Connect from " << renderIP(c->ipAddr)
            << " compression=" << (compEnabled ? 'Y' : 'N')
            << " sliding=" << (compSlidingWindow ? 'Y' : 'N')
         ;
-
-        Connection *c = new Connection(ws, connId);
-        c->ipAddr = addr;
-        ws->setUserData((void*)c);
-        connIdToConnection.emplace(connId, c);
 
         if (cfg().relay__enableTcpKeepalive) {
             int optval = 1;
@@ -156,7 +128,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         auto upComp = renderPercent(1.0 - (double)c->stats.bytesUpCompressed / c->stats.bytesUp);
         auto downComp = renderPercent(1.0 - (double)c->stats.bytesDownCompressed / c->stats.bytesDown);
 
-        LI << "[" << connId << "] Disconnect from " << c->ipAddr
+        LI << "[" << connId << "] Disconnect from " << renderIP(c->ipAddr)
            << " UP: " << renderSize(c->stats.bytesUp) << " (" << upComp << " compressed)"
            << " DN: " << renderSize(c->stats.bytesDown) << " (" << downComp << " compressed)"
         ;
@@ -173,7 +145,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         c.stats.bytesDown += length;
         c.stats.bytesDownCompressed += compressedSize;
 
-        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, std::string(message, length)}});
+        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, c.ipAddr, std::string(message, length)}});
     });
 
 
@@ -198,15 +170,18 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgWebsocket::SendBinary>(&newMsg.msg)) {
                 doSend(msg->connId, msg->payload, uWS::OpCode::BINARY);
             } else if (auto msg = std::get_if<MsgWebsocket::SendEventToBatch>(&newMsg.msg)) {
-                for (auto &item : msg->list) {
-                    tempBuf.clear();
-                    tempBuf += "[\"EVENT\",\"";
-                    tempBuf += item.subId.sv();
-                    tempBuf += "\",";
-                    tempBuf += msg->evJson;
-                    tempBuf += "]";
+                tempBuf.reserve(13 + MAX_SUBID_SIZE + msg->evJson.size());
+                tempBuf.resize(10 + MAX_SUBID_SIZE);
+                tempBuf += "\",";
+                tempBuf += msg->evJson;
+                tempBuf += "]";
 
-                    doSend(item.connId, tempBuf, uWS::OpCode::TEXT);
+                for (auto &item : msg->list) {
+                    auto subIdSv = item.subId.sv();
+                    auto *p = tempBuf.data() + MAX_SUBID_SIZE - subIdSv.size();
+                    memcpy(p, "[\"EVENT\",\"", 10);
+                    memcpy(p + 10, subIdSv.data(), subIdSv.size());
+                    doSend(item.connId, std::string_view(p, 13 + subIdSv.size() + msg->evJson.size()), uWS::OpCode::TEXT);
                 }
             }
         }

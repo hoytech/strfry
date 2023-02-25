@@ -14,6 +14,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
     });
 
 
+    Decompressor decomp;
     ActiveMonitors monitors;
     uint64_t currEventId = MAX_U64;
 
@@ -22,14 +23,16 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
         auto txn = env.txn_ro();
 
-        uint64_t latestEventId = getMostRecentEventId(txn);
+        uint64_t latestEventId = getMostRecentLevId(txn);
         if (currEventId > latestEventId) currEventId = latestEventId;
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgReqMonitor::NewSub>(&newMsg.msg)) {
+                auto connId = msg->sub.connId;
+
                 env.foreach_Event(txn, [&](auto &ev){
                     if (msg->sub.filterGroup.doesMatch(ev.flat_nested())) {
-                        sendEvent(msg->sub.connId, msg->sub.subId, getEventJson(txn, ev.primaryKeyId));
+                        sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
                     }
 
                     return true;
@@ -37,15 +40,17 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
                 msg->sub.latestEventId = latestEventId;
 
-                monitors.addSub(txn, std::move(msg->sub), latestEventId);
+                if (!monitors.addSub(txn, std::move(msg->sub), latestEventId)) {
+                    sendNoticeError(connId, std::string("too many concurrent REQs"));
+                }
             } else if (auto msg = std::get_if<MsgReqMonitor::RemoveSub>(&newMsg.msg)) {
                 monitors.removeSub(msg->connId, msg->subId);
             } else if (auto msg = std::get_if<MsgReqMonitor::CloseConn>(&newMsg.msg)) {
                 monitors.closeConn(msg->connId);
             } else if (std::get_if<MsgReqMonitor::DBChange>(&newMsg.msg)) {
                 env.foreach_Event(txn, [&](auto &ev){
-                    monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t quadId){
-                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, quadId)));
+                    monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
+                        sendEventToBatch(std::move(recipients), std::string(getEventJson(txn, decomp, levId)));
                     });
                     return true;
                 }, false, currEventId + 1);

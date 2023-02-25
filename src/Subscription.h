@@ -1,14 +1,16 @@
 #pragma once
 
+#include <parallel_hashmap/phmap_utils.h>
+
 #include "filters.h"
 
 
 struct SubId {
-    char buf[64];
+    char buf[72];
 
     SubId(std::string_view val) {
-        static_assert(MAX_SUBID_SIZE == 63, "MAX_SUBID_SIZE mismatch");
-        if (val.size() > 63) throw herr("subscription id too long");
+        static_assert(MAX_SUBID_SIZE == 71, "MAX_SUBID_SIZE mismatch");
+        if (val.size() > 71) throw herr("subscription id too long");
         if (val.size() == 0) throw herr("subscription id too short");
 
         auto badChar = [](char c){
@@ -28,10 +30,19 @@ struct SubId {
     std::string str() const {
         return std::string(sv());
     }
+
+    bool operator==(const SubId &o) const {
+        return o.sv() == sv();
+    }
 };
 
-inline bool operator <(const SubId &s1, const SubId &s2) {
-    return s1.sv() < s2.sv();
+namespace std {
+    // inject specialization of std::hash
+    template<> struct hash<SubId> {
+        std::size_t operator()(SubId const &p) const {
+            return phmap::HashState().combine(0, p.sv());
+        }
+    };
 }
 
 

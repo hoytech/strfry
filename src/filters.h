@@ -2,8 +2,6 @@
 
 #include "golpe.h"
 
-#include "constants.h"
-
 
 struct FilterSetBytes {
     struct Item {
@@ -18,16 +16,15 @@ struct FilterSetBytes {
     // Sizes are post-hex decode 
 
     FilterSetBytes(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
-        std::vector<std::string> arr;
+        if (maxSize > MAX_INDEXED_TAG_VAL_SIZE) throw herr("maxSize bigger than max indexed tag size");
 
-        uint64_t totalSize = 0;
+        std::vector<std::string> arr;
 
         for (const auto &i : arrHex.get_array()) {
             arr.emplace_back(hexDecode ? from_hex(i.get_string(), false) : i.get_string());
             size_t itemSize = arr.back().size();
             if (itemSize < minSize) throw herr("filter item too small");
             if (itemSize > maxSize) throw herr("filter item too large");
-            totalSize += itemSize;
         }
 
         std::sort(arr.begin(), arr.end());
@@ -114,7 +111,7 @@ struct NostrFilter {
     std::optional<FilterSetBytes> ids;
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
-    std::map<char, FilterSetBytes> tags;
+    flat_hash_map<char, FilterSetBytes> tags;
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
@@ -122,7 +119,7 @@ struct NostrFilter {
     bool neverMatch = false;
     bool indexOnlyScans = false;
 
-    explicit NostrFilter(const tao::json::value &filterObj) {
+    explicit NostrFilter(const tao::json::value &filterObj, uint64_t maxFilterLimit) {
         uint64_t numMajorFields = 0;
 
         for (const auto &[k, v] : filterObj.get_object()) {
@@ -148,7 +145,7 @@ struct NostrFilter {
                     if (tag == 'p' || tag == 'e') {
                         tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
                     } else {
-                        tags.emplace(tag, FilterSetBytes(v, false, 1, cfg().events__maxTagValSize));
+                        tags.emplace(tag, FilterSetBytes(v, false, 1, MAX_INDEXED_TAG_VAL_SIZE));
                     }
                 } else {
                     throw herr("unindexed tag filter");
@@ -166,10 +163,9 @@ struct NostrFilter {
 
         if (tags.size() > 2) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
 
-        if (limit > cfg().relay__maxFilterLimit) limit = cfg().relay__maxFilterLimit;
+        if (limit > maxFilterLimit) limit = maxFilterLimit;
 
-        indexOnlyScans = numMajorFields <= 1;
-        // FIXME: pubkeyKind scan could be serviced index-only too
+        indexOnlyScans = (numMajorFields <= 1) || (numMajorFields == 2 && authors && kinds);
     }
 
     bool doesMatchTimes(uint64_t created) const {
@@ -190,11 +186,21 @@ struct NostrFilter {
         for (const auto &[tag, filt] : tags) {
             bool foundMatch = false;
 
-            for (const auto &tagPair : *(ev->tags())) {
+            for (const auto &tagPair : *(ev->tagsFixed32())) {
                 auto eventTag = tagPair->key();
                 if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
                     foundMatch = true;
                     break;
+                }
+            }
+
+            if (!foundMatch) {
+                for (const auto &tagPair : *(ev->tagsGeneral())) {
+                    auto eventTag = tagPair->key();
+                    if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
+                        foundMatch = true;
+                        break;
+                    }
                 }
             }
 
@@ -209,18 +215,18 @@ struct NostrFilterGroup {
     std::vector<NostrFilter> filters;
 
     // Note that this expects the full array, so the first two items are "REQ" and the subId
-    NostrFilterGroup(const tao::json::value &req) {
+    NostrFilterGroup(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         const auto &arr = req.get_array();
         if (arr.size() < 3) throw herr("too small");
 
         for (size_t i = 2; i < arr.size(); i++) {
-            filters.emplace_back(arr[i]);
+            filters.emplace_back(arr[i], maxFilterLimit);
             if (filters.back().neverMatch) filters.pop_back();
         }
     }
 
     // Hacky! Deserves a refactor
-    static NostrFilterGroup unwrapped(tao::json::value filter) {
+    static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
             filter = tao::json::value::array({ filter });
         }
@@ -231,7 +237,7 @@ struct NostrFilterGroup {
             pretendReqQuery.push_back(e);
         }
 
-        return NostrFilterGroup(pretendReqQuery);
+        return NostrFilterGroup(pretendReqQuery, maxFilterLimit);
     }
 
     bool doesMatch(const NostrIndex::Event *ev) const {

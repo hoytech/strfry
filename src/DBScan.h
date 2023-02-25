@@ -30,7 +30,7 @@ struct DBScan {
     };
 
     struct TagScan {
-        std::map<char, FilterSetBytes>::const_iterator indexTagName;
+        flat_hash_map<char, FilterSetBytes>::const_iterator indexTagName;
         size_t indexTagVal = 0;
         std::string search;
     };
@@ -49,10 +49,16 @@ struct DBScan {
     std::string resumeKey;
     uint64_t resumeVal;
 
+    enum class KeyMatchResult {
+        Yes,
+        No,
+        NoButContinue,
+    };
+
     std::function<bool()> isComplete;
     std::function<void()> nextFilterItem;
     std::function<void()> resetResume;
-    std::function<bool(std::string_view, bool&)> keyMatch;
+    std::function<KeyMatchResult(std::string_view, bool&)> keyMatch;
 
     DBScan(const NostrFilter &f_) : f(f_) {
         remainingLimit = f.limit;
@@ -74,7 +80,7 @@ struct DBScan {
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool&){
-                return k.starts_with(state->prefix);
+                return k.starts_with(state->prefix) ? KeyMatchResult::Yes : KeyMatchResult::No;
             };
         } else if (f.authors && f.kinds) {
             scanState = PubkeyKindScan{};
@@ -98,16 +104,22 @@ struct DBScan {
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool &skipBack){
-                if (!k.starts_with(state->prefix)) return false;
-                if (state->prefix.size() == 32 + 8) return true;
+                if (!k.starts_with(state->prefix)) return KeyMatchResult::No;
+                if (state->prefix.size() == 32 + 8) return KeyMatchResult::Yes;
 
                 ParsedKey_StringUint64Uint64 parsedKey(k);
-                if (parsedKey.n1 <= f.kinds->at(state->indexKind)) return true;
+                if (parsedKey.n1 == f.kinds->at(state->indexKind)) {
+                    return KeyMatchResult::Yes;
+                } else if (parsedKey.n1 < f.kinds->at(state->indexKind)) {
+                    // With a prefix pubkey, continue scanning (pubkey,kind) backwards because with this index
+                    // we don't know the next pubkey to jump back to
+                    return KeyMatchResult::NoButContinue;
+                }
 
                 resumeKey = makeKey_StringUint64Uint64(parsedKey.s, f.kinds->at(state->indexKind), MAX_U64);
                 resumeVal = MAX_U64;
                 skipBack = true;
-                return false;
+                return KeyMatchResult::No;
             };
         } else if (f.authors) {
             scanState = PubkeyScan{};
@@ -126,7 +138,7 @@ struct DBScan {
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool&){
-                return k.starts_with(state->prefix);
+                return k.starts_with(state->prefix) ? KeyMatchResult::Yes : KeyMatchResult::No;
             };
         } else if (f.tags.size()) {
             scanState = TagScan{f.tags.begin()};
@@ -150,7 +162,7 @@ struct DBScan {
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool&){
-                return k.substr(0, state->search.size()) == state->search;
+                return k.substr(0, state->search.size()) == state->search ? KeyMatchResult::Yes : KeyMatchResult::No;
             };
         } else if (f.kinds) {
             scanState = KindScan{};
@@ -170,7 +182,7 @@ struct DBScan {
             };
             keyMatch = [&, state](std::string_view k, bool&){
                 ParsedKey_Uint64Uint64 parsedKey(k);
-                return parsedKey.n1 == state->kind;
+                return parsedKey.n1 == state->kind ? KeyMatchResult::Yes : KeyMatchResult::No;
             };
         } else {
             scanState = CreatedAtScan{};
@@ -188,7 +200,7 @@ struct DBScan {
                 resumeVal = MAX_U64;
             };
             keyMatch = [&, state](std::string_view k, bool&){
-                return true;
+                return KeyMatchResult::Yes;
             };
         }
     }
@@ -208,7 +220,8 @@ struct DBScan {
                     return false;
                 }
 
-                if (!keyMatch(k, skipBack)) return false;
+                auto matched = keyMatch(k, skipBack);
+                if (matched == KeyMatchResult::No) return false;
 
                 uint64_t created;
 
@@ -232,18 +245,20 @@ struct DBScan {
                 }
 
                 bool sent = false;
-                uint64_t quadId = lmdb::from_sv<uint64_t>(v);
+                uint64_t levId = lmdb::from_sv<uint64_t>(v);
 
-                if (f.indexOnlyScans) {
+                if (matched == KeyMatchResult::NoButContinue) {
+                    // Don't attempt to match filter
+                } else if (f.indexOnlyScans) {
                     if (f.doesMatchTimes(created)) {
-                        handleEvent(quadId);
+                        handleEvent(levId);
                         sent = true;
                     }
                 } else {
-                    auto view = env.lookup_Event(txn, quadId);
+                    auto view = env.lookup_Event(txn, levId);
                     if (!view) throw herr("missing event from index, corrupt DB?");
                     if (f.doesMatch(view->flat_nested())) {
-                        handleEvent(quadId);
+                        handleEvent(levId);
                         sent = true;
                     }
                 }
@@ -280,7 +295,7 @@ struct DBScanQuery : NonCopyable {
 
     size_t filterGroupIndex = 0;
     bool dead = false;
-    std::unordered_set<uint64_t> alreadySentEvents; // FIXME: flat_set here, or roaring bitmap/judy/whatever
+    flat_hash_set<uint64_t> alreadySentEvents;
 
     uint64_t currScanTime = 0;
     uint64_t currScanSaveRestores = 0;
@@ -298,16 +313,16 @@ struct DBScanQuery : NonCopyable {
         while (filterGroupIndex < sub.filterGroup.size()) {
             if (!scanner) scanner = std::make_unique<DBScan>(sub.filterGroup.filters[filterGroupIndex]);
 
-            bool complete = scanner->scan(txn, [&](uint64_t quadId){
+            bool complete = scanner->scan(txn, [&](uint64_t levId){
                 // If this event came in after our query began, don't send it. It will be sent after the EOSE.
-                if (quadId > sub.latestEventId) return;
+                if (levId > sub.latestEventId) return;
 
                 // We already sent this event
-                if (alreadySentEvents.find(quadId) != alreadySentEvents.end()) return;
-                alreadySentEvents.insert(quadId);
+                if (alreadySentEvents.find(levId) != alreadySentEvents.end()) return;
+                alreadySentEvents.insert(levId);
 
                 currScanRecordsFound++;
-                cb(sub, quadId);
+                cb(sub, levId);
             }, [&]{
                 currScanRecordsTraversed++;
                 return hoytech::curr_time_us() - startTime > timeBudgetMicroseconds;

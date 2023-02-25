@@ -4,12 +4,13 @@
 
 
 struct ActiveQueries : NonCopyable {
-    using ConnQueries = std::map<SubId, DBScanQuery*>;
-    std::map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
+    Decompressor decomp;
+    using ConnQueries = flat_hash_map<SubId, DBScanQuery*>;
+    flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBScanQuery*
     std::deque<DBScanQuery*> running;
 
-    void addSub(lmdb::txn &txn, Subscription &&sub) {
-        sub.latestEventId = getMostRecentEventId(txn);
+    bool addSub(lmdb::txn &txn, Subscription &&sub) {
+        sub.latestEventId = getMostRecentLevId(txn);
 
         {
             auto *existing = findQuery(sub.connId, sub.subId);
@@ -19,10 +20,16 @@ struct ActiveQueries : NonCopyable {
         auto res = conns.try_emplace(sub.connId);
         auto &connQueries = res.first->second;
 
+        if (connQueries.size() >= cfg().relay__maxSubsPerConnection) {
+            return false;
+        }
+
         DBScanQuery *q = new DBScanQuery(sub);
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);
+
+        return true;
     }
 
     DBScanQuery *findQuery(uint64_t connId, const SubId &subId) {
@@ -63,8 +70,12 @@ struct ActiveQueries : NonCopyable {
             return;
         }
 
-        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t quadId){
-            server->sendEvent(sub.connId, sub.subId, getEventJson(txn, quadId));
+        auto cursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
+
+        bool complete = q->process(txn, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
+            std::string_view key = lmdb::to_sv<uint64_t>(levId), val;
+            if (!cursor.get(key, val, MDB_SET_KEY)) throw herr("couldn't find event in EventPayload, corrupted DB?");
+            server->sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, val, nullptr, nullptr));
         });
 
         if (complete) {
@@ -93,7 +104,12 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgReqWorker::NewSub>(&newMsg.msg)) {
-                queries.addSub(txn, std::move(msg->sub));
+                auto connId = msg->sub.connId;
+
+                if (!queries.addSub(txn, std::move(msg->sub))) {
+                    sendNoticeError(connId, std::string("too many concurrent REQs"));
+                }
+
                 queries.process(this, txn);
             } else if (auto msg = std::get_if<MsgReqWorker::RemoveSub>(&newMsg.msg)) {
                 queries.removeSub(msg->connId, msg->subId);

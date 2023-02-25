@@ -1,25 +1,39 @@
 appName: strfry
-
-quadrable: true
+onAppStartup: true
+useGlobalH: true
+customLMDBSetup: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
 
+includes: |
+    inline std::string_view sv(const NostrIndex::Fixed32Bytes *f) {
+        return std::string_view((const char *)f->val()->data(), 32);
+    }
+
 tables:
-  Event:
-    tableId: 1
-
-    primaryKey: quadId
-
+  ## DB meta-data. Single entry, with id = 1
+  Meta:
     fields:
-      - name: quadId
+      - name: dbVersion
+      - name: endianness
+
+  ## Meta-info of nostr events, suitable for indexing
+  ## Primary key is auto-incremented, called "levId" for Local EVent ID
+  Event:
+    fields:
       - name: receivedAt # microseconds
       - name: flat
         type: ubytes
         nestedFlat: NostrIndex.Event
+      - name: sourceType
+      - name: sourceInfo
+        type: ubytes
 
     indices:
       created_at:
+        integer: true
+      receivedAt:
         integer: true
       id:
         comparator: StringUint64
@@ -34,28 +48,72 @@ tables:
         multi: true
       deletion: # eventId, pubkey
         multi: true
+      expiration:
+        integer: true
+        multi: true
+      replace: # pubkey, d-tag, kind
+        multi: true
 
     indexPrelude: |
         auto *flat = v.flat_nested();
         created_at = flat->created_at();
         uint64_t indexTime = *created_at;
+        receivedAt = v.receivedAt();
 
         id = makeKey_StringUint64(sv(flat->id()), indexTime);
         pubkey = makeKey_StringUint64(sv(flat->pubkey()), indexTime);
         kind = makeKey_Uint64Uint64(flat->kind(), indexTime);
         pubkeyKind = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), indexTime);
 
-        for (const auto &tagPair : *(flat->tags())) {
+        for (const auto &tagPair : *(flat->tagsGeneral())) {
+            auto tagName = (char)tagPair->key();
+            auto tagVal = sv(tagPair->val());
+
+            tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
+
+            if (tagName == 'd' && replace.size() == 0) {
+                replace.push_back(makeKey_StringUint64(std::string(sv(flat->pubkey())) + std::string(tagVal), flat->kind()));
+            }
+        }
+
+        for (const auto &tagPair : *(flat->tagsFixed32())) {
             auto tagName = (char)tagPair->key();
             auto tagVal = sv(tagPair->val());
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
             if (flat->kind() == 5 && tagName == 'e') deletion.push_back(std::string(tagVal) + std::string(sv(flat->pubkey())));
         }
 
+        if (flat->expiration() != 0) {
+            expiration.push_back(flat->expiration());
+        }
+
+  CompressionDictionary:
+    fields:
+      - name: dict
+        type: ubytes
+
+tablesRaw:
+  ## Raw nostr event JSON, possibly compressed
+  ## keys are levIds
+  ## vals are prefixed with a type byte:
+  ##   0: no compression, payload follows
+  ##   1: zstd compression. Followed by Dictionary ID (native endian uint32) then compressed payload
+  EventPayload:
+    flags: 'MDB_INTEGERKEY'
+
 config:
   - name: db
-    desc: "Directory that contains strfry database"
+    desc: "Directory that contains the strfry LMDB database"
     default: "./strfry-db/"
+    noReload: true
+
+  - name: dbParams__maxreaders
+    desc: "Maximum number of threads/processes that can simultaneously have LMDB transactions open"
+    default: 256
+    noReload: true
+  - name: dbParams__mapsize
+    desc: "Size of mmap() to use when loading LMDB (default is 10TB, does *not* correspond to disk-space used)"
+    default: 10995116277760
     noReload: true
 
   - name: relay__bind
@@ -66,6 +124,13 @@ config:
     desc: "Port to open for the nostr websocket protocol"
     default: 7777
     noReload: true
+  - name: relay__nofiles
+    desc: "Set OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)"
+    default: 1000000
+    noReload: true
+  - name: relay__realIpHeader
+    desc: "HTTP header that contains the client's real IP, before reverse proxying (ie x-real-ip) (MUST be all lower-case)"
+    default: ""
 
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
@@ -97,6 +162,25 @@ config:
   - name: relay__maxFilterLimit
     desc: "Maximum records that can be returned per filter"
     default: 500
+  - name: relay__maxSubsPerConnection
+    desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
+    default: 20
+
+  - name: relay__writePolicy__plugin
+    desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
+    default: ""
+  - name: relay__writePolicy__lookbackSeconds
+    desc: "Number of seconds to search backwards for lookback events when starting the writePolicy plugin (0 for no lookback)"
+    default: 0
+
+  - name: relay__compression__enabled
+    desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"
+    default: true
+    noReload: true
+  - name: relay__compression__slidingWindow
+    desc: "Maintain a sliding window buffer for each connection. Improves compression, but uses more memory"
+    default: true
+    noReload: true
 
   - name: relay__logging__dumpInAll
     desc: "Dump all incoming messages"
@@ -112,15 +196,19 @@ config:
     default: false
 
   - name: relay__numThreads__ingester
+    desc: Ingester threads: route incoming requests, validate events/sigs
     default: 3
     noReload: true
   - name: relay__numThreads__reqWorker
+    desc: reqWorker threads: Handle initial DB scan for events
     default: 3
     noReload: true
   - name: relay__numThreads__reqMonitor
+    desc: reqMonitor threads: Handle filtering of new events
     default: 3
     noReload: true
   - name: relay__numThreads__yesstr
+    desc: yesstr threads: Experimental yesstr protocol
     default: 1
     noReload: true
 
@@ -141,7 +229,7 @@ config:
     default: 300
   - name: events__maxNumTags
     desc: "Maximum number of tags allowed"
-    default: 250
+    default: 2000
   - name: events__maxTagValSize
     desc: "Maximum size for tag values, in bytes"
-    default: 255
+    default: 1024

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "golpe.h"
 
 #include "Subscription.h"
@@ -13,26 +15,35 @@ struct ActiveMonitors : NonCopyable {
         Subscription sub;
 
         Monitor(Subscription &sub_) : sub(std::move(sub_)) {}
+        Monitor(const Monitor&) = delete; // pointers to filters inside sub must be stable because they are stored in MonitorSets
     };
 
-    using ConnMonitor = std::map<SubId, Monitor>;
-    std::map<uint64_t, ConnMonitor> conns; // connId -> subId -> Monitor
+    using ConnMonitor = std::unordered_map<SubId, Monitor>;
+    flat_hash_map<uint64_t, ConnMonitor> conns; // connId -> subId -> Monitor
 
     struct MonitorItem {
         Monitor *mon;
         uint64_t latestEventId;
     };
 
-    using MonitorSet = std::map<NostrFilter*, MonitorItem>; // FIXME: flat_map here
-    std::map<std::string, MonitorSet> allIds;
-    std::map<std::string, MonitorSet> allAuthors;
-    std::map<std::string, MonitorSet> allTags;
-    std::map<uint64_t, MonitorSet> allKinds;
+    using MonitorSet = flat_hash_map<NostrFilter*, MonitorItem>;
+    btree_map<std::string, MonitorSet> allIds;
+    btree_map<std::string, MonitorSet> allAuthors;
+    btree_map<std::string, MonitorSet> allTags;
+    btree_map<uint64_t, MonitorSet> allKinds;
     MonitorSet allOthers;
+
+    std::string tagSpecBuf = std::string(256, '\0');
+    const std::string &getTagSpec(uint8_t k, std::string_view val) {
+        tagSpecBuf.clear();
+        tagSpecBuf += (char)k;
+        tagSpecBuf += val;
+        return tagSpecBuf;
+    }
 
 
   public:
-    void addSub(lmdb::txn &txn, Subscription &&sub, uint64_t currEventId) {
+    bool addSub(lmdb::txn &txn, Subscription &&sub, uint64_t currEventId) {
         if (sub.latestEventId != currEventId) throw herr("sub not up to date");
 
         {
@@ -43,10 +54,15 @@ struct ActiveMonitors : NonCopyable {
         auto res = conns.try_emplace(sub.connId);
         auto &connMonitors = res.first->second;
 
+        if (connMonitors.size() >= cfg().relay__maxSubsPerConnection) {
+            return false;
+        }
+
         auto subId = sub.subId;
         auto *m = &connMonitors.try_emplace(subId, sub).first->second;
 
         installLookups(m, currEventId);
+        return true;
     }
 
     void removeSub(uint64_t connId, const SubId &subId) {
@@ -84,7 +100,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsPrefix = [&](std::map<std::string, MonitorSet> &m, const std::string &key, std::function<bool(const std::string&)> matches){
+        auto processMonitorsPrefix = [&](btree_map<std::string, MonitorSet> &m, const std::string &key, std::function<bool(const std::string&)> matches){
             auto it = m.lower_bound(key.substr(0, 1));
 
             if (it == m.end()) return;
@@ -95,7 +111,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsExact = [&]<typename T>(std::map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
+        auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
             auto it = m.upper_bound(key);
 
             if (it == m.begin()) return;
@@ -124,10 +140,15 @@ struct ActiveMonitors : NonCopyable {
             }));
         }
 
-        for (const auto &tag : *flat->tags()) {
-            // FIXME: can avoid this allocation:
-            auto tagSpec = std::string(1, (char)tag->key()) + std::string(sv(tag->val()));
+        for (const auto &tag : *flat->tagsFixed32()) {
+            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
+            processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
+                return tagSpec == val;
+            }));
+        }
 
+        for (const auto &tag : *flat->tagsGeneral()) {
+            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
             processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
                 return tagSpec == val;
             }));
@@ -174,7 +195,7 @@ struct ActiveMonitors : NonCopyable {
             } else if (f.tags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
-                        std::string tagSpec = std::string(1, tagName) + filterSet.at(i);
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto res = allTags.try_emplace(tagSpec);
                         res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                     }
@@ -207,7 +228,7 @@ struct ActiveMonitors : NonCopyable {
             } else if (f.tags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
-                        std::string tagSpec = std::string(1, tagName) + filterSet.at(i);
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto &monSet = allTags.at(tagSpec);
                         monSet.erase(&f);
                         if (monSet.empty()) allTags.erase(tagSpec);

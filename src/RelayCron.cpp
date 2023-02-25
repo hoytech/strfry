@@ -1,18 +1,15 @@
 #include "RelayServer.h"
 
+#include "gc.h"
+
 
 void RelayServer::cleanupOldEvents() {
-    struct EventDel {
-        uint64_t nodeId;
-        uint64_t deletedNodeId;
-    };
-
-    std::vector<EventDel> expiredEvents;
+    std::vector<uint64_t> expiredLevIds;
 
     {
         auto txn = env.txn_ro();
 
-        auto mostRecent = getMostRecentEventId(txn);
+        auto mostRecent = getMostRecentLevId(txn);
         uint64_t cutoff = hoytech::curr_time_s() - cfg().events__ephemeralEventsLifetimeSeconds;
         uint64_t currKind = 20'000;
 
@@ -31,10 +28,10 @@ void RelayServer::cleanupOldEvents() {
                     return false;
                 }
 
-                uint64_t nodeId = lmdb::from_sv<uint64_t>(v);
+                uint64_t levId = lmdb::from_sv<uint64_t>(v);
 
-                if (nodeId != mostRecent) { // prevent nodeId re-use
-                    expiredEvents.emplace_back(nodeId, 0);
+                if (levId != mostRecent) { // prevent levId re-use
+                    expiredLevIds.emplace_back(levId);
                 }
 
                 return true;
@@ -44,29 +41,31 @@ void RelayServer::cleanupOldEvents() {
         }
     }
 
-    if (expiredEvents.size() > 0) {
-        LI << "Deleting " << expiredEvents.size() << " ephemeral events";
+    if (expiredLevIds.size() > 0) {
+        auto qdb = getQdbInstance();
 
         auto txn = env.txn_rw();
 
-        quadrable::Quadrable qdb;
-        qdb.init(txn);
-        qdb.checkout("events");
-
+        uint64_t numDeleted = 0;
         auto changes = qdb.change();
 
-        for (auto &e : expiredEvents) {
-            auto view = env.lookup_Event(txn, e.nodeId);
-            if (!view) throw herr("missing event from index, corrupt DB?");
-            changes.del(flatEventToQuadrableKey(view->flat_nested()), &e.deletedNodeId);
+        for (auto levId : expiredLevIds) {
+            auto view = env.lookup_Event(txn, levId);
+            if (!view) continue; // Deleted in between transactions
+            deleteEvent(txn, changes, *view);
+            numDeleted++;
         }
 
         changes.apply(txn);
 
-        for (auto &e : expiredEvents) {
-            if (e.deletedNodeId) env.delete_Event(txn, e.nodeId);
-        }
-
         txn.commit();
+
+        if (numDeleted) LI << "Deleted " << numDeleted << " ephemeral events";
     }
+}
+
+void RelayServer::garbageCollect() {
+    auto qdb = getQdbInstance();
+
+    quadrableGarbageCollect(qdb, 1);
 }

@@ -20,23 +20,23 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
     uint64_t pause = 0;
     if (args["--pause"]) pause = args["--pause"].asLong();
 
-    bool metrics = false;
-    if (args["--metrics"]) metrics = true;
-
+    bool metrics = args["--metrics"].asBool();
 
     std::string filterStr = args["<filter>"].asString();
-    auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr));
 
+
+    auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr), MAX_U64);
     Subscription sub(1, "junkSub", filterGroup);
-
     DBScanQuery query(sub);
 
+
+    Decompressor decomp;
 
     auto txn = env.txn_ro();
 
     while (1) {
-        bool complete = query.process(txn, pause ? pause : MAX_U64, metrics, [&](const auto &sub, uint64_t quadId){
-            std::cout << getEventJson(txn, quadId) << "\n";
+        bool complete = query.process(txn, pause ? pause : MAX_U64, metrics, [&](const auto &sub, uint64_t levId){
+            std::cout << getEventJson(txn, decomp, levId) << "\n";
         });
 
         if (complete) break;
