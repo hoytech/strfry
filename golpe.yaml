@@ -48,7 +48,7 @@ tables:
         multi: true
       deletion: # eventId, pubkey
         multi: true
-      expiration:
+      expiration: # unix timestamp, value of 1 is special-case for ephemeral event
         integer: true
         multi: true
       replace: # pubkey, d-tag, kind

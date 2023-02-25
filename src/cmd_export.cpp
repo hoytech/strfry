@@ -9,7 +9,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      export [--since=<since>] [--until=<until>] [--reverse] [--include-ephemeral]
+      export [--since=<since>] [--until=<until>] [--reverse]
 )";
 
 
@@ -19,7 +19,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     uint64_t since = 0, until = MAX_U64;
     if (args["--since"]) since = args["--since"].asLong();
     if (args["--until"]) until = args["--until"].asLong();
-    bool includeEphemeral = args["--include-ephemeral"].asBool();
     bool reverse = args["--reverse"].asBool();
 
     Decompressor decomp;
@@ -48,8 +47,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
             std::cout << raw.substr(8 + 32 + 32) << "\n";
             return true;
         }
-
-        if (!includeEphemeral && isEphemeralEvent(view.flat_nested()->kind())) return true;
 
         std::cout << getEventJson(txn, decomp, view.primaryKeyId) << "\n";
 

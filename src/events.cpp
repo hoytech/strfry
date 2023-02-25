@@ -24,11 +24,10 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
     if (v.at("tags").get_array().size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
     for (auto &tagArr : v.at("tags").get_array()) {
         auto &tag = tagArr.get_array();
-        if (tag.size() < 2) throw herr("too few fields in tag");
+        if (tag.size() < 1) throw herr("too few fields in tag");
 
         auto tagName = tag.at(0).get_string();
-
-        auto tagVal = tag.at(1).get_string();
+        auto tagVal = tag.size() >= 2 ? tag.at(1).get_string() : "";
 
         if (tagName == "e" || tagName == "p") {
             tagVal = from_hex(tagVal, false);
@@ -41,10 +40,11 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
         } else if (tagName == "expiration") {
             if (expiration == 0) {
                 expiration = parseUint64(tagVal);
-                if (expiration == 0) expiration = 1; // special value to indicate expiration of 0 was set
+                if (expiration < 100) throw herr("invalid expiration");
             }
+        } else if (tagName == "ephemeral") {
+            expiration = 1;
         } else if (tagName.size() == 1) {
-            if (tagVal.size() == 0) throw herr("tag val empty");
             if (tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too large: ", tagVal.size());
 
             if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
@@ -54,6 +54,17 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
                 ));
             }
         }
+    }
+
+    if (isDefaultReplaceableKind(kind)) {
+        tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
+            'd',
+            builder.CreateVector((uint8_t*)"", 0)
+        ));
+    }
+
+    if (isDefaultEphemeralKind(kind)) {
+        expiration = 1;
     }
 
     // Create flatbuffer
@@ -125,7 +136,7 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
     auto now = hoytech::curr_time_s();
     auto ts = flat->created_at();
 
-    uint64_t earliest = now - (isEphemeralEvent(flat->kind()) ? cfg().events__rejectEphemeralEventsOlderThanSeconds : cfg().events__rejectEventsOlderThanSeconds);
+    uint64_t earliest = now - (flat->expiration() == 1 ? cfg().events__rejectEphemeralEventsOlderThanSeconds : cfg().events__rejectEventsOlderThanSeconds);
     uint64_t latest = now + cfg().events__rejectEventsNewerThanSeconds;
 
     if (ts < earliest) throw herr("created_at too early");
@@ -261,24 +272,8 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
             continue;
         }
 
-        if (isReplaceableEvent(flat->kind())) {
-            auto searchKey = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), MAX_U64);
-
-            env.generic_foreachFull(txn, env.dbi_Event__pubkeyKind, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
-                ParsedKey_StringUint64Uint64 parsedKey(k);
-                if (parsedKey.s == sv(flat->pubkey()) && parsedKey.n1 == flat->kind()) {
-                    if (parsedKey.n2 < flat->created_at()) {
-                        auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
-                        if (logLevel >= 1) LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv.flat_nested()->id()));
-                        deleteEvent(txn, changes, otherEv);
-                    } else {
-                        ev.status = EventWriteStatus::Replaced;
-                    }
-                }
-                return false;
-            }, true);
-        } else {
-            std::string replace;
+        {
+            std::optional<std::string> replace;
 
             for (const auto &tagPair : *(flat->tagsGeneral())) {
                 auto tagName = (char)tagPair->key();
@@ -287,8 +282,8 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 break;
             }
 
-            if (replace.size()) {
-                auto searchStr = std::string(sv(flat->pubkey())) + replace;
+            if (replace) {
+                auto searchStr = std::string(sv(flat->pubkey())) + *replace;
                 auto searchKey = makeKey_StringUint64(searchStr, flat->kind());
 
                 env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {

@@ -26,6 +26,7 @@ features
     * inverted filter: delete events that *don't* match the provided filter
   ? relay block-list events
   ? if a client disconnects, delete all its pending write messages
+  ? support filtering on empty value tags
 
 rate limits
   ! event writes per second per ip
