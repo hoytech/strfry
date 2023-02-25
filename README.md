@@ -60,6 +60,19 @@ The `strfry export` command will print events from the DB to standard output in 
 Optionally, you can limit the time period exported with the `--since` and `--until` flags.
 
 
+### DB Upgrade
+
+In the past, incompatible changes have been made to the DB format. If you try to use a `strfry` binary with an incompatible DB version, an error will be thrown. Only the `strfry export` command will work.
+
+In order to upgrade the DB, you should export and then import again:
+
+    ./strfry export > dbdump.jsonl
+    mv strfry-db/data.mdb data.mdb.bak
+    ./strfry import < dbdump.jsonl
+
+After you have confirmed everything is working OK, the `dbdump.jsonl` and `data.mdb.bak` files can be deleted.
+
+
 ### Stream
 
 This command opens a websocket connection to the specified relay and makes a nostr `REQ` request with filter `{"limit":0}`:
