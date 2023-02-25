@@ -14,6 +14,8 @@ void RelayServer::runCron() {
 
 
     // Delete ephemeral events
+    // FIXME: This is for backwards compat during upgrades, and can be removed eventually since
+    // the newer style of finding ephemeral events relies on expiration=1
 
     cron.repeat(10 * 1'000'000UL, [&]{
         std::vector<uint64_t> expiredLevIds;
@@ -73,6 +75,67 @@ void RelayServer::runCron() {
             if (numDeleted) LI << "Deleted " << numDeleted << " ephemeral events";
         }
     });
+
+
+    // Delete expired events
+
+    cron.repeat(9 * 1'000'000UL, [&]{
+        std::vector<uint64_t> expiredLevIds;
+        uint64_t numEphemeral = 0;
+        uint64_t numExpired = 0;
+
+        {
+            auto txn = env.txn_ro();
+
+            auto mostRecent = getMostRecentLevId(txn);
+            uint64_t now = hoytech::curr_time_s();
+            uint64_t ephemeralCutoff = now - cfg().events__ephemeralEventsLifetimeSeconds;
+
+            env.generic_foreachFull(txn, env.dbi_Event__expiration, lmdb::to_sv<uint64_t>(0), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
+                auto expiration = lmdb::from_sv<uint64_t>(k);
+                auto levId =  lmdb::from_sv<uint64_t>(v);
+
+                if (levId == mostRecent) return true;
+
+                if (expiration == 1) { // Ephemeral event
+                    auto view = env.lookup_Event(txn, levId);
+                    if (!view) throw herr("missing event from index, corrupt DB?");
+                    uint64_t created = view->flat_nested()->created_at();
+
+                    if (created <= ephemeralCutoff) {
+                        numEphemeral++;
+                        expiredLevIds.emplace_back(levId);
+                    }
+                } else {
+                    numExpired++;
+                    expiredLevIds.emplace_back(levId);
+                }
+
+                return expiration <= now;
+            });
+        }
+
+        if (expiredLevIds.size() > 0) {
+            auto txn = env.txn_rw();
+
+            uint64_t numDeleted = 0;
+            auto changes = qdb.change();
+
+            for (auto levId : expiredLevIds) {
+                auto view = env.lookup_Event(txn, levId);
+                if (!view) continue; // Deleted in between transactions
+                deleteEvent(txn, changes, *view);
+                numDeleted++;
+            }
+
+            changes.apply(txn);
+
+            txn.commit();
+
+            if (numDeleted) LI << "Deleted " << numDeleted << " events (ephemeral=" << numEphemeral << " expired=" << numExpired << ")";
+        }
+    });
+
 
     // Garbage collect quadrable nodes
 

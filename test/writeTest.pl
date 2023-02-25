@@ -2,6 +2,9 @@
 
 use strict;
 
+use Carp;
+$SIG{ __DIE__ } = \&Carp::confess;
+
 use Data::Dumper;
 use JSON::XS;
 
@@ -35,6 +38,17 @@ doTest({
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
         qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5001 },
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
+    ],
+    verify => [ 1, ],
+});
+
+## Same, but explicit empty d tag
+
+doTest({
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5001 --tag d '' },
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
     ],
     verify => [ 1, ],
@@ -159,6 +173,9 @@ doTest({
 
 
 
+print "OK\n";
+
+
 sub doTest {
     my $spec = shift;
 
@@ -200,7 +217,7 @@ sub addEvent {
 
     my $eventJson = `cat test-eventXYZ.json`;
 
-    system(qq{ <test-eventXYZ.json ./strfry --config test/strfry.conf import --no-gc 2>/dev/null });
+    system(qq{ <test-eventXYZ.json ./strfry --config test/strfry.conf import 2>/dev/null });
 
     system(qq{ rm test-eventXYZ.json });
 
