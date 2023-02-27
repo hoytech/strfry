@@ -70,12 +70,8 @@ struct ActiveQueries : NonCopyable {
             return;
         }
 
-        auto cursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
-
-        bool complete = q->process(txn, [&](const auto &sub, uint64_t levId){
-            std::string_view key = lmdb::to_sv<uint64_t>(levId), val;
-            if (!cursor.get(key, val, MDB_SET_KEY)) throw herr("couldn't find event in EventPayload, corrupted DB?");
-            server->sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, val, nullptr, nullptr));
+        bool complete = q->process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
+            server->sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
         }, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf);
 
         if (complete) {

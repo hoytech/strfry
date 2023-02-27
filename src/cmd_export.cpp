@@ -39,20 +39,19 @@ void cmd_export(const std::vector<std::string> &subArgs) {
             if (lmdb::from_sv<uint64_t>(k) > until) return false;
         }
 
-        auto view = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
-        if (!view) throw herr("missing event from index, corrupt DB?");
+        auto view = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
 
         if (dbVersion == 0) {
             std::string_view raw;
-            bool found = qdb.dbi_nodesLeaf.get(txn, lmdb::to_sv<uint64_t>(view->primaryKeyId), raw);
-            if (!found) throw herr("couldn't find leaf node in quadrable, corrupted DB?");
+            bool found = qdb.dbi_nodesLeaf.get(txn, lmdb::to_sv<uint64_t>(view.primaryKeyId), raw);
+            if (!found) throw herr("couldn't find leaf node in quadrable table");
             std::cout << raw.substr(8 + 32 + 32) << "\n";
             return true;
         }
 
-        if (!includeEphemeral && isEphemeralEvent(view->flat_nested()->kind())) return true;
+        if (!includeEphemeral && isEphemeralEvent(view.flat_nested()->kind())) return true;
 
-        std::cout << getEventJson(txn, decomp, view->primaryKeyId) << "\n";
+        std::cout << getEventJson(txn, decomp, view.primaryKeyId) << "\n";
 
         return true;
     }, reverse);

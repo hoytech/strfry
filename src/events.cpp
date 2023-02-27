@@ -170,6 +170,12 @@ std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn
     return output;
 }
 
+defaultDb::environment::View_Event lookupEventByLevId(lmdb::txn &txn, uint64_t levId) {
+    auto view = env.lookup_Event(txn, levId);
+    if (!view) throw herr("unable to lookup event by levId");
+    return *view;
+}
+
 uint64_t getMostRecentLevId(lmdb::txn &txn) {
     uint64_t levId = 0;
 
@@ -210,12 +216,16 @@ std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::s
 // Return result only valid until one of: next call to getEventJson/decodeEventPayload, write to/closing of txn, or any action on decomp object
 
 std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId) {
-    std::string_view raw;
+    std::string_view eventPayload;
 
-    bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), raw);
-    if (!found) throw herr("couldn't find event in EventPayload, corrupted DB?");
+    bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), eventPayload);
+    if (!found) throw herr("couldn't find event in EventPayload");
 
-    return decodeEventPayload(txn, decomp, raw, nullptr, nullptr);
+    return getEventJson(txn, decomp, levId, eventPayload);
+}
+
+std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId, std::string_view eventPayload) {
+    return decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr);
 }
 
 
@@ -258,10 +268,9 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 ParsedKey_StringUint64Uint64 parsedKey(k);
                 if (parsedKey.s == sv(flat->pubkey()) && parsedKey.n1 == flat->kind()) {
                     if (parsedKey.n2 < flat->created_at()) {
-                        auto otherEv = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
-                        if (!otherEv) throw herr("missing event from index, corrupt DB?");
-                        if (logLevel >= 1) LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv->flat_nested()->id()));
-                        deleteEvent(txn, changes, *otherEv);
+                        auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                        if (logLevel >= 1) LI << "Deleting event (replaceable). id=" << to_hex(sv(otherEv.flat_nested()->id()));
+                        deleteEvent(txn, changes, otherEv);
                     } else {
                         ev.status = EventWriteStatus::Replaced;
                     }
@@ -285,12 +294,11 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                 env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                     ParsedKey_StringUint64 parsedKey(k);
                     if (parsedKey.s == searchStr && parsedKey.n == flat->kind()) {
-                        auto otherEv = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
-                        if (!otherEv) throw herr("missing event from index, corrupt DB?");
+                        auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
 
-                        if (otherEv->flat_nested()->created_at() < flat->created_at()) {
-                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv->flat_nested()->id()));
-                            deleteEvent(txn, changes, *otherEv);
+                        if (otherEv.flat_nested()->created_at() < flat->created_at()) {
+                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv.flat_nested()->id()));
+                            deleteEvent(txn, changes, otherEv);
                         } else {
                             ev.status = EventWriteStatus::Replaced;
                         }

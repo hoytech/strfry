@@ -52,7 +52,7 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
                 DBQuery query(tao::json::from_string(filterStr));
 
                 while (1) {
-                    bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+                    bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view){
                         levIds.push_back(levId);
                     }, MAX_U64, cfg().relay__logging__dbScanPerf);
 

@@ -4,6 +4,7 @@
 
 #include "Subscription.h"
 #include "filters.h"
+#include "events.h"
 
 
 struct DBScan : NonCopyable {
@@ -233,10 +234,12 @@ struct DBScan : NonCopyable {
         refillScanDepth = 10 * initialScanDepth;
     }
 
-    bool scan(lmdb::txn &txn, std::function<bool(uint64_t)> handleEvent, std::function<bool(uint64_t)> doPause) {
+    bool scan(lmdb::txn &txn, std::function<bool(uint64_t, std::string_view)> handleEvent, std::function<bool(uint64_t)> doPause) {
         auto cmp = [](auto &a, auto &b){
             return a.created() == b.created() ? a.levId() > b.levId() : a.created() > b.created();
         };
+
+        auto eventPayloadCursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
 
         while (1) {
             approxWork++;
@@ -258,18 +261,24 @@ struct DBScan : NonCopyable {
             auto ev = eventQueue.front();
             eventQueue.pop_front();
             bool doSend = false;
+            uint64_t levId = ev.levId();
+            std::string_view eventPayload;
+
+            auto loadEventPayload = [&]{
+                std::string_view key = lmdb::to_sv<uint64_t>(levId);
+                return eventPayloadCursor.get(key, eventPayload, MDB_SET_KEY); // If not found, was deleted while scan was paused
+            };
 
             if (indexOnly) {
                 if (f.doesMatchTimes(ev.created())) doSend = true;
-            } else {
+                if (!loadEventPayload()) doSend = false;
+            } else if (loadEventPayload()) {
                 approxWork += 10;
-                auto view = env.lookup_Event(txn, ev.levId());
-                if (!view) throw herr("missing event from index, corrupt DB?");
-                if (f.doesMatch(view->flat_nested())) doSend = true;
+                if (f.doesMatch(lookupEventByLevId(txn, levId).flat_nested())) doSend = true;
             }
 
             if (doSend) {
-                if (handleEvent(ev.levId())) return true;
+                if (handleEvent(levId, eventPayload)) return true;
             }
 
             cursors[ev.scanIndex()].outstanding--;
@@ -306,7 +315,7 @@ struct DBQuery : NonCopyable {
     DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup::unwrapped(filter, maxLimit))) {}
 
     // If scan is complete, returns true
-    bool process(lmdb::txn &txn, std::function<void(const Subscription &, uint64_t)> cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
+    bool process(lmdb::txn &txn, std::function<void(const Subscription &, uint64_t, std::string_view)> cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
         while (filterGroupIndex < sub.filterGroup.size()) {
             const auto &f = sub.filterGroup.filters[filterGroupIndex];
 
@@ -314,13 +323,13 @@ struct DBQuery : NonCopyable {
 
             uint64_t startTime = hoytech::curr_time_us();
 
-            bool complete = scanner->scan(txn, [&](uint64_t levId){
+            bool complete = scanner->scan(txn, [&](uint64_t levId, std::string_view eventPayload){
                 // If this event came in after our query began, don't send it. It will be sent after the EOSE.
                 if (levId > sub.latestEventId) return false;
 
                 if (sentEventsFull.find(levId) == sentEventsFull.end()) {
                     sentEventsFull.insert(levId);
-                    cb(sub, levId);
+                    cb(sub, levId, eventPayload);
                 }
 
                 sentEventsCurr.insert(levId);

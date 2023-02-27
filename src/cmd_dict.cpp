@@ -50,7 +50,7 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
     DBQuery query(tao::json::from_string(filterStr));
 
     while (1) {
-        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view){
             levIds.push_back(levId);
         });
 
@@ -77,7 +77,7 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
             std::string_view raw;
 
             bool found = env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), raw);
-            if (!found) throw herr("couldn't find event in EventPayload, corrupted DB?");
+            if (!found) throw herr("couldn't find event in EventPayload");
 
             uint32_t dictId;
             size_t outCompressedSize;
