@@ -25,6 +25,7 @@ rate limits
   ! event writes per second per ip
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
+  log IP address in sendNoticeError and elsewhere where it makes sense
   ? limit on total number of events from a DBScan, not just per filter
   ? time limit on DBScan
 
