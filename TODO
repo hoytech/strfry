@@ -1,3 +1,6 @@
+bugs
+  ! chunk rw commits due to MDB_TXN_FULL
+
 0.1 release
   when disk is full it should log warning but not crash
   delete expired events
