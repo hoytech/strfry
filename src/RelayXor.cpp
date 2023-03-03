@@ -35,6 +35,14 @@ struct XorViews {
             return std::string_view(data + 8, idSize);
         }
 
+        std::string_view getIdPadded() const {
+            return std::string_view(data + 8, 32);
+        }
+
+        std::string_view getFull() const {
+            return std::string_view(data, sizeof(data));
+        }
+
         bool isZero() {
             uint64_t *ours = reinterpret_cast<uint64_t*>(data + 8);
             return ours[0] == 0 && ours[1] == 0 && ours[2] == 0 && ours[3] == 0;
@@ -49,18 +57,20 @@ struct XorViews {
             ours[2] ^= theirs[2];
             ours[3] ^= theirs[3];
         }
+
+        bool operator==(const Elem &o) const {
+            return o.getIdPadded() == getIdPadded();
+        }
     };
 
     struct View {
-        uint64_t connId;
-        SubId subId;
         uint64_t idSize;
         std::string initialQuery;
 
         std::vector<Elem> elems;
         bool ready = false;
 
-        View(uint64_t connId, SubId subId, uint64_t idSize, const std::string &initialQuery) : connId(connId), subId(subId), idSize(idSize), initialQuery(initialQuery) {
+        View(uint64_t idSize, const std::string &initialQuery) : idSize(idSize), initialQuery(initialQuery) {
             if (idSize < 8 || idSize > 32) throw herr("idSize out of range");
         }
 
@@ -79,9 +89,8 @@ struct XorViews {
             initialQuery = "";
         }
 
-        void handleQuery(std::string_view query) { // FIXME: this can throw
+        std::string handleQuery(std::string_view query) { // FIXME: this can throw
             std::string output;
-            std::vector<Elem> idsToSend;
 
             auto cmp = [&](const auto &a, const auto &b){ return a.getCompare(idSize) < b.getCompare(idSize); };
 
@@ -94,23 +103,44 @@ struct XorViews {
                 if (upperLength > idSize + 5) throw herr("upper too long");
                 Elem upperKey(getBytes(query, upperLength));
 
-                std::string xorSet = getBytes(query, idSize);
-
                 auto lower = std::lower_bound(elems.begin(), elems.end(), lowerKey, cmp);
-                auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey, cmp);
+                auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey, cmp); // FIXME: start at lower?
 
-                Elem myXorSet;
-                for (auto i = lower; i < upper; ++i) myXorSet.doXor(*i);
+                uint64_t mode = decodeVarInt(query); // 0 = range, 8 and above = n-8 inline IDs
+
+                if (mode == 0) {
+                    Elem theirXorSet(getBytes(query, idSize));
+
+                    Elem ourXorSet;
+                    for (auto i = lower; i < upper; ++i) ourXorSet.doXor(*i);
+
+                    if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) {
+                        // Split our range
+                    }
+                } else if (mode >= 8) {
+                    flat_hash_map<Elem, bool> theirElems;
+                    for (uint64_t i = 0; i < mode - 8; i++) theirElems.emplace(getBytes(query, idSize), false);
+
+                    for (auto it = lower; lower < upper; ++it) {
+                        auto e = theirElems.find(*it);
+
+                        if (e == theirElems.end()) {
+                            // Id exists on our side, but not their side
+                        } else {
+                            // Id exists on both sides
+                            e->second = true;
+                        }
+                    }
+
+                    for (const auto &[k, v] : theirElems) {
+                        if (!v) {
+                            // Id exists on their side, but not our side
+                        }
+                    }
+                }
             }
 
-            /*
-            sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
-                "XOR-RES",
-                sub.subId.str(),
-                to_hex(view->xorRange(0, view->elems.size())),
-                view->elems.size(),
-            })));
-            */
+            return output;
         }
 
         std::string xorRange(uint64_t start, uint64_t len) {
@@ -140,7 +170,7 @@ struct XorViews {
             return false;
         }
 
-        connViews.try_emplace(subId, connId, subId, idSize, query);
+        connViews.try_emplace(subId, idSize, query);
 
         return true;
     }
@@ -190,6 +220,14 @@ void RelayServer::runXor(ThreadPool<MsgXor>::Thread &thr) {
         if (!view) return;
 
         view->finalise();
+            /*
+            sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
+                "XOR-RES",
+                sub.subId.str(),
+                to_hex(view->xorRange(0, view->elems.size())),
+                view->elems.size(),
+            })));
+            */
     };
 
     while(1) {
@@ -228,4 +266,14 @@ void RelayServer::runXor(ThreadPool<MsgXor>::Thread &thr) {
 
         txn.abort();
     }
+}
+
+
+namespace std {
+    // inject specialization of std::hash
+    template<> struct hash<XorViews::Elem> {
+        std::size_t operator()(XorViews::Elem const &p) const {
+            return phmap::HashState().combine(0, p.getFull());
+        }
+    };
 }
