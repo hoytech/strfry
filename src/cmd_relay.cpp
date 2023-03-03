@@ -32,6 +32,10 @@ void RelayServer::run() {
         runYesstr(thr);
     });
 
+    tpXor.init("Xor", cfg().relay__numThreads__xor, [this](auto &thr){
+        runXor(thr);
+    });
+
     cronThread = std::thread([this]{
         runCron();
     });

@@ -211,6 +211,10 @@ config:
     desc: yesstr threads: Experimental yesstr protocol
     default: 1
     noReload: true
+  - name: relay__numThreads__xor
+    desc: xor threads: Experimental XOR protocol
+    default: 3
+    noReload: true
 
   - name: events__maxEventSize
     desc: "Maximum size of normalised JSON, in bytes"

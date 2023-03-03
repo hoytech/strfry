@@ -50,6 +50,12 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
                             }
+                        } else if (cmd.starts_with("XOR-")) {
+                            try {
+                                ingesterProcessXor(txn, msg->connId, arr);
+                            } catch (std::exception &e) {
+                                sendNoticeError(msg->connId, std::string("bad xor: ") + e.what());
+                            }
                         } else {
                             throw herr("unknown cmd");
                         }
@@ -73,6 +79,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                 auto connId = msg->connId;
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
                 tpYesstr.dispatch(connId, MsgYesstr{MsgYesstr::CloseConn{connId}});
+                tpXor.dispatch(connId, MsgXor{MsgXor::CloseConn{connId}});
             }
         }
 
@@ -114,4 +121,21 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
     if (arr.get_array().size() != 2) throw herr("arr too small/big");
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(arr[1].get_string())}});
+}
+
+void RelayServer::ingesterProcessXor(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+    if (arr.at(0) == "XOR-OPEN") {
+        if (arr.get_array().size() < 5) throw herr("xor arr too small");
+
+        Subscription sub(connId, arr[1].get_string(), NostrFilterGroup::unwrapped(arr.at(2)));
+
+        uint64_t idSize = arr.at(3).get_unsigned();
+        if (idSize < 8 || idSize > 32) throw herr("idSize out of range");
+
+        std::string query = from_hex(arr.at(4).get_string());
+
+        tpXor.dispatch(connId, MsgXor{MsgXor::NewView{std::move(sub), idSize, std::move(query)}});
+    } else {
+        throw herr("unknown command");
+    }
 }

@@ -5,11 +5,13 @@
 
 struct QueryScheduler : NonCopyable {
     std::function<void(lmdb::txn &txn, const Subscription &sub, uint64_t levId, std::string_view eventPayload)> onEvent;
+    std::function<void(lmdb::txn &txn, const Subscription &sub, const std::vector<uint64_t> &levIds)> onEventBatch;
     std::function<void(Subscription &sub)> onComplete;
 
     using ConnQueries = flat_hash_map<SubId, DBQuery*>;
     flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBQuery*
     std::deque<DBQuery*> running;
+    std::vector<uint64_t> levIdBatch;
 
     bool addSub(lmdb::txn &txn, Subscription &&sub) {
         sub.latestEventId = getMostRecentLevId(txn);
@@ -73,14 +75,20 @@ struct QueryScheduler : NonCopyable {
         }
 
         bool complete = q->process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
-            onEvent(txn, sub, levId, eventPayload);
+            if (onEvent) onEvent(txn, sub, levId, eventPayload);
+            if (onEventBatch) levIdBatch.push_back(levId);
         }, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf);
+
+        if (onEventBatch) {
+            onEventBatch(txn, q->sub, levIdBatch);
+            levIdBatch.clear();
+        }
 
         if (complete) {
             auto connId = q->sub.connId;
             removeSub(connId, q->sub.subId);
 
-            onComplete(q->sub);
+            if (onComplete) onComplete(q->sub);
 
             delete q;
         } else {

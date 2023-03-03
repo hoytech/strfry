@@ -129,6 +129,33 @@ struct MsgYesstr : NonCopyable {
     MsgYesstr(Var &&msg_) : msg(std::move(msg_)) {}
 };
 
+struct MsgXor : NonCopyable {
+    struct NewView {
+        Subscription sub;
+        uint64_t idSize;
+        std::string query;
+    };
+
+    struct QueryView {
+        uint64_t connId;
+        SubId subId;
+        uint64_t queryId;
+        std::string query;
+    };
+
+    struct RemoveView {
+        uint64_t connId;
+        SubId subId;
+    };
+
+    struct CloseConn {
+        uint64_t connId;
+    };
+
+    using Var = std::variant<NewView, QueryView, RemoveView, CloseConn>;
+    Var msg;
+    MsgXor(Var &&msg_) : msg(std::move(msg_)) {}
+};
 
 struct RelayServer {
     std::unique_ptr<uS::Async> hubTrigger;
@@ -141,6 +168,7 @@ struct RelayServer {
     ThreadPool<MsgReqWorker> tpReqWorker;
     ThreadPool<MsgReqMonitor> tpReqMonitor;
     ThreadPool<MsgYesstr> tpYesstr;
+    ThreadPool<MsgXor> tpXor;
     std::thread cronThread;
 
     void run();
@@ -151,6 +179,7 @@ struct RelayServer {
     void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
     void ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessXor(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
 
     void runWriter(ThreadPool<MsgWriter>::Thread &thr);
 
@@ -159,6 +188,8 @@ struct RelayServer {
     void runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr);
 
     void runYesstr(ThreadPool<MsgYesstr>::Thread &thr);
+
+    void runXor(ThreadPool<MsgXor>::Thread &thr);
 
     void runCron();
 
