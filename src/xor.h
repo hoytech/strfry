@@ -4,62 +4,43 @@
 
 
 struct XorElem {
-    char data[5 * 8];
+    uint64_t timestamp;
+    char id[32];
 
-    XorElem() {
-        memset(data, '\0', sizeof(data));
+    XorElem() : timestamp(0) {
+        memset(id, '\0', sizeof(id));
     }
 
-    XorElem(uint64_t created, std::string_view id, uint64_t idSize) {
-        memset(data, '\0', sizeof(data));
-        data[3] = (created >> (4*8)) & 0xFF;
-        data[4] = (created >> (3*8)) & 0xFF;
-        data[5] = (created >> (2*8)) & 0xFF;
-        data[6] = (created >> (1*8)) & 0xFF;
-        data[7] = (created >> (0*8)) & 0xFF;
-        memcpy(data + 8, id.data(), idSize);
-    }
-
-    XorElem(std::string_view id) {
-        memset(data, '\0', sizeof(data));
-        memcpy(data + 3, id.data(), id.size());
-    }
-
-    std::string_view getCompare(uint64_t idSize) const {
-        return std::string_view(data + 3, idSize + 5);
+    XorElem(uint64_t timestamp, std::string_view id_) : timestamp(timestamp) {
+        memset(id, '\0', sizeof(id));
+        memcpy(id, id_.data(), std::min(id_.size(), sizeof(id)));
     }
 
     std::string_view getId(uint64_t idSize) const {
-        return std::string_view(data + 8, idSize);
+        return std::string_view(id, idSize);
     }
 
-    std::string_view getIdPadded() const {
-        return std::string_view(data + 8, 32);
-    }
-
-    std::string_view getFull() const {
-        return std::string_view(data, sizeof(data));
-    }
-
-    bool isZero() {
-        uint64_t *ours = reinterpret_cast<uint64_t*>(data + 8);
-        return ours[0] == 0 && ours[1] == 0 && ours[2] == 0 && ours[3] == 0;
-    }
-
-    void doXor(const XorElem &other) {
-        uint64_t *ours = reinterpret_cast<uint64_t*>(data + 8);
-        const uint64_t *theirs = reinterpret_cast<const uint64_t*>(other.data + 8);
+    XorElem& operator^=(const XorElem &other) {
+        uint64_t *ours = reinterpret_cast<uint64_t*>(id);
+        const uint64_t *theirs = reinterpret_cast<const uint64_t*>(other.id);
 
         ours[0] ^= theirs[0];
         ours[1] ^= theirs[1];
         ours[2] ^= theirs[2];
         ours[3] ^= theirs[3];
+
+        return *this;
     }
 
-    bool operator==(const XorElem &o) const {
-        return o.getIdPadded() == getIdPadded();
+    bool operator==(const XorElem &other) const {
+        return getId(32) == other.getId(32); // ignore timestamp
     }
 };
+
+inline bool operator<(const XorElem &a, const XorElem &b) {
+    return a.timestamp != b.timestamp ? a.timestamp < b.timestamp : a.getId(32) < b.getId(32);
+};
+
 
 struct XorView {
     uint64_t idSize;
@@ -72,13 +53,13 @@ struct XorView {
     }
 
     void addElem(uint64_t createdAt, std::string_view id) {
-        elems.emplace_back(createdAt, id, idSize);
+        elems.emplace_back(createdAt, id);
     }
 
     void finalise() {
         std::reverse(elems.begin(), elems.end()); // typically pushed in approximately descending order so this may speed up the sort
 
-        std::sort(elems.begin(), elems.end(), [&](const auto &a, const auto &b) { return a.getCompare(idSize) < b.getCompare(idSize); });
+        std::sort(elems.begin(), elems.end());
 
         ready = true;
     }
@@ -87,7 +68,7 @@ struct XorView {
         if (!ready) throw herr("xor view not ready");
 
         std::string output;
-        splitRange(elems.begin(), elems.end(), std::string(1, '\x00'), std::string(1, '\xFF'), output);
+        splitRange(elems.begin(), elems.end(), 0, "", 1678053147ULL, "", output);
         return output;
     }
 
@@ -97,36 +78,36 @@ struct XorView {
 
         std::string output;
 
-        auto cmp = [&](const auto &a, const auto &b){ return a.getCompare(idSize) < b.getCompare(idSize); };
-
         while (query.size()) {
+            uint64_t lowerTimestamp = decodeVarInt(query);
             uint64_t lowerLength = decodeVarInt(query);
-            if (lowerLength > idSize + 5) throw herr("lower too long: ", lowerLength);
+            if (lowerLength > idSize) throw herr("lower too long: ", lowerLength);
             auto lowerKeyRaw = getBytes(query, lowerLength);
-            XorElem lowerKey(lowerKeyRaw);
+            XorElem lowerKey(lowerTimestamp, lowerKeyRaw);
 
+            uint64_t upperTimestamp = decodeVarInt(query);
             uint64_t upperLength = decodeVarInt(query);
-            if (upperLength > idSize + 5) throw herr("upper too long");
+            if (upperLength > idSize) throw herr("upper too long");
             auto upperKeyRaw = getBytes(query, upperLength);
-            XorElem upperKey(upperKeyRaw);
+            XorElem upperKey(upperTimestamp, upperKeyRaw);
 
-            auto lower = std::lower_bound(elems.begin(), elems.end(), lowerKey, cmp); // FIXME: start at prev upper?
-            auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey, cmp); // FIXME: start at lower?
+            auto lower = std::lower_bound(elems.begin(), elems.end(), lowerKey); // FIXME: start at prev upper?
+            auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey); // FIXME: start at lower?
 
             uint64_t mode = decodeVarInt(query); // 0 = range, 8 and above = n-8 inline IDs
 
             if (mode == 0) {
-                XorElem theirXorSet(0, getBytes(query, idSize), idSize);
+                XorElem theirXorSet(0, getBytes(query, idSize));
 
                 XorElem ourXorSet;
-                for (auto i = lower; i < upper; ++i) ourXorSet.doXor(*i);
+                for (auto i = lower; i < upper; ++i) ourXorSet ^= *i;
 
-                if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) splitRange(lower, upper, lowerKeyRaw, upperKeyRaw, output);
+                if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) splitRange(lower, upper, lowerTimestamp, lowerKeyRaw, upperTimestamp, upperKeyRaw, output);
             } else if (mode >= 8) {
                 flat_hash_map<XorElem, bool> theirElems;
                 for (uint64_t i = 0; i < mode - 8; i++) {
                     auto bb = getBytes(query, idSize);
-                    theirElems.emplace(XorElem(0, bb, idSize), false);
+                    theirElems.emplace(XorElem(0, bb), false);
                 }
 
                 for (auto it = lower; it < upper; ++it) {
@@ -155,14 +136,14 @@ struct XorView {
 
   private:
 
-    void splitRange(std::vector<XorElem>::iterator lower, std::vector<XorElem>::iterator upper, const std::string &lowerKey, const std::string &upperKey, std::string &output) {
+    void splitRange(std::vector<XorElem>::iterator lower, std::vector<XorElem>::iterator upper, uint64_t lowerTimestamp, const std::string &lowerKey, uint64_t upperTimestamp, const std::string &upperKey, std::string &output) {
         // Split our range
         uint64_t numElems = upper - lower;
         const uint64_t buckets = 16;
 
         if (numElems < buckets * 2) {
-            appendBoundKey(lowerKey, output);
-            appendBoundKey(upperKey, output);
+            appendBoundKey(lowerTimestamp, lowerKey, output);
+            appendBoundKey(upperTimestamp, upperKey, output);
 
             output += encodeVarInt(numElems + 8);
             for (auto it = lower; it < upper; ++it) output += it->getId(idSize);
@@ -172,14 +153,16 @@ struct XorView {
             auto curr = lower;
 
             for (uint64_t i = 0; i < buckets; i++) {
-                appendBoundKey(i == 0 ? lowerKey : minimalKeyDiff(curr->getCompare(idSize), std::prev(curr)->getCompare(idSize)), output);
+                if (i == 0) appendBoundKey(lowerTimestamp, lowerKey, output);
+                else appendMinimalBoundKey(*curr, *std::prev(curr), output);
 
                 XorElem ourXorSet;
                 for (auto bucketEnd = curr + elemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
-                    ourXorSet.doXor(*curr);
+                    ourXorSet ^= *curr;
                 }
 
-                appendBoundKey(i == buckets - 1 ? upperKey : minimalKeyDiff(curr->getCompare(idSize), std::prev(curr)->getCompare(idSize)), output);
+                if (i == buckets - 1) appendBoundKey(upperTimestamp, upperKey, output);
+                else appendMinimalBoundKey(*curr, *std::prev(curr), output);
 
                 output += encodeVarInt(0); // mode = 0
                 output += ourXorSet.getId(idSize);
@@ -187,17 +170,30 @@ struct XorView {
         }
     }
 
-    void appendBoundKey(std::string k, std::string &output) {
+    void appendBoundKey(uint64_t t, std::string k, std::string &output) {
+        output += encodeVarInt(t);
         output += encodeVarInt(k.size());
         output += k;
     }
 
-    std::string minimalKeyDiff(std::string_view key, std::string_view prevKey) {
-        for (uint64_t i = 0; i < idSize + 5; i++) {
-            if (key[i] != prevKey[i]) return std::string(key.substr(0, i + 1));
-        }
+    void appendMinimalBoundKey(const XorElem &curr, const XorElem &prev, std::string &output) {
+        output += encodeVarInt(curr.timestamp);
 
-        throw herr("couldn't compute shared prefix");
+        if (curr.timestamp != prev.timestamp) {
+            output += encodeVarInt(0);
+        } else {
+            uint64_t sharedPrefixBytes = 0;
+            auto currKey = curr.getId(idSize);
+            auto prevKey = prev.getId(idSize);
+
+            for (uint64_t i = 0; i < idSize; i++) {
+                if (currKey[i] != prevKey[i]) break;
+                sharedPrefixBytes++;
+            }
+
+            output += encodeVarInt(sharedPrefixBytes + 1);
+            output += currKey.substr(0, sharedPrefixBytes + 1);
+        }
     }
 };
 
@@ -206,7 +202,7 @@ namespace std {
     // inject specialization of std::hash
     template<> struct hash<XorElem> {
         std::size_t operator()(XorElem const &p) const {
-            return phmap::HashState().combine(0, p.getIdPadded());
+            return phmap::HashState().combine(0, p.getId(32));
         }
     };
 }
