@@ -57,14 +57,7 @@ int main() {
         } else {
             throw herr("unexpected mode");
         }
-
-        if (mode == 1) std::cerr << "CLIENT-ONLY: " << to_hex(id) << std::endl;
-        if (mode == 2) std::cerr << "RELAY-ONLY : " << to_hex(id) << std::endl;
-        if (mode == 3) std::cerr << "BOTH       : " << to_hex(id) << std::endl;
-
     }
-
-    std::cerr << "BEGIN RECONCILATION" << std::endl;
 
     x1.finalise();
     x2.finalise();
@@ -76,35 +69,36 @@ int main() {
     while (q.size()) {
         round++;
         std::cerr << "ROUND A " << round << std::endl;
-        std::cerr << "CLIENT -> RELAY" << std::endl;
+        std::cerr << "CLIENT -> RELAY: " << q.size() << " bytes" << std::endl;
         {
             std::vector<std::string> have, need;
             q = x2.handleQuery(q, have, need);
 
             // q and have are returned to client
             for (auto &id : have) {
+                if (ids1.contains(id)) throw herr("redundant set");
                 ids1.insert(id);
-                std::cerr << "ADD CLIENT: " << to_hex(id) << std::endl;
             }
             for (auto &id : need) {
+                if (ids2.contains(id)) throw herr("redundant set");
                 ids2.insert(id);
-                std::cerr << "ADD RELAY:  " << to_hex(id) << std::endl;
             }
         }
 
         if (q.size()) {
-        std::cerr << "ROUND B " << round << std::endl;
-        std::cerr << "RELAY -> CLIENT" << std::endl;
+            std::cerr << "ROUND B " << round << std::endl;
+            std::cerr << "RELAY -> CLIENT: " << q.size() << " bytes" << std::endl;
+
             std::vector<std::string> have, need;
             q = x1.handleQuery(q, have, need);
 
             for (auto &id : need) {
+                if (ids1.contains(id)) throw herr("redundant set");
                 ids1.insert(id);
-                std::cerr << "ADD CLIENT: " << to_hex(id) << std::endl;
             }
             for (auto &id : have) {
+                if (ids2.contains(id)) throw herr("redundant set");
                 ids2.insert(id);
-                std::cerr << "ADD RELAY:  " << to_hex(id) << std::endl;
             }
         }
     }
@@ -114,15 +108,6 @@ int main() {
         for (const auto &id : ids2) if (!ids1.contains(id)) std::cerr << "In RELAY not CLIENT: " << to_hex(id) << std::endl;
         throw herr("mismatch");
     }
-
-/*
-    std::vector<std::string> have, need;
-    auto q2 = x2.handleQuery(q, have, need);
-
-    for (auto &s : have) std::cout << "HAVE: " << to_hex(s) << std::endl;
-    for (auto &s : need) std::cout << "NEED: " << to_hex(s) << std::endl;
-    std::cout << to_hex(q2) << std::endl;
-*/
 
     return 0;
 }

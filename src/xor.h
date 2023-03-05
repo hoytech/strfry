@@ -73,7 +73,6 @@ struct XorView {
 
     void addElem(uint64_t createdAt, std::string_view id) {
         elems.emplace_back(createdAt, id, idSize);
-        std::cerr << "ADDELEM " << to_hex(elems.back().getCompare(idSize)) << std::endl;
     }
 
     void finalise() {
@@ -82,8 +81,6 @@ struct XorView {
         std::sort(elems.begin(), elems.end(), [&](const auto &a, const auto &b) { return a.getCompare(idSize) < b.getCompare(idSize); });
 
         ready = true;
-
-        for (auto &e : elems) std::cerr << "FIN " << to_hex(e.getCompare(idSize)) << std::endl;
     }
 
     std::string initialQuery() {
@@ -96,7 +93,6 @@ struct XorView {
 
     // FIXME: try/catch everywhere that calls this
     std::string handleQuery(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
-    std::cerr << "-------------------" << std::endl;
         if (!ready) throw herr("xor view not ready");
 
         std::string output;
@@ -104,46 +100,36 @@ struct XorView {
         auto cmp = [&](const auto &a, const auto &b){ return a.getCompare(idSize) < b.getCompare(idSize); };
 
         while (query.size()) {
-    std::cerr << "=========" << std::endl;
             uint64_t lowerLength = decodeVarInt(query);
             if (lowerLength > idSize + 5) throw herr("lower too long: ", lowerLength);
             auto lowerKeyRaw = getBytes(query, lowerLength);
             XorElem lowerKey(lowerKeyRaw);
-            std::cerr << "LWCMP: " << to_hex(lowerKey.getCompare(idSize)) << std::endl;
 
             uint64_t upperLength = decodeVarInt(query);
             if (upperLength > idSize + 5) throw herr("upper too long");
             auto upperKeyRaw = getBytes(query, upperLength);
             XorElem upperKey(upperKeyRaw);
-            std::cerr << "UPCMP: " << to_hex(upperKey.getCompare(idSize)) << std::endl;
 
             auto lower = std::lower_bound(elems.begin(), elems.end(), lowerKey, cmp); // FIXME: start at prev upper?
             auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey, cmp); // FIXME: start at lower?
-            std::cerr << "FOUND: " << size_t(upper-lower) << std::endl;
-            for (auto it = lower; it < upper; ++it) std::cerr << "MMM: " << to_hex(it->getId(idSize)) << std::endl;
 
             uint64_t mode = decodeVarInt(query); // 0 = range, 8 and above = n-8 inline IDs
 
             if (mode == 0) {
-            std::cerr << "MODE 0" << std::endl;
                 XorElem theirXorSet(0, getBytes(query, idSize), idSize);
 
                 XorElem ourXorSet;
                 for (auto i = lower; i < upper; ++i) ourXorSet.doXor(*i);
 
-                std::cerr << "XSETS " << to_hex(theirXorSet.getId(idSize)) << " / " << to_hex(ourXorSet.getId(idSize)) << std::endl;
                 if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) splitRange(lower, upper, lowerKeyRaw, upperKeyRaw, output);
             } else if (mode >= 8) {
-            std::cerr << "MODE " << (mode - 8) << std::endl;
                 flat_hash_map<XorElem, bool> theirElems;
                 for (uint64_t i = 0; i < mode - 8; i++) {
                     auto bb = getBytes(query, idSize);
-                    std::cerr << "INSERTED THEIR " << to_hex(bb) << std::endl;
                     theirElems.emplace(XorElem(0, bb, idSize), false);
                 }
 
                 for (auto it = lower; it < upper; ++it) {
-                    std::cerr << "SEARCHING " << to_hex(it->getId(idSize)) << std::endl;
                     auto e = theirElems.find(*it);
 
                     if (e == theirElems.end()) {
@@ -152,7 +138,6 @@ struct XorView {
                     } else {
                         // ID exists on both sides
                         e->second = true;
-                        std::cerr << "ERMM " << to_hex(e->first.getId(idSize)) << std::endl;
                     }
                 }
 
@@ -176,51 +161,35 @@ struct XorView {
         const uint64_t buckets = 16;
 
         if (numElems < buckets * 2) {
-            std::cerr << "DUMPING IDs" << std::endl;
-            appendBoundKey(lowerKey /*getLowerKey(lower)*/, output);
-            appendBoundKey(upperKey /*getUpperKey(upper)*/, output);
+            appendBoundKey(lowerKey, output);
+            appendBoundKey(upperKey, output);
 
             output += encodeVarInt(numElems + 8);
             for (auto it = lower; it < upper; ++it) output += it->getId(idSize);
-            for (auto it = lower; it < upper; ++it) std::cerr << "DUMP ID: " << to_hex(it->getId(idSize)) << std::endl;
         } else {
-            std::cerr << "DOING SPLIT" << std::endl;
             uint64_t elemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;
 
             for (uint64_t i = 0; i < buckets; i++) {
-                appendBoundKey(i == 0 ? lowerKey : getLowerKey(curr), output);
+                appendBoundKey(i == 0 ? lowerKey : minimalKeyDiff(curr->getCompare(idSize), std::prev(curr)->getCompare(idSize)), output);
 
                 XorElem ourXorSet;
                 for (auto bucketEnd = curr + elemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
-                std::cerr << "XORING IN " << to_hex(curr->getId(idSize)) << std::endl;
                     ourXorSet.doXor(*curr);
                 }
 
-                appendBoundKey(i == buckets - 1 ? upperKey : getUpperKey(curr), output);
+                appendBoundKey(i == buckets - 1 ? upperKey : minimalKeyDiff(curr->getCompare(idSize), std::prev(curr)->getCompare(idSize)), output);
 
                 output += encodeVarInt(0); // mode = 0
                 output += ourXorSet.getId(idSize);
-                std::cerr << "FULL XOR " << to_hex(ourXorSet.getId(idSize)) << std::endl;
             }
         }
     }
 
     void appendBoundKey(std::string k, std::string &output) {
-        std::cerr << "ABK: " << to_hex(k) << std::endl;
         output += encodeVarInt(k.size());
         output += k;
-    }
-
-    std::string getLowerKey(std::vector<XorElem>::iterator it) {
-        if (it == elems.begin()) return std::string(1, '\0');
-        return minimalKeyDiff(it->getCompare(idSize), std::prev(it)->getCompare(idSize));
-    }
-
-    std::string getUpperKey(std::vector<XorElem>::iterator it) {
-        if (it == elems.end()) return std::string(1, '\xFF');
-        return minimalKeyDiff(it->getCompare(idSize), std::prev(it)->getCompare(idSize));
     }
 
     std::string minimalKeyDiff(std::string_view key, std::string_view prevKey) {
