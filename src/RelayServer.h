@@ -4,7 +4,6 @@
 #include <memory>
 #include <algorithm>
 
-#include <hoytech/timer.h>
 #include <hoytech/time.h>
 #include <hoytech/hex.h>
 #include <hoytech/file_change_monitor.h>
@@ -142,7 +141,7 @@ struct RelayServer {
     ThreadPool<MsgReqWorker> tpReqWorker;
     ThreadPool<MsgReqMonitor> tpReqMonitor;
     ThreadPool<MsgYesstr> tpYesstr;
-    hoytech::timer cron;
+    std::thread cronThread;
 
     void run();
 
@@ -161,8 +160,7 @@ struct RelayServer {
 
     void runYesstr(ThreadPool<MsgYesstr>::Thread &thr);
 
-    void cleanupOldEvents();
-    void garbageCollect();
+    void runCron();
 
     // Utils (can be called by any thread)
 

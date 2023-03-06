@@ -2,7 +2,7 @@
 #include <quadrable/transport.h>
 
 #include "RelayServer.h"
-#include "DBScan.h"
+#include "DBQuery.h"
 
 
 void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
@@ -49,14 +49,12 @@ void RelayServer::runYesstr(ThreadPool<MsgYesstr>::Thread &thr) {
                 // with other requests like RelayReqWorker does.
 
                 std::vector<uint64_t> levIds;
-                auto filterGroup = NostrFilterGroup::unwrapped(tao::json::from_string(filterStr));
-                Subscription sub(1, "junkSub", filterGroup);
-                DBScanQuery query(sub);
+                DBQuery query(tao::json::from_string(filterStr));
 
                 while (1) {
-                    bool complete = query.process(txn, MAX_U64, cfg().relay__logging__dbScanPerf, [&](const auto &sub, uint64_t levId){
+                    bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view){
                         levIds.push_back(levId);
-                    });
+                    }, MAX_U64, cfg().relay__logging__dbScanPerf);
 
                     if (complete) break;
                 }

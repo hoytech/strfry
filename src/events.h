@@ -45,9 +45,11 @@ inline const NostrIndex::Event *flatStrToFlatEvent(std::string_view flatStr) {
 
 
 std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn, std::string_view id);
+defaultDb::environment::View_Event lookupEventByLevId(lmdb::txn &txn, uint64_t levId); // throws if can't find
 uint64_t getMostRecentLevId(lmdb::txn &txn);
 std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::string_view raw, uint32_t *outDictId, size_t *outCompressedSize);
 std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId);
+std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t levId, std::string_view eventPayload);
 
 inline quadrable::Key flatEventToQuadrableKey(const NostrIndex::Event *flat) {
     uint64_t timestamp = flat->created_at();

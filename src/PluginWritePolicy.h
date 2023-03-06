@@ -192,16 +192,14 @@ struct PluginWritePolicy {
         env.generic_foreachFull(txn, env.dbi_Event__receivedAt, lmdb::to_sv<uint64_t>(start), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
             if (lmdb::from_sv<uint64_t>(k) > now) return false;
 
-            auto ev = env.lookup_Event(txn, lmdb::from_sv<uint64_t>(v));
-            if (!ev) throw herr("unable to look up event, corrupt DB?");
-
-            auto sourceType = (EventSourceType)ev->sourceType();
-            std::string_view sourceInfo = ev->sourceInfo();
+            auto ev = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+            auto sourceType = (EventSourceType)ev.sourceType();
+            std::string_view sourceInfo = ev.sourceInfo();
 
             auto request = tao::json::value({
                 { "type", "lookback" },
-                { "event", tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId)) },
-                { "receivedAt", ev->receivedAt() / 1000000 },
+                { "event", tao::json::from_string(getEventJson(txn, decomp, ev.primaryKeyId)) },
+                { "receivedAt", ev.receivedAt() / 1000000 },
                 { "sourceType", eventSourceTypeToStr(sourceType) },
                 { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
             });
