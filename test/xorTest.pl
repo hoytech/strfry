@@ -10,6 +10,9 @@ my $stgen = Session::Token->new(seed => "\x00" x 1024, alphabet => '0123456789ab
 
 
 while(1) {
+    my $ids1 = {};
+    my $ids2 = {};
+
     my $pid = open2(my $outfile, my $infile, './test/xor');
 
     my $num = rnd(10000) + 1;
@@ -21,20 +24,43 @@ while(1) {
         } else {
             $mode = 3;
         }
+
         my $created = 1677970534 + rnd($num);
         my $id = $stgen->get;
+
+        $ids1->{$id} = 1 if $mode == 1 || $mode == 3;
+        $ids2->{$id} = 1 if $mode == 2 || $mode == 3;
+
         print $infile "$mode,$created,$id\n";
     }
 
     close($infile);
 
     while (<$outfile>) {
-        print $_;
+        if (/^xor,(\d),(HAVE|NEED),(\w+)/) {
+            my ($side, $action, $id) = ($1, $2, $3);
+
+            if (($action eq 'HAVE' && $side == 2) || ($action eq 'NEED' && $side == 1)) {
+                die "duplicate insert of $side,$action,$id" if $ids1->{$id};
+                $ids1->{$id} = 1;
+            } elsif (($action eq 'NEED' && $side == 2) || ($action eq 'HAVE' && $side == 1)) {
+                die "duplicate insert of $side,$action,$id" if $ids2->{$id};
+                $ids2->{$id} = 1;
+            }
+        }
     }
 
     waitpid($pid, 0);
     my $child_exit_status = $?;
-    die "failure" if $child_exit_status;
+    die "failure running test harness" if $child_exit_status;
+
+    for my $id (keys %$ids1) {
+        die "$id not in ids2" if !$ids2->{$id};
+    }
+
+    for my $id (keys %$ids2) {
+        die "$id not in ids1" if !$ids1->{$id};
+    }
 
     print "\n-----------OK-----------\n";
 }

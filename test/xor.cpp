@@ -27,9 +27,6 @@ int main() {
     XorView x1(idSize);
     XorView x2(idSize);
 
-    std::set<std::string> ids1;
-    std::set<std::string> ids2;
-
     std::string line;
     while (std::cin) {
         std::getline(std::cin, line);
@@ -45,15 +42,11 @@ int main() {
 
         if (mode == 1) {
             x1.addElem(created, id);
-            ids1.insert(id);
         } else if (mode == 2) {
             x2.addElem(created, id);
-            ids2.insert(id);
         } else if (mode == 3) {
             x1.addElem(created, id);
             x2.addElem(created, id);
-            ids1.insert(id);
-            ids2.insert(id);
         } else {
             throw herr("unexpected mode");
         }
@@ -76,12 +69,10 @@ int main() {
 
             // q and have are returned to client
             for (auto &id : have) {
-                if (ids1.contains(id)) throw herr("redundant set");
-                ids1.insert(id);
+                std::cout << "xor,2,HAVE," << to_hex(id) << "\n";
             }
             for (auto &id : need) {
-                if (ids2.contains(id)) throw herr("redundant set");
-                ids2.insert(id);
+                std::cout << "xor,2,NEED," << to_hex(id) << "\n";
             }
             std::cerr << "HAVE " << (have.size() * idSize) << " bytes "
                       << "NEED " << (need.size() * idSize) << " bytes " << std::endl;
@@ -95,20 +86,12 @@ int main() {
             q = x1.handleQuery(q, have, need);
 
             for (auto &id : need) {
-                if (ids1.contains(id)) throw herr("redundant set");
-                ids1.insert(id);
+                std::cout << "xor,1,NEED," << to_hex(id) << "\n";
             }
             for (auto &id : have) {
-                if (ids2.contains(id)) throw herr("redundant set");
-                ids2.insert(id);
+                std::cout << "xor,1,HAVE," << to_hex(id) << "\n";
             }
         }
-    }
-
-    if (ids1 != ids2) {
-        for (const auto &id : ids1) if (!ids2.contains(id)) std::cerr << "In CLIENT not RELAY: " << to_hex(id) << std::endl;
-        for (const auto &id : ids2) if (!ids1.contains(id)) std::cerr << "In RELAY not CLIENT: " << to_hex(id) << std::endl;
-        throw herr("mismatch");
     }
 
     return 0;
