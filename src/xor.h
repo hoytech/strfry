@@ -21,14 +21,7 @@ struct XorElem {
     }
 
     XorElem& operator^=(const XorElem &other) {
-        uint64_t *ours = reinterpret_cast<uint64_t*>(id);
-        const uint64_t *theirs = reinterpret_cast<const uint64_t*>(other.id);
-
-        ours[0] ^= theirs[0];
-        ours[1] ^= theirs[1];
-        ours[2] ^= theirs[2];
-        ours[3] ^= theirs[3];
-
+        for (size_t i = 0; i < 32; i++) id[i] ^= other.id[i];
         return *this;
     }
 
@@ -71,7 +64,7 @@ struct XorView {
         return output;
     }
 
-    // FIXME: try/catch everywhere that calls this
+    // FIXME: better name for this function, check try/catch everywhere that calls this
     std::string handleQuery(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!ready) throw herr("xor view not ready");
 
@@ -80,7 +73,7 @@ struct XorView {
         uint64_t lastTimestampIn = 0;
         uint64_t lastTimestampOut = 0;
 
-        auto decodeTimestampIn = [&](std::string_view &query){
+        auto decodeTimestampIn = [&]{
             uint64_t timestamp = decodeVarInt(query);
             timestamp = timestamp == 0 ? MAX_U64 : timestamp - 1;
             timestamp += lastTimestampIn;
@@ -89,16 +82,19 @@ struct XorView {
             return timestamp;
         };
 
-        while (query.size()) {
-            uint64_t lowerTimestamp = decodeTimestampIn(query);
-            uint64_t lowerLength = decodeVarInt(query);
-            if (lowerLength > idSize) throw herr("lower too long");
-            auto lowerKey = getBytes(query, lowerLength);
+        auto decodeBoundKey = [&](uint64_t &timestamp, std::string &key){
+            timestamp = decodeTimestampIn();
+            uint64_t len = decodeVarInt(query);
+            if (len > idSize) throw herr("bound key too long");
+            key = getBytes(query, len);
+        };
 
-            uint64_t upperTimestamp = decodeTimestampIn(query);
-            uint64_t upperLength = decodeVarInt(query);
-            if (upperLength > idSize) throw herr("upper too long");
-            auto upperKey = getBytes(query, upperLength);
+        while (query.size()) {
+            uint64_t lowerTimestamp, upperTimestamp;
+            std::string lowerKey, upperKey;
+
+            decodeBoundKey(lowerTimestamp, lowerKey);
+            decodeBoundKey(upperTimestamp, upperKey);
 
             auto lower = std::lower_bound(prevUpper, elems.end(), XorElem(lowerTimestamp, lowerKey));
             auto upper = std::upper_bound(lower, elems.end(), XorElem(upperTimestamp, upperKey));
