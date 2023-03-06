@@ -58,9 +58,7 @@ struct XorView {
 
     void finalise() {
         std::reverse(elems.begin(), elems.end()); // typically pushed in approximately descending order so this may speed up the sort
-
         std::sort(elems.begin(), elems.end());
-
         ready = true;
     }
 
@@ -77,11 +75,12 @@ struct XorView {
         if (!ready) throw herr("xor view not ready");
 
         std::string output;
+        auto prevUpper = elems.begin();
 
         while (query.size()) {
             uint64_t lowerTimestamp = decodeVarInt(query);
             uint64_t lowerLength = decodeVarInt(query);
-            if (lowerLength > idSize) throw herr("lower too long: ", lowerLength);
+            if (lowerLength > idSize) throw herr("lower too long");
             auto lowerKeyRaw = getBytes(query, lowerLength);
             XorElem lowerKey(lowerTimestamp, lowerKeyRaw);
 
@@ -91,8 +90,9 @@ struct XorView {
             auto upperKeyRaw = getBytes(query, upperLength);
             XorElem upperKey(upperTimestamp, upperKeyRaw);
 
-            auto lower = std::lower_bound(elems.begin(), elems.end(), lowerKey); // FIXME: start at prev upper?
-            auto upper = std::upper_bound(elems.begin(), elems.end(), upperKey); // FIXME: start at lower?
+            auto lower = std::lower_bound(prevUpper, elems.end(), lowerKey);
+            auto upper = std::upper_bound(lower, elems.end(), upperKey);
+            prevUpper = upper;
 
             uint64_t mode = decodeVarInt(query); // 0 = range, 8 and above = n-8 inline IDs
 
