@@ -93,17 +93,15 @@ struct XorView {
             uint64_t lowerTimestamp = decodeTimestampIn(query);
             uint64_t lowerLength = decodeVarInt(query);
             if (lowerLength > idSize) throw herr("lower too long");
-            auto lowerKeyRaw = getBytes(query, lowerLength);
-            XorElem lowerKey(lowerTimestamp, lowerKeyRaw);
+            auto lowerKey = getBytes(query, lowerLength);
 
             uint64_t upperTimestamp = decodeTimestampIn(query);
             uint64_t upperLength = decodeVarInt(query);
             if (upperLength > idSize) throw herr("upper too long");
-            auto upperKeyRaw = getBytes(query, upperLength);
-            XorElem upperKey(upperTimestamp, upperKeyRaw);
+            auto upperKey = getBytes(query, upperLength);
 
-            auto lower = std::lower_bound(prevUpper, elems.end(), lowerKey);
-            auto upper = std::upper_bound(lower, elems.end(), upperKey);
+            auto lower = std::lower_bound(prevUpper, elems.end(), XorElem(lowerTimestamp, lowerKey));
+            auto upper = std::upper_bound(lower, elems.end(), XorElem(upperTimestamp, upperKey));
             prevUpper = upper;
 
             uint64_t mode = decodeVarInt(query); // 0 = range, 8 and above = n-8 inline IDs
@@ -114,7 +112,7 @@ struct XorView {
                 XorElem ourXorSet;
                 for (auto i = lower; i < upper; ++i) ourXorSet ^= *i;
 
-                if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) splitRange(lower, upper, lowerTimestamp, lowerKeyRaw, upperTimestamp, upperKeyRaw, lastTimestampOut, output);
+                if (theirXorSet.getId(idSize) != ourXorSet.getId(idSize)) splitRange(lower, upper, lowerTimestamp, lowerKey, upperTimestamp, upperKey, lastTimestampOut, output);
             } else if (mode >= 8) {
                 flat_hash_map<XorElem, bool> theirElems;
                 for (uint64_t i = 0; i < mode - 8; i++) {

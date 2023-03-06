@@ -16,7 +16,7 @@ while(1) {
 
     for (1..$num) {
         my $mode;
-        if (rand() < 0.001) {
+        if (rand() < 0.01) {
             $mode = rnd(2) + 1;
         } else {
             $mode = 3;

@@ -83,6 +83,8 @@ int main() {
                 if (ids2.contains(id)) throw herr("redundant set");
                 ids2.insert(id);
             }
+            std::cerr << "HAVE " << (have.size() * idSize) << " bytes "
+                      << "NEED " << (need.size() * idSize) << " bytes " << std::endl;
         }
 
         if (q.size()) {
