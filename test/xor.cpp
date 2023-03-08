@@ -55,7 +55,7 @@ int main() {
     x1.finalise();
     x2.finalise();
 
-    std::string q = x1.initialQuery();
+    std::string q = x1.initial();
 
     uint64_t round = 0;
 

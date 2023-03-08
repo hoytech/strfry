@@ -112,6 +112,62 @@ class XorView {
             lastTimestampOut[0] = temp;
             return encodeVarInt(timestamp + 1);
         };
+
+        let appendBoundKey = (key, output) => {
+            output.push(...encodeTimestampOut(key.timestamp));
+            output.push(...encodeVarInt(key.id.length));
+            output.push(...key.id);
+        };
+
+        let appendMinimalBoundKey = (curr, prev) => {
+            output.push(...encodeTimestampOut(curr.timestamp));
+
+            if (curr.timestamp !== prev.timestamp) {
+                output.push(...encodeVarInt(0));
+            } else {
+                let sharedPrefixBytes = 0;
+
+                for (let i = 0; i < this.idSize; i++) {
+                    if (curr.id[i] !== prev.id[i]) break;
+                    sharedPrefixBytes++;
+                }
+
+                output.push(...encodeVarInt(sharedPrefixBytes + 1));
+                output.push(...curr.id.slice(0, sharedPrefixBytes + 1));
+            }
+        };
+
+        // Split our range
+        let numElems = upper - lower;
+        let buckets = 16;
+
+        if (numElems < buckets * 2) {
+            appendBoundKey(lowerKey);
+            appendBoundKey(upperKey);
+
+            output.push(...encodeVarInt(numElems + 8));
+            for (let it = lower; it < upper; ++it) output.push(...this.elems[it].id);
+        } else {
+            let elemsPerBucket = Math.floor(numElems / buckets);
+            let bucketsWithExtra = numElems % buckets;
+            let curr = lower;
+
+            for (let i = 0; i < buckets; i++) {
+                if (i == 0) appendBoundKey(lowerKey);
+                else appendMinimalBoundKey(this.elems[curr], this.elems[curr - 1]);
+
+                let ourXorSet = new Array(this.idSize).fill(0);
+                for (let bucketEnd = curr + elemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
+                    for (let j = 0; j < this.idSize; j++) ourXorSet[j] ^= this.elems[curr][j];
+                }
+
+                if (i === buckets - 1) appendBoundKey(upperKey);
+                else appendMinimalBoundKey(this.elems[curr], this.elems[curr - 1]);
+
+                output.push(...encodeVarInt(0)); // mode = 0
+                output.push(...ourXorSet.id);
+            }
+        }
     }
 }
 

@@ -157,13 +157,13 @@ struct XorView {
             return encodeVarInt(timestamp + 1);
         };
 
-        auto appendBoundKey = [&](uint64_t t, std::string k, std::string &output) {
+        auto appendBoundKey = [&](uint64_t t, std::string k) {
             output += encodeTimestampOut(t);
             output += encodeVarInt(k.size());
             output += k;
         };
 
-        auto appendMinimalBoundKey = [&](const XorElem &curr, const XorElem &prev, std::string &output) {
+        auto appendMinimalBoundKey = [&](const XorElem &curr, const XorElem &prev) {
             output += encodeTimestampOut(curr.timestamp);
 
             if (curr.timestamp != prev.timestamp) {
@@ -188,8 +188,8 @@ struct XorView {
         const uint64_t buckets = 16;
 
         if (numElems < buckets * 2) {
-            appendBoundKey(lowerTimestamp, lowerKey, output);
-            appendBoundKey(upperTimestamp, upperKey, output);
+            appendBoundKey(lowerTimestamp, lowerKey);
+            appendBoundKey(upperTimestamp, upperKey);
 
             output += encodeVarInt(numElems + 8);
             for (auto it = lower; it < upper; ++it) output += it->getId(idSize);
@@ -199,16 +199,16 @@ struct XorView {
             auto curr = lower;
 
             for (uint64_t i = 0; i < buckets; i++) {
-                if (i == 0) appendBoundKey(lowerTimestamp, lowerKey, output);
-                else appendMinimalBoundKey(*curr, *std::prev(curr), output);
+                if (i == 0) appendBoundKey(lowerTimestamp, lowerKey);
+                else appendMinimalBoundKey(*curr, *std::prev(curr));
 
                 XorElem ourXorSet;
                 for (auto bucketEnd = curr + elemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
                     ourXorSet ^= *curr;
                 }
 
-                if (i == buckets - 1) appendBoundKey(upperTimestamp, upperKey, output);
-                else appendMinimalBoundKey(*curr, *std::prev(curr), output);
+                if (i == buckets - 1) appendBoundKey(upperTimestamp, upperKey);
+                else appendMinimalBoundKey(*curr, *std::prev(curr));
 
                 output += encodeVarInt(0); // mode = 0
                 output += ourXorSet.getId(idSize);
