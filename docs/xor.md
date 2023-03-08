@@ -4,20 +4,75 @@ This document describes a method for syncing nostr events over a nostr protocol 
 
 If both sides of the sync have common events, then this protocol will use less bandwidth than transferring the full set of events (or even just their IDs).
 
-## Protocol
+## High-Level Protocol
 
 We'll call the two sides engaged in the sync the client and the relay (even though the initiating party may be another relay, not a regular client).
 
 1. Client selects the parameters of a reconcilliation query and sends it to the relay:
   * A subscription ID that will be used by each side to identify which query a message refers to
-  * A nostr filter, as described in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)
-  * The truncation size for IDs, called `idSize. An integer between 8 and 32, inclusive.
+  * A nostr filter, as described in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), or an event ID whose `content` contains the JSON-encoded filter
+  * The truncation byte size for IDs, called `idSize. An integer between 8 and 32, inclusive.
 2. Both sides collect all the events they have stored/cached that match this filter.
 3. Each side sorts the events by their `created_at` timestamp. If the timestamps are equivalent, events are sorted lexically by their `id` (the canonicalised hash of the event). 
 4. Client creates an initial reconcilliation message and sends it to relay.
 5. Each side processes an incoming message and replies with its own outgoing message, along with a list of "have IDs" and "need IDs", stopping when one party receives an empty message.
 
-## Reconcilliation messages
+## Nostr Protocol
+
+### Initial message (client to relay):
+
+```json
+[
+    "XOR-OPEN",
+    <subscription ID string>,
+    <nostr filter or event ID>,
+    <idSize>,
+    <initialMessage, lowercase hex-encoded>
+]
+```
+
+### Error message (relay to client):
+
+If a request cannot be serviced, an error is returned (relay to client):
+
+```json
+[
+    "XOR-ERR",
+    <subscription ID string>,
+    <reason code string>
+]
+```
+
+Current reason codes are:
+
+* `RESULTS_TOO_BIG`
+* `FILTER_NOT_FOUND`
+
+### Subsequent messages (bi-drectional):
+
+```json
+[
+    "XOR-MSG",
+    <subscription ID string>,
+    <message, lowercase hex-encoded>,
+    <have IDs, lowercase hex-encoded>,
+    <need IDs, lowercase hex-encoded>
+]
+```
+
+The have and need ID fields are event IDs truncated to `idSize`, concatenated together, then hex encoded. If there are `n` IDs, then the length after hex encoding is `n * idSize * 2`.
+
+### Close message (client to relay):
+
+```json
+[
+    "XOR-CLOSE",
+    <subscription ID string>
+]
+```
+
+
+## Reconcilliation Messages
 
 ### Varint
 
