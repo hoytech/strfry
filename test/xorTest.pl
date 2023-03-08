@@ -3,7 +3,8 @@
 use IPC::Open2;
 use Session::Token;
 
-my $idSize = 16;
+my $harnessCmd = shift;
+my $idSize = shift || 16;
 
 srand($ENV{SEED} || 0);
 my $stgen = Session::Token->new(seed => "\x00" x 1024, alphabet => '0123456789abcdef', length => $idSize * 2);
@@ -13,7 +14,7 @@ while(1) {
     my $ids1 = {};
     my $ids2 = {};
 
-    my $pid = open2(my $outfile, my $infile, './test/xor');
+    my $pid = open2(my $outfile, my $infile, $harnessCmd);
 
     my $num = rnd(10000) + 1;
 

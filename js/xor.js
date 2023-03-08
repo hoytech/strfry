@@ -5,7 +5,7 @@ class XorView {
     }
 
     addElem(timestamp, id) {
-        elems.push({ timestamp, id, });
+        this.elems.push({ timestamp, id, });
     }
 
     finalise() {
@@ -13,7 +13,18 @@ class XorView {
         this.ready = true;
     }
 
+    initial() {
+        if (!this.ready) throw Error("xor view not ready");
+
+        let output = [];
+        let lastTimestampOut = [0]; // wrapped in array so we can modify it by reference
+        this._splitRange(0, this.elems.length, { timestamp: 0, id: [], }, { timestamp: Number.MAX_VALUE, id: [], }, lastTimestampOut, output);
+        return toHexString(output);
+    }
+
     reconcile(query) {
+        if (!this.ready) throw Error("xor view not ready");
+
         query = fromHexString(query);
         let output = [];
         let haveIds = [], needIds = [];
@@ -69,20 +80,24 @@ class XorView {
                     }
                 }
 
-                if (!matches) this._splitRange(lower, upper, lowerKey, upperKey, lastTimestampOut, output);
+                if (!matches) this._splitRange(lower, upper, lowerBoundKey, upperBoundKey, lastTimestampOut, output);
             } else if (mode >= 8) {
                 let theirElems = {};
-                for (let i = 0; i < mode - 8; i++) theirElems[getBytes(query, this.idSize)] = false;
+                for (let i = 0; i < mode - 8; i++) {
+                    let id = toHexString(getBytes(query, this.idSize));
+                    theirElems[id] = false;
+                }
 
-                for (let it = lower; it < upper; it++) {
-                    let e = theirElems[this.elems[i]];
+                for (let i = lower; i < upper; i++) {
+                    let id = toHexString(this.elems[i].id);
+                    let e = theirElems[id];
 
                     if (e === undefined) {
                         // ID exists on our side, but not their side
-                        haveIds.push(e.id);
+                        haveIds.push(id);
                     } else {
                         // ID exists on both sides
-                        theirElems[this.elems[i]] = true;
+                        theirElems[id] = true;
                     }
                 }
 
@@ -97,10 +112,10 @@ class XorView {
             }
         }
 
-        return [output, haveIds, needIds];
+        return [toHexString(output), haveIds, needIds];
     }
 
-    _splitRange(lower, upper, lowerKey, upperKey, lastTimestampOut, output) {
+    _splitRange(lower, upper, lowerBoundKey, upperBoundKey, lastTimestampOut, output) {
         let encodeTimestampOut = (timestamp) => {
             if (timestamp === Number.MAX_VALUE) {
                 lastTimestampOut[0] = Number.MAX_VALUE;
@@ -113,7 +128,7 @@ class XorView {
             return encodeVarInt(timestamp + 1);
         };
 
-        let appendBoundKey = (key, output) => {
+        let appendBoundKey = (key) => {
             output.push(...encodeTimestampOut(key.timestamp));
             output.push(...encodeVarInt(key.id.length));
             output.push(...key.id);
@@ -142,8 +157,8 @@ class XorView {
         let buckets = 16;
 
         if (numElems < buckets * 2) {
-            appendBoundKey(lowerKey);
-            appendBoundKey(upperKey);
+            appendBoundKey(lowerBoundKey);
+            appendBoundKey(upperBoundKey);
 
             output.push(...encodeVarInt(numElems + 8));
             for (let it = lower; it < upper; ++it) output.push(...this.elems[it].id);
@@ -153,19 +168,19 @@ class XorView {
             let curr = lower;
 
             for (let i = 0; i < buckets; i++) {
-                if (i == 0) appendBoundKey(lowerKey);
+                if (i == 0) appendBoundKey(lowerBoundKey);
                 else appendMinimalBoundKey(this.elems[curr], this.elems[curr - 1]);
 
                 let ourXorSet = new Array(this.idSize).fill(0);
                 for (let bucketEnd = curr + elemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
-                    for (let j = 0; j < this.idSize; j++) ourXorSet[j] ^= this.elems[curr][j];
+                    for (let j = 0; j < this.idSize; j++) ourXorSet[j] ^= this.elems[curr].id[j];
                 }
 
-                if (i === buckets - 1) appendBoundKey(upperKey);
+                if (i === buckets - 1) appendBoundKey(upperBoundKey);
                 else appendMinimalBoundKey(this.elems[curr], this.elems[curr - 1]);
 
                 output.push(...encodeVarInt(0)); // mode = 0
-                output.push(...ourXorSet.id);
+                output.push(...ourXorSet);
             }
         }
     }
@@ -260,3 +275,7 @@ function lowerBound(arr, first, last, value, cmp) {
 function upperBound(arr, first, last, value, cmp) {
     return binarySearch(arr, first, last, (a) => cmp(value, a) >= 0);
 }
+
+
+
+module.exports = XorView;

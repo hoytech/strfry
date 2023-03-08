@@ -68,12 +68,9 @@ int main() {
             q = x2.reconcile(q, have, need);
 
             // q and have are returned to client
-            for (auto &id : have) {
-                std::cout << "xor,2,HAVE," << to_hex(id) << "\n";
-            }
-            for (auto &id : need) {
-                std::cout << "xor,2,NEED," << to_hex(id) << "\n";
-            }
+            for (auto &id : have) std::cout << "xor,2,HAVE," << to_hex(id) << "\n";
+            for (auto &id : need) std::cout << "xor,2,NEED," << to_hex(id) << "\n";
+
             std::cerr << "HAVE " << (have.size() * idSize) << " bytes "
                       << "NEED " << (need.size() * idSize) << " bytes " << std::endl;
         }
@@ -85,12 +82,8 @@ int main() {
             std::vector<std::string> have, need;
             q = x1.reconcile(q, have, need);
 
-            for (auto &id : need) {
-                std::cout << "xor,1,NEED," << to_hex(id) << "\n";
-            }
-            for (auto &id : have) {
-                std::cout << "xor,1,HAVE," << to_hex(id) << "\n";
-            }
+            for (auto &id : have) std::cout << "xor,1,HAVE," << to_hex(id) << "\n";
+            for (auto &id : need) std::cout << "xor,1,NEED," << to_hex(id) << "\n";
         }
     }
 
