@@ -65,7 +65,7 @@ int main() {
         std::cerr << "CLIENT -> RELAY: " << q.size() << " bytes" << std::endl;
         {
             std::vector<std::string> have, need;
-            q = x2.handleQuery(q, have, need);
+            q = x2.reconcile(q, have, need);
 
             // q and have are returned to client
             for (auto &id : have) {
@@ -83,7 +83,7 @@ int main() {
             std::cerr << "RELAY -> CLIENT: " << q.size() << " bytes" << std::endl;
 
             std::vector<std::string> have, need;
-            q = x1.handleQuery(q, have, need);
+            q = x1.reconcile(q, have, need);
 
             for (auto &id : need) {
                 std::cout << "xor,1,NEED," << to_hex(id) << "\n";

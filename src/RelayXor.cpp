@@ -78,7 +78,7 @@ void RelayServer::runXor(ThreadPool<MsgXor>::Thread &thr) {
         view->v.finalise();
 
         std::vector<std::string> haveIds, needIds;
-        auto resp = view->v.handleQuery(view->initialQuery, haveIds, needIds);
+        auto resp = view->v.reconcile(view->initialQuery, haveIds, needIds);
 
         sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
             "XOR-RES",

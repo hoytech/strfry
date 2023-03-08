@@ -55,7 +55,7 @@ struct XorView {
         ready = true;
     }
 
-    std::string initialQuery() {
+    std::string initial() {
         if (!ready) throw herr("xor view not ready");
 
         std::string output;
@@ -65,7 +65,7 @@ struct XorView {
     }
 
     // FIXME: better name for this function, check try/catch everywhere that calls this
-    std::string handleQuery(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
+    std::string reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!ready) throw herr("xor view not ready");
 
         std::string output;
@@ -112,8 +112,8 @@ struct XorView {
             } else if (mode >= 8) {
                 flat_hash_map<XorElem, bool> theirElems;
                 for (uint64_t i = 0; i < mode - 8; i++) {
-                    auto bb = getBytes(query, idSize);
-                    theirElems.emplace(XorElem(0, bb), false);
+                    auto e = getBytes(query, idSize);
+                    theirElems.emplace(XorElem(0, e), false);
                 }
 
                 for (auto it = lower; it < upper; ++it) {
@@ -134,6 +134,8 @@ struct XorView {
                         needIds.emplace_back(k.getId(idSize));
                     }
                 }
+            } else {
+                throw herr("unexpected mode");
             }
         }
 
