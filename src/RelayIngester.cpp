@@ -63,6 +63,9 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         } else {
                             throw herr("unrecognised yesstr request");
                         }
+                    } else if (msg->payload == "\n") {
+                        // Do nothing.
+                        // This is for when someone is just sending newlines on websocat for debugging purposes.
                     } else {
                         throw herr("unparseable message");
                     }
