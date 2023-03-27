@@ -10,6 +10,8 @@
 #include "WSConnection.h"
 #include "events.h"
 
+#include "PluginWritePolicy.h"
+
 
 static const char USAGE[] =
 R"(
@@ -30,11 +32,13 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
 
     if (dir != "up" && dir != "down" && dir != "both") throw herr("invalid direction: ", dir, ". Should be one of up/down/both");
 
-
     flat_hash_set<std::string> downloadedIds;
     WriterPipeline writer;
     WSConnection ws(url);
     Decompressor decomp;
+
+    PluginWritePolicy writePolicy;
+
 
     ws.onConnect = [&]{
         if (dir == "down" || dir == "both") {
@@ -63,8 +67,17 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                 if (dir == "down" || dir == "both") {
                     if (origJson.get_array().size() < 3) throw herr("array too short");
                     auto &evJson = origJson.at(2);
-                    downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
-                    writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
+
+                    // bortloff@github hacks in writePolicy here
+                    std::string okMsg;
+                    auto res = writePolicy.acceptEvent(evJson.get_string(), hoytech::curr_time_s(), EventSourceType::Stream, ws.connected_addr, okMsg);
+                    if (res == WritePolicyResult::Accept) {
+                        downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
+                        writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
+                    } else {
+                        LW << "[" << ws.connected_addr << "] write policy blocked event" << from_hex(evJson.at("id").get_string()) << ": " << okMsg;
+                    }
+                    
                 } else {
                     LW << "Unexpected EVENT";
                 }

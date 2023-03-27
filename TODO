@@ -6,7 +6,7 @@
 
 0.2 release
   ? why isn't the LMDB mapping CLOEXEC
-  plugin for stream
+  ? plugin for stream: make sure bortloff@github didn't make a mess of it
   fix sync
     * logging of bytes up/down
     * up/both directions
