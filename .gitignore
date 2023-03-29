@@ -3,4 +3,4 @@
 *.o
 /strfry
 /strfry-db/*.mdb
-.vscode/c_cpp_properties.json
+.vscode/*

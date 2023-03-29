@@ -70,7 +70,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
 
                     // bortloff@github hacks in writePolicy here
                     std::string okMsg;
-                    auto res = writePolicy.acceptEvent(evJson.get_string(), hoytech::curr_time_s(), EventSourceType::Stream, ws.connected_addr, okMsg);
+                    auto res = writePolicy.acceptEvent(tao::json::to_string(evJson), hoytech::curr_time_s(), EventSourceType::Stream, ws.connected_addr, okMsg);
                     if (res == WritePolicyResult::Accept) {
                         downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
                         writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
