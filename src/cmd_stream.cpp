@@ -75,7 +75,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                         downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
                         writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
                     } else {
-                        LW << "[" << ws.connected_addr << "] write policy blocked event" << from_hex(evJson.at("id").get_string()) << ": " << okMsg;
+                        LI << "[" << ws.connected_addr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
                     }
                     
                 } else {
