@@ -25,6 +25,7 @@ class WSConnection {
     std::function<void()> onTrigger;
     bool reconnect = true;
     uint64_t reconnectDelayMilliseconds = 5'000;
+    std::string remoteAddr;
 
     // Should only be called from the websocket thread (ie within an onConnect or onMessage callback)
     void send(std::string_view msg, uWS::OpCode op = uWS::OpCode::TEXT, size_t *compressedSize = nullptr) {
@@ -57,8 +58,8 @@ class WSConnection {
                 currWs = nullptr;
             }
 
-            std::string addr = ws->getAddress().address;
-            LI << "Connected to " << addr;
+            remoteAddr = ws->getAddress().address;
+            LI << "Connected to " << remoteAddr;
 
             {
                 int optval = 1;

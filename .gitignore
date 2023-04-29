@@ -3,3 +3,4 @@
 *.o
 /strfry
 /strfry-db/*.mdb
+.vscode/*
