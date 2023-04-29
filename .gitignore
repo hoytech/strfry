@@ -4,3 +4,4 @@
 /strfry
 /strfry-db/*.mdb
 .vscode/*
+/strfry-db-test/
