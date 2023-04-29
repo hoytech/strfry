@@ -146,7 +146,7 @@ config:
     default: "unset"
 
   - name: relay__maxWebsocketPayloadSize
-    desc: "Maximum accepted incoming websocket frame size (should be larger than max event and yesstr msg)"
+    desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
     default: 131072
     noReload: true
   - name: relay__autoPingSeconds
@@ -206,10 +206,6 @@ config:
   - name: relay__numThreads__reqMonitor
     desc: reqMonitor threads: Handle filtering of new events
     default: 3
-    noReload: true
-  - name: relay__numThreads__yesstr
-    desc: yesstr threads: Experimental yesstr protocol
-    default: 1
     noReload: true
 
   - name: events__maxEventSize

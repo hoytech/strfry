@@ -26,7 +26,8 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     auto txn = env.txn_ro();
 
     auto dbVersion = getDBVersion(txn);
-    auto qdb = getQdbInstance(txn);
+
+    if (dbVersion == 0) throw herr("migration from DB version 0 not supported by this version of strfry");
 
     uint64_t start = reverse ? until : since;
     uint64_t startDup = reverse ? MAX_U64 : 0;
@@ -39,14 +40,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
         }
 
         auto view = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
-
-        if (dbVersion == 0) {
-            std::string_view raw;
-            bool found = qdb.dbi_nodesLeaf.get(txn, lmdb::to_sv<uint64_t>(view.primaryKeyId), raw);
-            if (!found) throw herr("couldn't find leaf node in quadrable table");
-            std::cout << raw.substr(8 + 32 + 32) << "\n";
-            return true;
-        }
 
         std::cout << getEventJson(txn, decomp, view.primaryKeyId) << "\n";
 

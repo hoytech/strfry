@@ -4,8 +4,6 @@
 #include <docopt.h>
 #include "golpe.h"
 
-#include "gc.h"
-
 
 static const char USAGE[] =
 R"(

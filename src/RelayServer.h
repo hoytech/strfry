@@ -9,7 +9,6 @@
 #include <hoytech/file_change_monitor.h>
 #include <uWebSockets/src/uWS.h>
 #include <tao/json.hpp>
-#include <quadrable.h>
 
 #include "golpe.h"
 
@@ -17,7 +16,6 @@
 #include "ThreadPool.h"
 #include "events.h"
 #include "filters.h"
-#include "yesstr.h"
 
 
 
@@ -114,20 +112,6 @@ struct MsgReqMonitor : NonCopyable {
     MsgReqMonitor(Var &&msg_) : msg(std::move(msg_)) {}
 };
 
-struct MsgYesstr : NonCopyable {
-    struct SyncRequest {
-        uint64_t connId;
-        std::string yesstrMessage;
-    };
-
-    struct CloseConn {
-        uint64_t connId;
-    };
-
-    using Var = std::variant<SyncRequest, CloseConn>;
-    Var msg;
-    MsgYesstr(Var &&msg_) : msg(std::move(msg_)) {}
-};
 
 
 struct RelayServer {
@@ -140,7 +124,6 @@ struct RelayServer {
     ThreadPool<MsgWriter> tpWriter;
     ThreadPool<MsgReqWorker> tpReqWorker;
     ThreadPool<MsgReqMonitor> tpReqMonitor;
-    ThreadPool<MsgYesstr> tpYesstr;
     std::thread cronThread;
 
     void run();
@@ -157,8 +140,6 @@ struct RelayServer {
     void runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr);
 
     void runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr);
-
-    void runYesstr(ThreadPool<MsgYesstr>::Thread &thr);
 
     void runCron();
 

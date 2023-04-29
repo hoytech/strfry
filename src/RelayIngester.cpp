@@ -53,16 +53,6 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         } else {
                             throw herr("unknown cmd");
                         }
-                    } else if (msg->payload.starts_with("Y")) {
-                        verifyYesstrRequest(msg->payload);
-
-                        auto *req = parseYesstrRequest(msg->payload);
-
-                        if (req->payload_type() == Yesstr::RequestPayload::RequestPayload_RequestSync) {
-                            tpYesstr.dispatch(msg->connId, MsgYesstr{MsgYesstr::SyncRequest{ msg->connId, std::move(msg->payload) }});
-                        } else {
-                            throw herr("unrecognised yesstr request");
-                        }
                     } else if (msg->payload == "\n") {
                         // Do nothing.
                         // This is for when someone is just sending newlines on websocat for debugging purposes.
@@ -75,7 +65,6 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
-                tpYesstr.dispatch(connId, MsgYesstr{MsgYesstr::CloseConn{connId}});
             }
         }
 

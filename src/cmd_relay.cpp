@@ -28,10 +28,6 @@ void RelayServer::run() {
         runReqMonitor(thr);
     });
 
-    tpYesstr.init("Yesstr", cfg().relay__numThreads__yesstr, [this](auto &thr){
-        runYesstr(thr);
-    });
-
     cronThread = std::thread([this]{
         runCron();
     });

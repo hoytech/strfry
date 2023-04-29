@@ -5,7 +5,6 @@
 
 #include "DBQuery.h"
 #include "events.h"
-#include "gc.h"
 
 
 static const char USAGE[] =
@@ -65,22 +64,16 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
     }
 
 
-    auto qdb = getQdbInstance();
-
     LI << "Deleting " << levIds.size() << " events";
 
     {
         auto txn = env.txn_rw();
 
-        auto changes = qdb.change();
-
         for (auto levId : levIds) {
             auto view = env.lookup_Event(txn, levId);
             if (!view) continue; // Deleted in between transactions
-            deleteEvent(txn, changes, *view);
+            deleteEvent(txn, *view);
         }
-
-        changes.apply(txn);
 
         txn.commit();
     }

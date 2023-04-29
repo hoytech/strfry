@@ -4,8 +4,6 @@
 
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
-    auto qdb = getQdbInstance();
-
     PluginWritePolicy writePolicy;
 
     while(1) {
@@ -37,7 +35,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         {
             auto txn = env.txn_rw();
-            writeEvents(txn, qdb, newEvents);
+            writeEvents(txn, newEvents);
             txn.commit();
         }
 

@@ -6,12 +6,6 @@
 using namespace phmap;
 
 
-#include <quadrable.h>
-
-quadrable::Quadrable getQdbInstance(lmdb::txn &txn);
-quadrable::Quadrable getQdbInstance();
-
-
 #include "constants.h"
 
 

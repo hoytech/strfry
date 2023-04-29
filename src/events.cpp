@@ -140,7 +140,7 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
     uint64_t latest = now + cfg().events__rejectEventsNewerThanSeconds;
 
     if (ts < earliest) throw herr("created_at too early");
-    if (ts > latest || ts > MAX_TIMESTAMP) throw herr("created_at too late");
+    if (ts > latest) throw herr("created_at too late");
 
     if (flat->expiration() != 0 && flat->expiration() <= now) throw herr("event expired");
 }
@@ -243,18 +243,21 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 
 
 
-void deleteEvent(lmdb::txn &txn, quadrable::Quadrable::UpdateSet &changes, defaultDb::environment::View_Event &ev) {
-    changes.del(flatEventToQuadrableKey(ev.flat_nested()));
+void deleteEvent(lmdb::txn &txn, defaultDb::environment::View_Event &ev) {
     env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(ev.primaryKeyId));
     env.delete_Event(txn, ev.primaryKeyId);
 }
 
 
 
-void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToWrite> &evs, uint64_t logLevel) {
-    std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) { return a.quadKey < b.quadKey; });
+void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLevel) {
+    std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
+        auto aC = a.createdAt();
+        auto bC = b.createdAt();
+        if (aC == bC) return a.id() < b.id();
+        return aC < bC;
+    });
 
-    auto changes = qdb.change();
     std::string tmpBuf;
 
     for (size_t i = 0; i < evs.size(); i++) {
@@ -262,7 +265,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
         const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(ev.flatStr.data());
 
-        if (lookupEventById(txn, sv(flat->id())) || (i != 0 && ev.quadKey == evs[i-1].quadKey)) {
+        if (lookupEventById(txn, sv(flat->id())) || (i != 0 && ev.id() == evs[i-1].id())) {
             ev.status = EventWriteStatus::Duplicate;
             continue;
         }
@@ -293,7 +296,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
 
                         if (otherEv.flat_nested()->created_at() < flat->created_at()) {
                             if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv.flat_nested()->id()));
-                            deleteEvent(txn, changes, otherEv);
+                            deleteEvent(txn, otherEv);
                         } else {
                             ev.status = EventWriteStatus::Replaced;
                         }
@@ -311,7 +314,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
                     auto otherEv = lookupEventById(txn, sv(tagPair->val()));
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
                         if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(sv(tagPair->val()));
-                        deleteEvent(txn, changes, *otherEv);
+                        deleteEvent(txn, *otherEv);
                     }
                 }
             }
@@ -325,11 +328,7 @@ void writeEvents(lmdb::txn &txn, quadrable::Quadrable &qdb, std::vector<EventToW
             tmpBuf += ev.jsonStr;
             env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
 
-            changes.put(ev.quadKey, "");
-
             ev.status = EventWriteStatus::Written;
         }
     }
-
-    changes.apply(txn);
 }

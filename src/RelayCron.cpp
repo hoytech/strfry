@@ -2,12 +2,8 @@
 
 #include "RelayServer.h"
 
-#include "gc.h"
-
 
 void RelayServer::runCron() {
-    auto qdb = getQdbInstance();
-
     hoytech::timer cron;
 
     cron.setupCb = []{ setThreadName("cron"); };
@@ -59,16 +55,13 @@ void RelayServer::runCron() {
             auto txn = env.txn_rw();
 
             uint64_t numDeleted = 0;
-            auto changes = qdb.change();
 
             for (auto levId : expiredLevIds) {
                 auto view = env.lookup_Event(txn, levId);
                 if (!view) continue; // Deleted in between transactions
-                deleteEvent(txn, changes, *view);
+                deleteEvent(txn, *view);
                 numDeleted++;
             }
-
-            changes.apply(txn);
 
             txn.commit();
 
@@ -119,16 +112,13 @@ void RelayServer::runCron() {
             auto txn = env.txn_rw();
 
             uint64_t numDeleted = 0;
-            auto changes = qdb.change();
 
             for (auto levId : expiredLevIds) {
                 auto view = env.lookup_Event(txn, levId);
                 if (!view) continue; // Deleted in between transactions
-                deleteEvent(txn, changes, *view);
+                deleteEvent(txn, *view);
                 numDeleted++;
             }
-
-            changes.apply(txn);
 
             txn.commit();
 
@@ -137,11 +127,6 @@ void RelayServer::runCron() {
     });
 
 
-    // Garbage collect quadrable nodes
-
-    cron.repeat(60 * 60 * 1'000'000UL, [&]{
-        quadrableGarbageCollect(qdb, 1);
-    });
 
     cron.run();
 

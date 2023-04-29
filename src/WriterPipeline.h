@@ -58,8 +58,6 @@ struct WriterPipeline {
         writerThread = std::thread([&]() {
             setThreadName("Writer");
 
-            auto qdb = getQdbInstance();
-
             while (1) {
                 // Debounce
                 writerInbox.wait();
@@ -103,7 +101,7 @@ struct WriterPipeline {
                 if (newEventsToProc.size()) {
                     {
                         auto txn = env.txn_rw();
-                        writeEvents(txn, qdb, newEventsToProc);
+                        writeEvents(txn, newEventsToProc);
                         txn.commit();
                     }
 

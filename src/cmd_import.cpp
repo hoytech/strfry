@@ -5,7 +5,6 @@
 
 #include "events.h"
 #include "filters.h"
-#include "gc.h"
 
 
 static const char USAGE[] =
@@ -23,8 +22,6 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
-    auto qdb = getQdbInstance();
-
     auto txn = env.txn_rw();
 
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
@@ -38,7 +35,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     };
 
     auto flushChanges = [&]{
-        writeEvents(txn, qdb, newEvents, 0);
+        writeEvents(txn, newEvents, 0);
 
         uint64_t numCommits = 0;
 
