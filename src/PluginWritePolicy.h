@@ -53,7 +53,7 @@ struct PluginWritePolicy {
 
     std::unique_ptr<RunningPlugin> running; 
 
-    WritePolicyResult acceptEvent(std::string_view jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string_view sourceInfo, std::string &okMsg) {
+    WritePolicyResult acceptEvent(const tao::json::value &evJson, uint64_t receivedAt, EventSourceType sourceType, std::string_view sourceInfo, std::string &okMsg) {
         const auto &pluginPath = cfg().relay__writePolicy__plugin;
 
         if (pluginPath.size() == 0) {
@@ -81,7 +81,7 @@ struct PluginWritePolicy {
 
             auto request = tao::json::value({
                 { "type", "new" },
-                { "event", tao::json::from_string(jsonStr) },
+                { "event", evJson },
                 { "receivedAt", receivedAt / 1000000 },
                 { "sourceType", eventSourceTypeToStr(sourceType) },
                 { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },

@@ -68,14 +68,13 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     if (origJson.get_array().size() < 3) throw herr("array too short");
                     auto &evJson = origJson.at(2);
 
-                    // bortloff@github hacks in writePolicy here
                     std::string okMsg;
-                    auto res = writePolicy.acceptEvent(tao::json::to_string(evJson), hoytech::curr_time_s(), EventSourceType::Stream, ws.connected_addr, okMsg);
+                    auto res = writePolicy.acceptEvent(evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
                     if (res == WritePolicyResult::Accept) {
                         downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
                         writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
                     } else {
-                        LI << "[" << ws.connected_addr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
+                        LI << "[" << ws.remoteAddr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
                     }
                     
                 } else {
