@@ -57,10 +57,7 @@ void RelayServer::runCron() {
             uint64_t numDeleted = 0;
 
             for (auto levId : expiredLevIds) {
-                auto view = env.lookup_Event(txn, levId);
-                if (!view) continue; // Deleted in between transactions
-                deleteEvent(txn, *view);
-                numDeleted++;
+                if (deleteEvent(txn, levId)) numDeleted++;
             }
 
             txn.commit();
@@ -114,10 +111,7 @@ void RelayServer::runCron() {
             uint64_t numDeleted = 0;
 
             for (auto levId : expiredLevIds) {
-                auto view = env.lookup_Event(txn, levId);
-                if (!view) continue; // Deleted in between transactions
-                deleteEvent(txn, *view);
-                numDeleted++;
+                if (deleteEvent(txn, levId)) numDeleted++;
             }
 
             txn.commit();

@@ -70,9 +70,7 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_rw();
 
         for (auto levId : levIds) {
-            auto view = env.lookup_Event(txn, levId);
-            if (!view) continue; // Deleted in between transactions
-            deleteEvent(txn, *view);
+            deleteEvent(txn, levId);
         }
 
         txn.commit();

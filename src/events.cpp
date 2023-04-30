@@ -243,9 +243,10 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 
 
 
-void deleteEvent(lmdb::txn &txn, defaultDb::environment::View_Event &ev) {
-    env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(ev.primaryKeyId));
-    env.delete_Event(txn, ev.primaryKeyId);
+bool deleteEvent(lmdb::txn &txn, uint64_t levId) {
+    bool deleted = env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
+    env.delete_Event(txn, levId);
+    return deleted;
 }
 
 
@@ -258,6 +259,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
         return aC < bC;
     });
 
+    std::vector<uint64_t> levIdsToDelete;
     std::string tmpBuf;
 
     for (size_t i = 0; i < evs.size(); i++) {
@@ -296,7 +298,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
 
                         if (otherEv.flat_nested()->created_at() < flat->created_at()) {
                             if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv.flat_nested()->id()));
-                            deleteEvent(txn, otherEv);
+                            levIdsToDelete.push_back(otherEv.primaryKeyId);
                         } else {
                             ev.status = EventWriteStatus::Replaced;
                         }
@@ -314,7 +316,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
                     auto otherEv = lookupEventById(txn, sv(tagPair->val()));
                     if (otherEv && sv(otherEv->flat_nested()->pubkey()) == sv(flat->pubkey())) {
                         if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(sv(tagPair->val()));
-                        deleteEvent(txn, *otherEv);
+                        levIdsToDelete.push_back(otherEv->primaryKeyId);
                     }
                 }
             }
@@ -329,6 +331,13 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
             env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
 
             ev.status = EventWriteStatus::Written;
+
+            // Deletions happen after event was written to ensure levIds are not reused
+
+            for (auto levId : levIdsToDelete) deleteEvent(txn, levId);
+            levIdsToDelete.clear();
         }
+
+        if (levIdsToDelete.size()) throw herr("unprocessed deletion");
     }
 }

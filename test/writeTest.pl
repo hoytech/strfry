@@ -22,9 +22,8 @@ my $ids = [
 
 
 
-## Basic insert
-
 doTest({
+    desc => "Basic insert",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 },
         qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 1 },
@@ -32,9 +31,9 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-## Replacement, newer timestamp
 
 doTest({
+    desc => "Replacement, newer timestamp",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
         qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5001 },
@@ -43,9 +42,9 @@ doTest({
     verify => [ 1, ],
 });
 
-## Same, but explicit empty d tag
 
 doTest({
+    desc => "Same, but explicit empty d tag",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
         qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5001 --tag d '' },
@@ -54,9 +53,9 @@ doTest({
     verify => [ 1, ],
 });
 
-## Replacement is dropped
 
 doTest({
+    desc => "Replacement is dropped",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5001 },
         qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5000 },
@@ -64,9 +63,9 @@ doTest({
     verify => [ 0, ],
 });
 
-## Doesn't replace some else's event
 
 doTest({
+    desc => "Doesn't replace some else's event",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
         qq{--sec $ids->[1]->{sec} --content "hi 2" --kind 10000 --created-at 5001 },
@@ -74,9 +73,9 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-## Doesn't replace different kind
 
 doTest({
+    desc => "Doesn't replace different kind",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 10001 --created-at 5000 },
         qq{--sec $ids->[1]->{sec} --content "hi 2" --kind 10000 --created-at 5001 },
@@ -85,9 +84,9 @@ doTest({
 });
 
 
-## Deletion
 
 doTest({
+    desc => "Deletion",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5001 },
@@ -97,9 +96,21 @@ doTest({
     verify => [ 1, 3, ],
 });
 
-## Can't delete someone else's event
 
 doTest({
+    desc => "Deletion, duplicate",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5001 },
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5002 },
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 -e EV_2 -e EV_2 },
+    ],
+    verify => [ 0, 1, 3, ],
+});
+
+
+doTest({
+    desc => "Can't delete someone else's event",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
         qq{--sec $ids->[1]->{sec} --content "blah" --kind 5 --created-at 6000 -e EV_0 },
@@ -107,9 +118,9 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-## Deletion prevents re-adding same event
 
 doTest({
+    desc => "Deletion prevents re-adding same event",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
         qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 -e EV_0 },
@@ -120,9 +131,9 @@ doTest({
 
 
 
-## Parameterized Replaceable Events
 
 doTest({
+    desc => "Parameterized Replaceable Events",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
         qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl },
@@ -130,9 +141,9 @@ doTest({
     verify => [ 1, ],
 });
 
-## d tags have to match
 
 doTest({
+    desc => "d tags have to match",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
         qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl2 },
@@ -141,9 +152,9 @@ doTest({
     verify => [ 1, 2, ],
 });
 
-## Kinds have to match
 
 doTest({
+    desc => "Kinds have to match",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
         qq{--sec $ids->[0]->{sec} --content "hi2" --kind 2 --created-at 5001 --tag d myrepl },
@@ -151,9 +162,9 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-## Pubkeys have to match
 
 doTest({
+    desc => "Pubkeys have to match",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
         qq{--sec $ids->[1]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl },
@@ -161,9 +172,9 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-## Timestamp
 
 doTest({
+    desc => "Timestamp",
     events => [
         qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5001 --tag d myrepl },
         qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5000 --tag d myrepl },
@@ -173,11 +184,13 @@ doTest({
 
 
 
-print "OK\n";
+print "\nOK\n";
 
 
 sub doTest {
     my $spec = shift;
+
+    print "* ", ($spec->{desc} || 'unnamed'), "\n";
 
     cleanDb();
 

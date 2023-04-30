@@ -112,4 +112,4 @@ struct EventToWrite {
 
 
 void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLevel = 1);
-void deleteEvent(lmdb::txn &txn, defaultDb::environment::View_Event &ev);
+bool deleteEvent(lmdb::txn &txn, uint64_t levId);
