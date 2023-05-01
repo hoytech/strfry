@@ -207,6 +207,10 @@ config:
     desc: reqMonitor threads: Handle filtering of new events
     default: 3
     noReload: true
+  - name: relay__numThreads__negentropy
+    desc: negentropy threads: Handle negentropy protocol messages
+    default: 2
+    noReload: true
 
   - name: events__maxEventSize
     desc: "Maximum size of normalised JSON, in bytes"

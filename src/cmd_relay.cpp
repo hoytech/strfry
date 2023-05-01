@@ -28,6 +28,10 @@ void RelayServer::run() {
         runReqMonitor(thr);
     });
 
+    tpNegentropy.init("Negentropy", cfg().relay__numThreads__negentropy, [this](auto &thr){
+        runNegentropy(thr);
+    });
+
     cronThread = std::thread([this]{
         runCron();
     });
