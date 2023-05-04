@@ -8,16 +8,16 @@ It is a nostr-friendly wrapper around the [Negentropy](https://github.com/hoytec
 
 We're going to call the two sides engaged in the sync the client and the relay (even though the initiator could be another relay instead of a client).
 
-1. Client (initiator) chooses a nostr filter, and retrieves the set of events that it has locally that match this filter.
+* (1) Client (initiator) chooses a nostr filter, and retrieves the set of events that it has locally that match this filter.
   * Client creates a `Negentropy` object, adds all events to it, seals it, and then calls `initiate()` to create the initial message.
-1. Client sends a `NEG-OPEN` message to the relay, which includes the filter and the initial message.
-1. Relay selects the set of events that it has locally that match the filter
+* (2) Client sends a `NEG-OPEN` message to the relay, which includes the filter and the initial message.
+* (3) Relay selects the set of events that it has locally that match the filter
   * Relay creates a `Negentropy` object, adds all events to it, and seals it.
-1. Relay calls `reconcile()` on its `Negentropy` object, and returns the results as a `NEG-MSG` answer to the client.
-1. Client calls `reconcile()` on its `Negentropy` object using the value sent by the relay.
-  1. If the empty string is returned, the sync is complete.
-  1. This call will return `have` and `need` arrays, which correspond to nostr IDs (or ID prefixes, if `idSize < 32`) that should be uploaded and downloaded, respectively.
-  1. Otherwise, the result is sent back to the relay in another `NEG-MSG`. Goto step 4.
+* (4) Relay calls `reconcile()` on its `Negentropy` object, and returns the results as a `NEG-MSG` answer to the client.
+* (5) Client calls `reconcile()` on its `Negentropy` object using the value sent by the relay.
+  * If the empty string is returned, the sync is complete.
+  * This call will return `have` and `need` arrays, which correspond to nostr IDs (or ID prefixes, if `idSize < 32`) that should be uploaded and downloaded, respectively.
+  * Otherwise, the result is sent back to the relay in another `NEG-MSG`. Goto step 4.
 
 ## Nostr Messages
 
