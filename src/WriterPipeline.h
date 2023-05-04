@@ -24,6 +24,10 @@ struct WriterPipeline {
     std::thread validatorThread;
     std::thread writerThread;
 
+    std::condition_variable shutdownCv;
+    std::mutex shutdownMutex;
+    bool shutdown = false;
+
   public:
     WriterPipeline() {
         validatorThread = std::thread([&]() {
@@ -61,7 +65,12 @@ struct WriterPipeline {
             while (1) {
                 // Debounce
                 writerInbox.wait();
-                std::this_thread::sleep_for(std::chrono::milliseconds(1'000));
+
+                {
+                    std::unique_lock<std::mutex> lk(shutdownMutex);
+                    shutdownCv.wait_for(lk, std::chrono::milliseconds(1'000), [&]{return shutdown;}); 
+                }
+
                 auto newEvents = writerInbox.pop_all();
 
                 bool flush = false;
@@ -120,6 +129,12 @@ struct WriterPipeline {
     }
 
     void flush() {
+        {
+            std::lock_guard<std::mutex> lk(shutdownMutex);
+            shutdown = true;
+        }
+        shutdownCv.notify_all();
+
         inbox.push_move({ tao::json::null, EventSourceType::None, "" });
         flushInbox.wait();
     }
