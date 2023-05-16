@@ -4,7 +4,7 @@ WORKDIR /build
 RUN apt update && apt install -y --no-install-recommends \
     git g++ make pkg-config libtool ca-certificates \
     libyaml-perl libtemplate-perl libssl-dev zlib1g-dev \
-    liblmdb-dev libflatbuffers-dev libsecp256k1-dev libb2-dev \
+    liblmdb-dev libflatbuffers-dev libsecp256k1-dev \
     libzstd-dev
 
 COPY . .
