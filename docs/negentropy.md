@@ -58,6 +58,8 @@ Current reason codes are:
   * Because the `NEG-OPEN` queries are stateful, relays may choose to time-out inactive queries to recover memory resources
 * `FILTER_NOT_FOUND`
   * If an event ID is used as the filter, this error will be returned if the relay does not have this event. The client should retry with the full filter, or upload the event to the relay.
+* `FILTER_INVALID`
+  * The event's `content` was not valid JSON, or the filter was invalid for some other reason.
 
 After a `NEG-ERR` is issued, the subscription is considered to be closed.
 
