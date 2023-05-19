@@ -8,6 +8,8 @@ $SIG{ __DIE__ } = \&Carp::confess;
 use Data::Dumper;
 use JSON::XS;
 
+$Data::Dumper::Sortkeys = 1;
+
 
 my $ids = [
     {
@@ -19,6 +21,7 @@ my $ids = [
         pub => 'cc49e2a58373abc226eee84bee9ba954615aa2ef1563c4f955a74c4606a3b1fa',
     },
 ];
+
 
 
 
@@ -83,6 +86,25 @@ doTest({
     verify => [ 1, ],
 });
 
+doTest({
+    desc => "Equal timestamps: replacement does not happen because new id > old id",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "c1" --kind 10000 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "c2" --kind 10000 --created-at 5000 },
+    ],
+    assertIds => [qw/ 7c ae /],
+    verify => [ 0, ],
+});
+
+doTest({
+    desc => "Equal timestamps: replacement does happen because new id < old id",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "c1" --kind 10000 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "c4" --kind 10000 --created-at 5000 },
+    ],
+    assertIds => [qw/ 7c 63 /],
+    verify => [ 1, ],
+});
 
 
 
@@ -221,6 +243,10 @@ sub doTest {
         push @$eventIds, addEvent($ev);
     }
 
+    for (my $i = 0; $i < @{ $spec->{assertIds} || [] }; $i++) {
+        die "assertId incorrect" unless rindex($eventIds->[$i], $spec->{assertIds}->[$i], 0) == 0;
+    }
+
     my $finalEventIds = [];
 
     {
@@ -255,6 +281,7 @@ sub addEvent {
     system(qq{ rm test-eventXYZ.json });
 
     my $event = decode_json($eventJson);
+    print Dumper($event) if $ENV{DUMP_EVENTS};
 
     return $event->{id};
 }

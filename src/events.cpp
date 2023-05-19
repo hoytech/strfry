@@ -305,7 +305,13 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
                     if (parsedKey.s == searchStr && parsedKey.n == flat->kind()) {
                         auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
 
-                        if (otherEv.flat_nested()->created_at() < flat->created_at()) {
+                        auto thisTimestamp = flat->created_at();
+                        auto otherTimestamp = otherEv.flat_nested()->created_at();
+                        LI << thisTimestamp << " / " << otherTimestamp;
+                        LI << to_hex(sv(flat->id())) << " / " << to_hex(sv(otherEv.flat_nested()->id()));
+
+                        if (otherTimestamp < thisTimestamp ||
+                            (otherTimestamp == thisTimestamp && sv(flat->id()) < sv(otherEv.flat_nested()->id()))) {
                             if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(sv(otherEv.flat_nested()->id()));
                             levIdsToDelete.push_back(otherEv.primaryKeyId);
                         } else {
