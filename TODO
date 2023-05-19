@@ -1,38 +1,38 @@
-0.1 release
-  when disk is full it should log warning but not crash
-  delete expired events
-    * decide what to do about generalised ephemeral events
-  kill plugin if it times out
-
-0.2 release
-  ? why isn't the LMDB mapping CLOEXEC
-  ? plugin for stream: make sure bortloff@github didn't make a mess of it
-
-sync
-  logging of bytes up/down
-  pre-calcuated tree of XOR
-    full-db scan limited by since/until
+1.0 release
+  ! find root cause of "invalid candidate" crash
+  support filtering on empty value tags
+  test negentropy queries stored in events
+  more config params in negentropy
+    ? limit for total number of events, not just per filter
+  move plugin support into writerpipeline to support sync
+  increase DB version
+  update list of supported NIPs
+  update docs
 
 features
-  less verbose default logging
-  multiple sync connections in one process/config
+  in sync/stream, log bytes up/down and compression ratios
+  "router" app, where multiple stream/sync connections handled in one process/config (the "nginx of nostr")
   NIP-42 AUTH
-  slow-reader detection and back-pressure
-  delete command
+  slow-websocket connection detection and back-pressure
+  pre-calcuated tree negentropy XOR trees to support full-db scans (optionally limited by since/until)
+    ? maybe just use daily/fixed-size bucketing
+  improve delete command
     * delete by receivedAt, IP addrs, etc
     * inverted filter: delete events that *don't* match the provided filter
-  ? relay block-list events
+  ? less verbose default logging
   ? if a client disconnects, delete all its pending write messages
-  ? support filtering on empty value tags
+  ? kill plugin if it times out
 
-rate limits
-  ! event writes per second per ip
+rate limits (maybe not needed now that we have plugins?)
+  event writes per second per ip
   max connections per ip (nginx?)
   max bandwidth up/down (nginx?)
   log IP address in sendNoticeError and elsewhere where it makes sense
+  ? events that contain IP/pubkey/etc block-lists in their contents
   ? limit on total number of events from a DBScan, not just per filter
   ? time limit on DBScan
 
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
-  export not dying on SIGPIPE, or not getting SIGPIPE
+  ? export not dying on SIGPIPE, or not getting SIGPIPE
+  ? why isn't the LMDB mapping CLOEXEC
