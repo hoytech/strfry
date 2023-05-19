@@ -43,16 +43,6 @@ doTest({
 });
 
 
-doTest({
-    desc => "Same, but explicit empty d tag",
-    events => [
-        qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
-        qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10000 --created-at 5001 --tag d '' },
-        qq{--sec $ids->[0]->{sec} --content "hi" --kind 10000 --created-at 5000 },
-    ],
-    verify => [ 1, ],
-});
-
 
 doTest({
     desc => "Replacement is dropped",
@@ -82,6 +72,17 @@ doTest({
     ],
     verify => [ 0, 1, ],
 });
+
+
+doTest({
+    desc => "d tags are ignored in 10k-20k range",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 10003 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 10003 --created-at 5001 --tag d 'myrepl' },
+    ],
+    verify => [ 1, ],
+});
+
 
 
 
@@ -135,19 +136,27 @@ doTest({
 doTest({
     desc => "Parameterized Replaceable Events",
     events => [
-        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
-        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 30001 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 30001 --created-at 5001 --tag d myrepl },
     ],
     verify => [ 1, ],
 });
 
+doTest({
+    desc => "d tag only works in range 30k-40k",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl },
+    ],
+    verify => [ 0, 1, ],
+});
 
 doTest({
     desc => "d tags have to match",
     events => [
-        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
-        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl2 },
-        qq{--sec $ids->[0]->{sec} --content "hi3" --kind 1 --created-at 5002 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 30001 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 30001 --created-at 5001 --tag d myrepl2 },
+        qq{--sec $ids->[0]->{sec} --content "hi3" --kind 30001 --created-at 5002 --tag d myrepl },
     ],
     verify => [ 1, 2, ],
 });
@@ -156,8 +165,8 @@ doTest({
 doTest({
     desc => "Kinds have to match",
     events => [
-        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
-        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 2 --created-at 5001 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 30001 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 30002 --created-at 5001 --tag d myrepl },
     ],
     verify => [ 0, 1, ],
 });
@@ -166,20 +175,31 @@ doTest({
 doTest({
     desc => "Pubkeys have to match",
     events => [
-        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5000 --tag d myrepl },
-        qq{--sec $ids->[1]->{sec} --content "hi2" --kind 1 --created-at 5001 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 30001 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[1]->{sec} --content "hi2" --kind 30001 --created-at 5001 --tag d myrepl },
     ],
     verify => [ 0, 1, ],
 });
 
 
 doTest({
-    desc => "Timestamp",
+    desc => "Newer param replaceable event isn't replaced",
     events => [
-        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 1 --created-at 5001 --tag d myrepl },
-        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 1 --created-at 5000 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi1" --kind 30001 --created-at 5001 --tag d myrepl },
+        qq{--sec $ids->[0]->{sec} --content "hi2" --kind 30001 --created-at 5000 --tag d myrepl },
     ],
     verify => [ 0, ],
+});
+
+
+doTest({
+    desc => "Explicit empty d tag",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30003 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "hi 2" --kind 30003 --created-at 5001 --tag d '' },
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30003 --created-at 5000 },
+    ],
+    verify => [ 1, ],
 });
 
 

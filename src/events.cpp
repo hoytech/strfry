@@ -21,6 +21,14 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
 
     uint64_t expiration = 0;
 
+    if (isReplaceableKind(kind)) {
+        // Prepend virtual d-tag
+        tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
+            'd',
+            builder.CreateVector((uint8_t*)"", 0)
+        ));
+    }
+
     if (v.at("tags").get_array().size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
     for (auto &tagArr : v.at("tags").get_array()) {
         auto &tag = tagArr.get_array();
@@ -42,8 +50,6 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
                 expiration = parseUint64(tagVal);
                 if (expiration < 100) throw herr("invalid expiration");
             }
-        } else if (tagName == "ephemeral") {
-            expiration = 1;
         } else if (tagName.size() == 1) {
             if (tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too large: ", tagVal.size());
 
@@ -56,14 +62,15 @@ std::string nostrJsonToFlat(const tao::json::value &v) {
         }
     }
 
-    if (isDefaultReplaceableKind(kind)) {
+    if (isParamReplaceableKind(kind)) {
+        // Append virtual d-tag
         tagsGeneral.emplace_back(NostrIndex::CreateTagGeneral(builder,
             'd',
             builder.CreateVector((uint8_t*)"", 0)
         ));
     }
 
-    if (isDefaultEphemeralKind(kind)) {
+    if (isEphemeralKind(kind)) {
         expiration = 1;
     }
 
@@ -280,11 +287,13 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
         {
             std::optional<std::string> replace;
 
-            for (const auto &tagPair : *(flat->tagsGeneral())) {
-                auto tagName = (char)tagPair->key();
-                if (tagName != 'd') continue;
-                replace = std::string(sv(tagPair->val()));
-                break;
+            if (isReplaceableKind(flat->kind()) || isParamReplaceableKind(flat->kind())) {
+                for (const auto &tagPair : *(flat->tagsGeneral())) {
+                    auto tagName = (char)tagPair->key();
+                    if (tagName != 'd') continue;
+                    replace = std::string(sv(tagPair->val()));
+                    break;
+                }
             }
 
             if (replace) {
