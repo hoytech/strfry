@@ -72,7 +72,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     auto res = writePolicy.acceptEvent(evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
                     if (res == WritePolicyResult::Accept) {
                         downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
-                        writer.inbox.push_move({ std::move(evJson), EventSourceType::Stream, url });
+                        writer.write({ std::move(evJson), EventSourceType::Stream, url });
                     } else {
                         LI << "[" << ws.remoteAddr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
                     }

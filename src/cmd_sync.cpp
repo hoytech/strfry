@@ -89,7 +89,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
     const uint64_t highWaterUp = 100, lowWaterUp = 50;
     const uint64_t batchSizeDown = 50;
-    uint64_t inFlightUp = 0, inFlightDown = 0;
+    uint64_t inFlightUp = 0;
+    bool inFlightDown = false; // bool because we can't count on getting every EVENT we request (might've been deleted mid-query)
     std::vector<std::string> have, need;
     bool syncDone = false;
     uint64_t totalHaves = 0, totalNeeds = 0;
@@ -127,9 +128,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                     LW << "Unable to upload event " << msg.at(1).get_string() << ": " << msg.at(3).get_string();
                 }
             } else if (msg.at(0) == "EVENT") {
-                writer.inbox.push_move({ std::move(msg.at(2)), EventSourceType::Sync, url });
+                writer.write({ std::move(msg.at(2)), EventSourceType::Sync, url });
             } else if (msg.at(0) == "EOSE") {
-                inFlightDown = 0;
+                inFlightDown = false;
+            } else {
+                LW << "Unexpected message from relay: " << msg;
             }
         } catch (std::exception &e) {
             LE << "Error processing websocket message: " << e.what();
@@ -163,7 +166,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             if (numSent > 0) LI << "UP: " << numSent << " events (" << have.size() << " remaining)";
         }
 
-        if (doDown && need.size() > 0 && inFlightDown == 0) {
+        if (doDown && need.size() > 0 && !inFlightDown) {
             tao::json::value ids = tao::json::empty_array;
 
             while (need.size() > 0 && ids.get_array().size() < batchSizeDown) {
@@ -181,10 +184,10 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 }),
             })));
 
-            inFlightDown = 1;
+            inFlightDown = true;
         }
 
-        if (syncDone && have.size() == 0 && need.size() == 0 && inFlightUp == 0 && inFlightDown == 0) {
+        if (syncDone && have.size() == 0 && need.size() == 0 && inFlightUp == 0 && !inFlightDown) {
             if (doDown) writer.flush();
             ::exit(0);
         }

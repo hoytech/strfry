@@ -214,6 +214,8 @@ struct NostrFilter {
 struct NostrFilterGroup {
     std::vector<NostrFilter> filters;
 
+    NostrFilterGroup() {}
+
     // Note that this expects the full array, so the first two items are "REQ" and the subId
     NostrFilterGroup(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         const auto &arr = req.get_array();
@@ -225,7 +227,7 @@ struct NostrFilterGroup {
         }
     }
 
-    // Hacky! Deserves a refactor
+    // FIXME refactor: Make unwrapped the default constructor
     static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
             filter = tao::json::value::array({ filter });

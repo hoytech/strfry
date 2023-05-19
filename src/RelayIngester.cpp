@@ -55,7 +55,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessNegentropy(txn, decomp, msg->connId, arr);
                             } catch (std::exception &e) {
-                                sendNoticeError(msg->connId, std::string("bad negentropy: ") + e.what());
+                                sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
                         } else {
                             throw herr("unknown cmd");
@@ -120,7 +120,8 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
     if (arr.at(0) == "NEG-OPEN") {
         if (arr.get_array().size() < 5) throw herr("negentropy query missing elements");
 
-        NostrFilterGroup filter({});
+        NostrFilterGroup filter;
+        auto maxFilterLimit = cfg().relay__negentropy__maxFilterLimit;
 
         if (arr.at(2).is_string()) {
             auto ev = lookupEventById(txn, from_hex(arr.at(2).get_string()));
@@ -137,7 +138,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
             tao::json::value json = tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId));
 
             try {
-                filter = std::move(NostrFilterGroup::unwrapped(tao::json::from_string(json.at("content").get_string())));
+                filter = std::move(NostrFilterGroup::unwrapped(tao::json::from_string(json.at("content").get_string()), maxFilterLimit));
             } catch (std::exception &e) {
                 sendToConn(connId, tao::json::to_string(tao::json::value::array({
                     "NEG-ERR",
@@ -148,7 +149,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
                 return;
             }
         } else {
-            filter = std::move(NostrFilterGroup::unwrapped(arr.at(2)));
+            filter = std::move(NostrFilterGroup::unwrapped(arr.at(2), maxFilterLimit));
         }
 
         Subscription sub(connId, arr[1].get_string(), std::move(filter));

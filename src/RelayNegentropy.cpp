@@ -9,6 +9,7 @@ struct NegentropyViews {
     struct UserView {
         Negentropy ne;
         std::string initialMsg;
+        uint64_t startTime = hoytech::curr_time_us();
     };
 
     using ConnViews = flat_hash_map<SubId, UserView>;
@@ -76,6 +77,9 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         auto *view = views.findView(sub.connId, sub.subId);
         if (!view) return;
 
+        LI << "[" << sub.connId << "] Negentropy query matched " << view->ne.items.size() << " events in "
+           << (hoytech::curr_time_us() - view->startTime) << "us";
+
         view->ne.seal();
 
         auto resp = view->ne.reconcile(view->initialMsg);
@@ -120,7 +124,12 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     return;
                 }
 
-                auto resp = view->ne.reconcile(view->initialMsg);
+                if (!view->ne.sealed) {
+                    sendNoticeError(msg->connId, "negentropy error: got NEG-MSG before NEG-OPEN complete");
+                    return;
+                }
+
+                auto resp = view->ne.reconcile(msg->negPayload);
 
                 sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
                     "NEG-MSG",

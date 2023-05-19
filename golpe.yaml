@@ -212,6 +212,10 @@ config:
     default: 2
     noReload: true
 
+  - name: relay__negentropy__maxFilterLimit
+    desc: "Maximum records that can be processed per filter"
+    default: 1000000
+
   - name: events__maxEventSize
     desc: "Maximum size of normalised JSON, in bytes"
     default: 65536
