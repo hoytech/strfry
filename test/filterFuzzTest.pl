@@ -87,6 +87,17 @@ c1e5e04d92d9bd20701bff4cbdac1cdc317d405035883b7adcf9a6a5308d0f54
 3a15cb7cf951de54a23585ca003c96ca9a7c49fbf8e436575ff9bb710af301f0
 }];
 
+my $topics = [qw{
+bitcoin
+nostr
+gitlog
+introductions
+jb55
+damus
+chat
+nosuchtopic
+}];
+
 sub genRandomFilterGroup {
     my $useLimit = shift;
 
@@ -129,6 +140,13 @@ sub genRandomFilterGroup {
                 $f->{'#p'} = [];
                 for (1..(rand()*5)) {
                     push @{$f->{'#p'}}, $pubkeys->[int(rand() * @$pubkeys)];
+                }
+            }
+
+            if (rand() < .2) {
+                $f->{'#t'} = [];
+                for (1..(rand()*5)) {
+                    push @{$f->{'#t'}}, $topics->[int(rand() * @$topics)];
                 }
             }
         }

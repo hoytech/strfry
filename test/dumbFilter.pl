@@ -102,6 +102,19 @@ sub doesMatchSingle {
         return 0 if !$found;
     }
 
+    if ($filter->{'#t'}) {
+        my $found;
+        foreach my $search (@{ $filter->{'#t'} }) {
+            foreach my $tag (@{ $ev->{tags} }) {
+                if ($tag->[0] eq 't' && $tag->[1] eq $search) {
+                    $found = 1;
+                    last;
+                }
+            }
+        }
+        return 0 if !$found;
+    }
+
     return 1;
 }
 
