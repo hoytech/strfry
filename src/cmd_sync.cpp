@@ -131,6 +131,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 writer.write({ std::move(msg.at(2)), EventSourceType::Sync, url });
             } else if (msg.at(0) == "EOSE") {
                 inFlightDown = false;
+                writer.wait();
             } else {
                 LW << "Unexpected message from relay: " << msg;
             }
@@ -139,7 +140,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             LW << "MSG: " << msgStr;
         }
 
-        if (doUp && have.size() > 0 && inFlightUp < lowWaterUp) {
+        if (doUp && have.size() > 0 && inFlightUp <= lowWaterUp) {
             auto txn = env.txn_ro();
 
             uint64_t numSent = 0;
