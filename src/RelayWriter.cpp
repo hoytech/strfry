@@ -33,10 +33,25 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             }
         }
 
-        {
+        try {
             auto txn = env.txn_rw();
             writeEvents(txn, newEvents);
             txn.commit();
+        } catch (std::exception &e) {
+            LE << "Error writing " << newEvents.size() << " events: " << e.what();
+
+            for (auto &newEvent : newEvents) {
+                auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(newEvent.flatStr.data());
+                auto eventIdHex = to_hex(sv(flat->id()));
+                MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
+
+                std::string message = "Write error: ";
+                message += e.what();
+
+                sendOKResponse(addEventMsg->connId, eventIdHex, false, message);
+            }
+
+            continue;
         }
 
         // Log
