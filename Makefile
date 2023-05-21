@@ -1,5 +1,6 @@
-BIN = strfry
-OPT = -O3 -g
+BIN  ?= strfry
+APPS ?= dbutils relay mesh
+OPT  ?= -O3 -g
 
 include golpe/rules.mk
 
