@@ -37,7 +37,10 @@ struct MsgWebsocket : NonCopyable {
         std::string evJson;
     };
 
-    using Var = std::variant<Send, SendBinary, SendEventToBatch>;
+    struct GracefulShutdown {
+    };
+
+    using Var = std::variant<Send, SendBinary, SendEventToBatch, GracefulShutdown>;
     Var msg;
     MsgWebsocket(Var &&msg_) : msg(std::move(msg_)) {}
 };
@@ -153,6 +156,7 @@ struct RelayServer {
     ThreadPool<MsgReqMonitor> tpReqMonitor;
     ThreadPool<MsgNegentropy> tpNegentropy;
     std::thread cronThread;
+    std::thread signalHandlerThread;
 
     void run();
 
@@ -173,6 +177,8 @@ struct RelayServer {
     void runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr);
 
     void runCron();
+
+    void runSignalHandler();
 
     // Utils (can be called by any thread)
 

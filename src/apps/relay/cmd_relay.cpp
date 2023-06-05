@@ -1,3 +1,6 @@
+#include <pthread.h>
+#include <signal.h>
+
 #include "RelayServer.h"
 
 
@@ -8,6 +11,14 @@ void cmd_relay(const std::vector<std::string> &subArgs) {
 }
 
 void RelayServer::run() {
+    {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR1);
+        int s = pthread_sigmask(SIG_BLOCK, &set, NULL);
+        if (s != 0) throw herr("Unable to set sigmask: ", strerror(errno));
+    }
+
     tpWebsocket.init("Websocket", 1, [this](auto &thr){
         runWebsocket(thr);
     });
@@ -34,6 +45,10 @@ void RelayServer::run() {
 
     cronThread = std::thread([this]{
         runCron();
+    });
+
+    signalHandlerThread = std::thread([this]{
+        runSignalHandler();
     });
 
     // Monitor for config file reloads

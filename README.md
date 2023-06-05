@@ -7,6 +7,7 @@ strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nos
 * Supports most applicable NIPs: 1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40
 * No external database required: All data is stored locally on the filesystem in LMDB
 * Hot reloading of config file: No server restart needed for many config param changes
+* Zero downtime restarts, for upgrading binary without impacting users
 * Websocket compression: permessage-deflate with optional sliding window, when supported by clients
 * Built-in support for real-time streaming (up/down/both) events from remote relays, and bulk import/export of events from/to jsonl files
 * [negentropy](https://github.com/hoytech/negentropy)-based set reconcilliation for efficient syncing with remote relays
@@ -69,6 +70,29 @@ In order to upgrade the DB, you should export and then import again:
     ./strfry import < dbdump.jsonl
 
 After you have confirmed everything is working OK, the `dbdump.jsonl` and `data.mdb.bak` files can be deleted.
+
+
+### Zero Downtime Restarts
+
+strfry can have multiple different running instances simultaneously listening on the same port, because it uses the `REUSE_PORT` linux socket option. One of the reasons you may want to do this is to restart the relay without impacting currently connected users. This allows you to upgrade the strfry binary, or perform major configuration changes (for the subset of config options that require a restart).
+
+If you send a `SIGUSR1` signal to a strfry process, it will initiate a "graceful shutdown". This means that it will no longer accept new websocket connections, and after its last existing websocket connection is closed, it will exit.
+
+So, the typical flow for a zero downtime restart is:
+
+* Record the PID of the currently running strfry instance.
+
+* Start a new relay process using the same configuration as the currently running instance:
+
+      strfry relay
+
+  At this point, both instances will be accepting new connections.
+
+* Initiate the graceful shutdown:
+
+      kill -USR1 $OLD_PID
+
+  Now only the new strfry instance will be accepting connections. The old one will exit once all its connections have been closed.
 
 
 ### Stream

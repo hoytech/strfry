@@ -41,6 +41,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     uWS::Group<uWS::SERVER> *hubGroup;
     flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
+    bool gracefulShutdown = false;
 
     std::string tempBuf;
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
@@ -137,6 +138,14 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
         connIdToConnection.erase(connId);
         delete c;
+
+        if (gracefulShutdown) {
+            LI << "Graceful shutdown in progress: " << connIdToConnection.size() << " connections remaining";
+            if (connIdToConnection.size() == 0) {
+                LW << "All connections closed, shutting down";
+                ::exit(0);
+            }
+        }
     });
 
     hubGroup->onMessage2([&](uWS::WebSocket<uWS::SERVER> *ws, char *message, size_t length, uWS::OpCode opCode, size_t compressedSize) {
@@ -183,6 +192,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                     memcpy(p + 10, subIdSv.data(), subIdSv.size());
                     doSend(item.connId, std::string_view(p, 13 + subIdSv.size() + msg->evJson.size()), uWS::OpCode::TEXT);
                 }
+            } else if (std::get_if<MsgWebsocket::GracefulShutdown>(&newMsg.msg)) {
+                LW << "Initiating graceful shutdown: " << connIdToConnection.size() << " connections remaining";
+                gracefulShutdown = true;
+                hubGroup->stopListening();
             }
         }
     };
