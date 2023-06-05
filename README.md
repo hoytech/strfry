@@ -4,21 +4,19 @@
 
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
-* Supports most applicable NIPs: 1, 9, 11, 12, 15, 16, 20, 22
+* Supports most applicable NIPs: 1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40
 * No external database required: All data is stored locally on the filesystem in LMDB
 * Hot reloading of config file: No server restart needed for many config param changes
 * Websocket compression: permessage-deflate with optional sliding window, when supported by clients
 * Built-in support for real-time streaming (up/down/both) events from remote relays, and bulk import/export of events from/to jsonl files
-* Merkle-tree based set reconcilliation for efficient syncing with remote relays
-
-**NOTE**: This project is still in development/testing phase, so you may not want to use it in production yet.
+* [negentropy](https://github.com/hoytech/negentropy)-based set reconcilliation for efficient syncing with remote relays
 
 If you are using strfry, please [join our telegram chat](https://t.me/strfry_users). Hopefully soon we'll migrate this to nostr.
 
 
 ## Syncing
 
-The most original feature of strfry is a set reconcillation protocol based on [Quadrable](https://github.com/hoytech/quadrable). This is implemented over a protocol extension called "yesstr", which is primarily designed for relay-to-relay communication, but could also be used by sophisticated clients. Yesstr allows two parties to synchronise their sets of stored messages with minimal bandwidth overhead.
+The most original feature of strfry is a set reconcillation protocol based on [negentropy](https://github.com/hoytech/negentropy). This is implemented over a [nostr protocol extension](https://github.com/hoytech/strfry/blob/master/docs/negentropy.md) that allows two parties to synchronise their sets of stored messages with minimal bandwidth overhead. Although primarily designed for relay-to-relay communication, this can also be used by clients.
 
 Either the full set of messages in the DB can be synced, or the results of one or more nostr filter expressions. If the two parties to the sync share common subsets of identical events, then there will be significant bandwidth savings compared to downloading the full set.
 
@@ -89,24 +87,24 @@ Both of these operations can be concurrently multiplexed over the same websocket
 
     ./strfry stream wss://relay.example.com --dir both
 
-`strfry stream` will compress messages with permessage-deflate in both directions, if supported by the server. Sliding window is not supported for now.
+`strfry stream` will compress messages with permessage-deflate in both directions, if supported by the server. Sliding window compression is not supported for now.
 
 
 ### Sync
 
-This command uses the yesstr protocol and performs a merkle-tree set reconcilliation against the specified relay.
+This command uses the negentropy protocol and performs a set reconcilliation between the local DB and the specified relay's remote DB.
 
 Effectively what this does is figure out which events the remote relay has that you don't, and vice versa. Assuming that you both have common subsets of events, it does this more efficiently than simply transferring the full set of events (or even just their ids).
 
-You can read about the algorithm used on the [Quadrable project page](https://github.com/hoytech/quadrable#syncing). For now, the only implementation is in C++, although we plan on compiling this into WASM so the protocol can also be used by JS clients.
+You can read about the algorithm used on the [negentropy project page](https://github.com/hoytech/negentropy). There are both C++ and Javascript reference implementations.
 
 Here is how to perform a "full DB" set reconcilliation against a remote server:
 
     ./strfry sync wss://relay.example.com
 
-This will download all missing events from the remote relay and insert them into your DB. Similar to `stream`, you can also sync in the `up` or `both` directions (not implemented yet, coming soon):
+This will download all missing events from the remote relay and insert them into your DB. Similar to `stream`, you can also sync in the `up` or `both` directions:
 
-    ./strfry sync wss://relay.example.com --dir both ## coming soon
+    ./strfry sync wss://relay.example.com --dir both
 
 `both` is especially efficient, because performing the set reconcilliation automatically determines the missing members on each side.
 
@@ -114,9 +112,7 @@ Instead of a "full DB" sync, you can also sync the result of a nostr filter (or 
 
     ./strfry sync wss://relay.example.com '{"authors":["003b"]}'
 
-Because many messages can be batched into a single yesstr websocket message, permessage-deflate compression can also make syncing more bandwidth-efficient when bulk-loading data over the network compared to regular nostr.
-
-Warning: Syncing can consume a lot of memory and bandwidth if the DBs are highly divergent (for example if your local DB is empty and your filter matches many events). The sync doesn't begin to commit received events to your DB until it has downloaded the entire set (but it is possible to improve this).
+Warning: Syncing can consume a lot of memory and bandwidth if the DBs are highly divergent (for example if your local DB is empty and your filter matches many events).
 
 
 
@@ -134,7 +130,7 @@ Database records are serialised with [Flatbuffers](https://google.github.io/flat
 
 The query engine is quite a bit less flexible than a general-purpose SQL engine, however the types of queries that can be performed via the nostr protocol are fairly constrained, so we can ensure that almost all queries have good index support. All possible query plans are determined at compile-time, so there is no SQL generation/parsing overhead, or risk of SQL injection.
 
-When an event is inserted, indexable data (id, pubkey, tags, kind, and created_at) is loaded into a flatbuffers object. Signatures and non-indexed tags are removed, along with recommended relay fields, etc, to keep the record size minimal (and therefore improve cache usage). The full event's raw JSON is stored separately.
+When an event is inserted, indexable data (id, pubkey, tags, kind, and created_at) is loaded into a flatbuffers object. Signatures and non-indexed tags are removed, along with recommended relay fields, etc, to keep the record size minimal (and therefore improve cache usage). The full event's raw JSON is stored separately. The raw JSON is re-serialised to remove any unauthenticated fields from the event.
 
 Various indices are created based on the indexed fields. Almost all indices are "clustered" with the event's `created_at` timestamp, allowing efficient `since`/`until` scans. Many queries can be serviced by index-only scans, and don't need to load the flatbuffers object at all.
 
@@ -256,9 +252,12 @@ After comparing the event against each filter detected via the inverted index, t
 After an event has been processed, all the matching connections and subscription IDs are sent to the Websocket thread along with a single copy of the event's JSON. This prevents intermediate memory bloat that would occur if a copy was created for each subscription.
 
 
-### Yesstr
+### Negentropy
 
-This thread implements the provider-side of the Quadrable [syncing protocol](https://github.com/hoytech/quadrable#syncing). More details coming soon...
+These threads implements the provider-side of the [negentropy syncing protocol](https://github.com/hoytech/negentropy).
+
+When [NEG-OPEN](https://github.com/hoytech/strfry/blob/master/docs/negentropy.md) requests are received, these threads perform DB queries in the same way as [ReqWorker](#ReqWorker) threads do. However, instead of sending the results back to the client, the IDs of the matching events are kept in memory, so they can be queried with future `NEG-MSG` queries.
+
 
 
 ### Cron
@@ -267,6 +266,10 @@ This thread is responsible for periodic maintenance operations. Currently this c
 
 
 ## Testing
+
+How to run the tests is described in the `test/README.md` file.
+
+### Fuzz tests
 
 The query engine is the most complicated part of the relay, so there is a differential fuzzing test framework to exercise it.
 
