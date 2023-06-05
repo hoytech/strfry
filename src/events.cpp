@@ -307,8 +307,6 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
 
                         auto thisTimestamp = flat->created_at();
                         auto otherTimestamp = otherEv.flat_nested()->created_at();
-                        LI << thisTimestamp << " / " << otherTimestamp;
-                        LI << to_hex(sv(flat->id())) << " / " << to_hex(sv(otherEv.flat_nested()->id()));
 
                         if (otherTimestamp < thisTimestamp ||
                             (otherTimestamp == thisTimestamp && sv(flat->id()) < sv(otherEv.flat_nested()->id()))) {
