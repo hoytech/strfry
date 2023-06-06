@@ -1,0 +1,100 @@
+config:
+  - name: relay__bind
+    desc: "Interface to listen on. Use 0.0.0.0 to listen on all interfaces"
+    default: "127.0.0.1"
+    noReload: true
+  - name: relay__port
+    desc: "Port to open for the nostr websocket protocol"
+    default: 7777
+    noReload: true
+  - name: relay__nofiles
+    desc: "Set OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)"
+    default: 1000000
+    noReload: true
+  - name: relay__realIpHeader
+    desc: "HTTP header that contains the client's real IP, before reverse proxying (ie x-real-ip) (MUST be all lower-case)"
+    default: ""
+
+  - name: relay__info__name
+    desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
+    default: "strfry default"
+  - name: relay__info__description
+    desc: "NIP-11: Detailed information about relay, free-form"
+    default: "This is a strfry instance."
+  - name: relay__info__pubkey
+    desc: "NIP-11: Administrative nostr pubkey, for contact purposes"
+    default: "unset"
+  - name: relay__info__contact
+    desc: "NIP-11: Alternative administrative contact (email, website, etc)"
+    default: "unset"
+
+  - name: relay__maxWebsocketPayloadSize
+    desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
+    default: 131072
+    noReload: true
+  - name: relay__autoPingSeconds
+    desc: "Websocket-level PING message frequency (should be less than any reverse proxy idle timeouts)"
+    default: 55
+    noReload: true
+  - name: relay__enableTcpKeepalive
+    desc: "If TCP keep-alive should be enabled (detect dropped connections to upstream reverse proxy)"
+    default: false
+  - name: relay__queryTimesliceBudgetMicroseconds
+    desc: "How much uninterrupted CPU time a REQ query should get during its DB scan"
+    default: 10000
+  - name: relay__maxFilterLimit
+    desc: "Maximum records that can be returned per filter"
+    default: 500
+  - name: relay__maxSubsPerConnection
+    desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
+    default: 20
+
+  - name: relay__writePolicy__plugin
+    desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
+    default: ""
+  - name: relay__writePolicy__lookbackSeconds
+    desc: "Number of seconds to search backwards for lookback events when starting the writePolicy plugin (0 for no lookback)"
+    default: 0
+
+  - name: relay__compression__enabled
+    desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"
+    default: true
+    noReload: true
+  - name: relay__compression__slidingWindow
+    desc: "Maintain a sliding window buffer for each connection. Improves compression, but uses more memory"
+    default: true
+    noReload: true
+
+  - name: relay__logging__dumpInAll
+    desc: "Dump all incoming messages"
+    default: false
+  - name: relay__logging__dumpInEvents
+    desc: "Dump all incoming EVENT messages"
+    default: false
+  - name: relay__logging__dumpInReqs
+    desc: "Dump all incoming REQ/CLOSE messages"
+    default: false
+  - name: relay__logging__dbScanPerf
+    desc: "Log performance metrics for initial REQ database scans"
+    default: false
+
+  - name: relay__numThreads__ingester
+    desc: Ingester threads: route incoming requests, validate events/sigs
+    default: 3
+    noReload: true
+  - name: relay__numThreads__reqWorker
+    desc: reqWorker threads: Handle initial DB scan for events
+    default: 3
+    noReload: true
+  - name: relay__numThreads__reqMonitor
+    desc: reqMonitor threads: Handle filtering of new events
+    default: 3
+    noReload: true
+  - name: relay__numThreads__negentropy
+    desc: negentropy threads: Handle negentropy protocol messages
+    default: 2
+    noReload: true
+
+  - name: relay__negentropy__maxFilterLimit
+    desc: "Maximum records that can be processed per filter"
+    default: 1000000
