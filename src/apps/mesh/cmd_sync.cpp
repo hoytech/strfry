@@ -10,6 +10,7 @@
 #include "DBQuery.h"
 #include "filters.h"
 #include "events.h"
+#include "PluginWritePolicy.h"
 
 
 static const char USAGE[] =
@@ -73,6 +74,9 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
     WriterPipeline writer;
     WSConnection ws(url);
+    PluginWritePolicy writePolicy;
+
+
     ws.reconnect = false;
 
     ws.onConnect = [&]{
@@ -128,7 +132,16 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                     LW << "Unable to upload event " << msg.at(1).get_string() << ": " << msg.at(3).get_string();
                 }
             } else if (msg.at(0) == "EVENT") {
-                writer.write({ std::move(msg.at(2)), EventSourceType::Sync, url });
+                if (msg.get_array().size() < 3) throw herr("array too short");
+                auto &evJson = msg.at(2);
+
+                std::string okMsg;
+                auto res = writePolicy.acceptEvent(evJson, hoytech::curr_time_s(), EventSourceType::Sync, ws.remoteAddr, okMsg);
+                if (res == WritePolicyResult::Accept) {
+                    writer.write({ std::move(evJson), EventSourceType::Sync, url });
+                } else {
+                    LI << "[" << ws.remoteAddr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
+                }
             } else if (msg.at(0) == "EOSE") {
                 inFlightDown = false;
                 writer.wait();

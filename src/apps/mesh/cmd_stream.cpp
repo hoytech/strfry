@@ -9,7 +9,6 @@
 #include "Subscription.h"
 #include "WSConnection.h"
 #include "events.h"
-
 #include "PluginWritePolicy.h"
 
 
@@ -76,7 +75,6 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     } else {
                         LI << "[" << ws.remoteAddr << "] write policy blocked event " << evJson.at("id").get_string() << ": " << okMsg;
                     }
-                    
                 } else {
                     LW << "Unexpected EVENT";
                 }
