@@ -1,9 +1,8 @@
 1.0 release
-  ! find root cause of "invalid candidate" crash
-  support filtering on empty value tags
   test negentropy queries stored in events
   more config params in negentropy
     ? limit for total number of events, not just per filter
+  ? default since limit for sync
   increase DB version
 
 features
