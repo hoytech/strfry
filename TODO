@@ -4,10 +4,7 @@
   test negentropy queries stored in events
   more config params in negentropy
     ? limit for total number of events, not just per filter
-  move plugin support into writerpipeline to support sync
   increase DB version
-  update list of supported NIPs
-  update docs
 
 features
   in sync/stream, log bytes up/down and compression ratios
