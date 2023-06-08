@@ -3,7 +3,6 @@
   more config params in negentropy
     ? limit for total number of events, not just per filter
   ? default since limit for sync
-  increase DB version
 
 features
   in sync/stream, log bytes up/down and compression ratios
