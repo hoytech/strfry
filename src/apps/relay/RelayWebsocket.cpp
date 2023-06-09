@@ -1,5 +1,6 @@
 #include "RelayServer.h"
 
+#include "StrfryTemplates.h"
 #include "app_git_version.h"
 
 
@@ -47,15 +48,16 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
 
 
+    tao::json::value supportedNips = tao::json::value::array({ 1, 2, 4, 9, 11, 12, 16, 20, 22, 28, 33, 40 });
 
-    auto getServerInfoHttpResponse = [ver = uint64_t(0), rendered = std::string("")]() mutable {
+    auto getServerInfoHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(tao::json::value({
                 { "name", cfg().relay__info__name },
                 { "description", cfg().relay__info__description },
                 { "pubkey", cfg().relay__info__pubkey },
                 { "contact", cfg().relay__info__contact },
-                { "supported_nips", tao::json::value::array({ 1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40 }) },
+                { "supported_nips", supportedNips },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
                 { "version", APP_GIT_VERSION },
             })));
@@ -65,7 +67,19 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
-    const std::string defaultHttpResponse = preGenerateHttpResponse("text/plain", "Please use a Nostr client to connect.");
+    auto getLandingPageHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
+        if (ver != cfg().version()) {
+            struct {
+                std::string supportedNips;
+                std::string version;
+            } ctx = { tao::json::to_string(supportedNips), APP_GIT_VERSION };
+
+            rendered = preGenerateHttpResponse("text/html", ::strfrytmpl::landing(ctx).str);
+            ver = cfg().version();
+        }
+
+        return std::string_view(rendered); // memory only valid until next call
+    };
 
 
 
@@ -87,7 +101,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
         } else {
-            res->write(defaultHttpResponse.data(), defaultHttpResponse.size());
+            auto landing = getLandingPageHttpResponse();
+            res->write(landing.data(), landing.size());
         }
     });
 

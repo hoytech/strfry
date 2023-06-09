@@ -1,0 +1,160 @@
+<html>
+    <head>
+        <style>
+            /* CSS Reset */
+
+            html, body, div, span, applet, object, iframe,
+            h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+            a, abbr, acronym, address, big, cite, code,
+            del, dfn, em, img, ins, kbd, q, s, samp,
+            small, strike, strong, sub, sup, tt, var,
+            b, u, i, center,
+            dl, dt, dd, ol, ul, li,
+            fieldset, form, label, legend,
+            table, caption, tbody, tfoot, thead, tr, th, td,
+            article, aside, canvas, details, embed, 
+            figure, figcaption, footer, header, hgroup, 
+            menu, nav, output, ruby, section, summary,
+            time, mark, audio, video {
+                margin: 0;
+                padding: 0;
+                border: 0;
+                font-size: 100%;
+                font: inherit;
+                vertical-align: baseline;
+            }
+            /* HTML5 display-role reset for older browsers */
+            article, aside, details, figcaption, figure, 
+            footer, header, hgroup, menu, nav, section {
+                display: block;
+            }
+            body {
+                line-height: 1;
+            }
+            ol, ul {
+                list-style: none;
+            }
+            blockquote, q {
+                quotes: none;
+            }
+            blockquote:before, blockquote:after,
+            q:before, q:after {
+                content: '';
+                content: none;
+            }
+            table {
+                border-collapse: collapse;
+                border-spacing: 0;
+            }
+
+            /* Our stylesheet */
+
+            body {
+                font-family: sans-serif;
+                font-size: 135%;
+            }
+
+            .header {
+                font-size: 150%;
+                text-align: center;
+                margin-top: 20px;
+                margin-bottom: 20px;
+                font-weight: bold;
+
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-around;
+            }
+
+            .header img {
+                width: 200px;
+            }
+
+            table {
+                width: 100%;
+                margin-bottom: 50px;
+                font-size: 125%
+            }
+
+            table th {
+                color: white;
+                background-color: black;
+                font-size: 110%;
+            }
+
+            table tr td:nth-child(1) {
+                width: 20%;
+                text-align: right;
+                padding-right: 20px;
+            }
+
+            table tr td:nth-child(2) {
+                font-weight: bold;
+                padding-left: 15px;
+            }
+
+            table tr:nth-child(even) {
+                background-color: #f2f2f2;
+            }
+
+            table td,th {
+                padding: 8px 5px 8px 5px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="header">
+            <a href="https://github.com/hoytech/strfry"><img src="data:image/svg+xml;charset=utf-8;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4NCjxzdmcgaWQ9InN2ZzgiIHdpZHRoPSIyNzMuNDMiIGhlaWdodD0iMTY0Ljg5IiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCA3Mi4zNDQgNDMuNjI2IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4NCiA8bWV0YWRhdGEgaWQ9Im1ldGFkYXRhNSI+DQogIDxyZGY6UkRGPg0KICAgPGNjOldvcmsgcmRmOmFib3V0PSIiPg0KICAgIDxkYzpmb3JtYXQ+aW1hZ2Uvc3ZnK3htbDwvZGM6Zm9ybWF0Pg0KICAgIDxkYzp0eXBlIHJkZjpyZXNvdXJjZT0iaHR0cDovL3B1cmwub3JnL2RjL2RjbWl0eXBlL1N0aWxsSW1hZ2UiLz4NCiAgICA8ZGM6dGl0bGUvPg0KICAgPC9jYzpXb3JrPg0KICA8L3JkZjpSREY+DQogPC9tZXRhZGF0YT4NCiA8ZyBpZD0ibGF5ZXIxIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtLjQ3NTE1IC0uMzg0NjEpIj4NCiAgPHBhdGggaWQ9InBhdGgxMCIgdHJhbnNmb3JtPSJyb3RhdGUoLTE2LjA3NCkiIGQ9Im00My43MjMgMzUuMDYyYTIzLjQ5MiAxNC41MTkgMCAwIDEtMTEuNzQ2IDEyLjU3NCAyMy40OTIgMTQuNTE5IDAgMCAxLTIzLjQ5MiAwIDIzLjQ5MiAxNC41MTkgMCAwIDEtMTEuNzQ2LTEyLjU3NCIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS4wNTQ4Ii8+DQogIDxwYXRoIGlkPSJwYXRoODM5IiBkPSJtNi43NTgyIDM0Ljk4MSA0NS4wNzEtMTIuOTg3IiBmaWxsPSJub25lIiBzdHJva2Utd2lkdGg9IjAiLz4NCiAgPHBhdGggaWQ9InBhdGgxMC0zIiB0cmFuc2Zvcm09InJvdGF0ZSgtMTYuMDc0KSIgZD0ibTE0LjIxIDQ3LjE5MWEyMy40OTIgMTQuNTE5IDAgMCAxLTkuOTIzOS00LjA3NzUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2NjYyIgc3Ryb2tlLXdpZHRoPSIxLjA1NDgiLz4NCiAgPHBhdGggaWQ9InBhdGg4NjkiIGQ9Im03LjY4NjggMzYuODA0LTUuMTQ1NCAwLjA4OSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuMDU0OCIvPg0KICA8Y2lyY2xlIGlkPSJwYXRoODQwIiB0cmFuc2Zvcm09InJvdGF0ZSgtMTYuMDc0KSIgZD0ibSAtNi4xNjYwMDYyLDM3LjUxMDcxMyBhIDEuODUxODU3NywxLjg1MTg1NzcgMCAwIDEgLTIuMjU0MDk1OSwwLjI1MTE2MyAxLjg1MTg1NzcsMS44NTE4NTc3IDAgMCAxIC0wLjgwNjcyMjYsLTIuMTE5NzI0IDEuODUxODU3NywxLjg1MTg1NzcgMCAwIDEgMS44NTA3MjY2LC0xLjMxMTA0NiAxLjg1MTg1NzcsMS44NTE4NTc3IDAgMCAxIDEuNzMyMTA0MiwxLjQ2NDE4OCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYTA1YTJjIiBzdHJva2Utd2lkdGg9IjEuMDU0OCIvPg0KICA8cGF0aCBpZD0icGF0aDg0NCIgZD0ibTUyLjE2NSAyNC42ODQgMy44NjcyLTIuMzYxMyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuMDU0OCIvPg0KICA8cGF0aCBpZD0icGF0aDg4OCIgZD0ibTEwLjk0OCAzMy4zMjdjLTEuMTc1MS01LjI0MjctMS42NzQ0LTExLjE5MiAxLjQ3My0xNS41NyAxLjQyMyAyLjM3OTQgMi4wOTgzIDQuNTQ0MyA0Ljk5NTkgNS41NDcxLTAuMTAzOTUtNS44OTQ3IDAuMTkzNDctMTUuMzUxIDUuMjkxOC0yMS43NDEgMS45MTk2IDguMjA1NCAzLjUyODUgNy4wMDM0IDguMTA3MiAxMy41NTIgMC43OTE5Ni0yLjU1NjggNS45ODkyLTkuNDI5OSA4LjQ2NjctMTIuNjI0LTAuOTM3NSAxMi4xNDMgMy45ODc5IDE0Ljc5OSA2LjE4MDMgMjEuMDQ1IiBmaWxsPSIjZjAwIiBzdHJva2U9IiNmMDAiIHN0cm9rZS13aWR0aD0iMS4wNTQ4Ii8+DQogIDxwYXRoIGlkPSJwYXRoODg4LTYiIGQ9Im0xMy44MzggMzIuNTFjLTEuMDIzNS00LjU2NjUtMi4wNzExLTQuNDY3OSAwLjY3MDM1LTguMjgxMyAxLjIzOTUgMi4wNzI1IDIuNTcxNCA0LjY3IDUuNTMxOSA0LjU2MjcgNC4xNTE2LTcuNDA3MiAwLjI0NzUtMTIuODI3IDQuMTE0LTE3LjgzOSAxLjYyNjkgNi40MTk5IDMuMzI3MSAxLjEwNjIgNy41NTY5IDEwLjcwNiAwLjY5ODgyLTIuODcxNyAzLjMxNDctOC4xMjkxIDUuMDQzLTEwLjQzMyAxLjcyMTggNi42MTA0IDIuMDE2MiA0LjgyNTYgNS4zMzc3IDEzLjIyNSIgZmlsbD0iI2ZjMCIgc3Ryb2tlPSIjZmMwIiBzdHJva2Utd2lkdGg9Ii45MTg3OCIvPg0KICA8cmVjdCBpZD0icmVjdDkxNCIgdHJhbnNmb3JtPSJyb3RhdGUoLTMxLjI2OSkiIHg9IjM0Ljk0NyIgeT0iNDcuMDE3IiB3aWR0aD0iMjAuNzM5IiBoZWlnaHQ9IjIuMjA5NyIgcnk9IjEuMDY4NiIgZmlsbD0iI2M4NzEzNyIgc3Ryb2tlPSIjYTA1YTJjIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iLjEzOTc2IiBzdHlsZT0icGFpbnQtb3JkZXI6bWFya2VycyBzdHJva2UgZmlsbCIvPg0KIDwvZz4NCjwvc3ZnPg=="></a>
+            <span>Please use a <a href="https://github.com/aljazceru/awesome-nostr#clients">Nostr client</a> to connect.</span>
+        </div>
+
+        <table>
+            <tr>
+                <th colspan="2">Relay</th>
+            </tr>
+
+            <tr>
+                <td>Name</td>
+                <td>$(cfg().relay__info__name)</td>
+            </tr>
+
+            <tr>
+                <td>Description</td>
+                <td>$(cfg().relay__info__description)</td>
+            </tr>
+
+            <tr>
+                <td>Pubkey</td>
+                <td>$(cfg().relay__info__pubkey)</td>
+            </tr>
+
+            <tr>
+                <td>Contact</td>
+                <td>$(cfg().relay__info__contact)</td>
+            </tr>
+        </table>
+
+        <table>
+            <tr>
+                <th colspan="2">Server Software</th>
+            </tr>
+
+            <tr>
+                <td>Software</td>
+                <td><a href="https://github.com/hoytech/strfry">strfry</a></td>
+            </tr>
+
+            <tr>
+                <td>Version</td>
+                <td>$(ctx.version)</td>
+            </tr>
+
+            <tr>
+                <td>Supported NIPs</td>
+                <td>$(ctx.supportedNips)</td>
+            </tr>
+        </table>
+    </body>
+</html>
