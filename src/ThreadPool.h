@@ -26,7 +26,10 @@ struct ThreadPool {
 
         for (size_t i = 0; i < numThreads; i++) {
             std::string myName = name;
-            if (numThreads != 1) myName += std::string(" ") + std::to_string(i);
+            if (numThreads != 1) {
+                myName += std::string(" ");
+                myName += std::to_string(i);
+            }
 
             pool.emplace_back();
             auto &t = pool.back();

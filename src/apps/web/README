@@ -1,0 +1,11 @@
+no:
+  * slow loading
+  * burning client CPU
+  * wasting bandwidth
+  * images
+  * cookie warning crap
+  * pop-ups that come up when you scroll half way down
+  * re-rendering, re-flowing, bouncing around of the page after you started reading
+  * breaking back button
+  * messing with scrolling
+  * breaking when JS disabled
