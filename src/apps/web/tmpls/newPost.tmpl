@@ -1,0 +1,10 @@
+<div x-data="newPost" class="new-post">
+    <textarea id="post-text" name="post-text" x-ref="post" rows="8" cols="80" wrap="virtual"></textarea>
+
+    <div @click="submit" class="submit-button">
+        <button>Post Note</button>
+    </div>
+
+    <div class="result-message" x-ref="msg">
+    </div>
+</div>

@@ -1,0 +1,19 @@
+<div class="user-followers">
+    <table class="vert">
+        <tr>
+            <th>user</th>
+        </tr>
+
+        <> @(const auto &pubkey : ctx.followers)
+            $;(
+                auto *u = ctx.getUser(pubkey);
+            )
+            <tr>
+                <td>
+                    <a href="/u/$(u->npubId)">$(u->username)</a>
+                </td>
+            </tr>
+        </>
+
+    </table>
+</div>

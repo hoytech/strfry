@@ -1,0 +1,19 @@
+<div class="community-info">
+    <h2>Community: $(ctx.communitySpec.name)</h2>
+
+    <div>
+        Admin: <a href='/u/$(ctx.communitySpec.adminNpub)'>$(ctx.communitySpec.adminUsername)</a> ($(ctx.communitySpec.adminTopic))
+    </div>
+
+
+    <h2>Description</h2>
+
+    <div class="desc">$(ctx.communitySpec.desc)</div>
+
+
+    <h2>Algo</h2>
+
+    <div>
+        <pre class="algo">$(ctx.communitySpec.algo)</pre>
+    </div>
+</div>

@@ -1,0 +1,7 @@
+<div class="event-root">
+    $(ctx.foundEvents)
+
+    <div class="replies"> @(auto &e : ctx.orphanNodes)
+        $(e.rendered)
+    </div>
+</div>
