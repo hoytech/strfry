@@ -1,0 +1,47 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <link href="$(ctx.staticFilesPrefix)/oddbean.css" rel="stylesheet">
+        <script defer src="$(ctx.staticFilesPrefix)/oddbean.js"></script>
+
+        <title>$(ctx.title)Oddbean</title>
+    </head>
+
+    <body>
+        <div id="ob-header">
+            <span class="links">
+                <a href="/"><img class="logo" src="$(ctx.staticFilesPrefix)/oddbean.svg"></a>
+
+                <a href="/" class="sitename">
+                    <span class="oddbean-name">Oddbean</span>
+                    <> ?(ctx.communitySpec)
+                        / $(ctx.communitySpec->name)
+                    </>
+                </a>
+
+                <a href="/algo" class="community-rules">(algo)</a> ?(ctx.communitySpec)
+
+                <a href="/post" class="new-post">new post</a>
+            </span>
+
+            <span x-data="obLogin" class="login">
+                <span x-show="!loggedIn" @click="login" class="login-link">login</span>
+                <span x-show="loggedIn">
+                    <a x-text="username" class="username" :href="myProfile"></a>
+                    | <span @click="logout" class="logout-link">logout</span>
+                </span>
+            </span>
+        </div>
+
+        <div id="ob-page">
+            $(ctx.body)
+        </div>
+
+        <div id="ob-footer">
+            <form method="get" action="/search">
+                Search: <input type="text" name="q" size="17" autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="false">
+            </form>
+        </div>
+    </body>
+</html>
