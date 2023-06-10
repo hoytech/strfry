@@ -1,0 +1,19 @@
+name: homepage
+
+desc: |
+    Oddbean.com's homepage
+
+algo: |
+    let doug = npub1yxprsscnjw2e6myxz73mmzvnqw5kvzd5ffjya9ecjypc5l0gvgksh8qud4;
+    let admins = doug.following;
+    let members = admins.following;
+
+    posts {
+        threshold = 80;
+
+        mods = admins;
+        voters = members;
+
+        /10 if ~ /(?i)bitcoin|btc|crypto/;
+        *3.5  if ~ /(?i)#grownostr/;
+    }

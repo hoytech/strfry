@@ -1,0 +1,43 @@
+<div class='event $(ctx.abbrev ? "abbrev" : "")'>
+    <> ?(ctx.eventPresent)
+        <div class="event-present vote-context" data-note="$(ctx.ev->getNoteId())">
+            <div class="vote-buttons">
+                <span class="u">▲</span>
+                <span class="d">▼</span>
+            </div>
+
+            <div class="header">
+                <a class='$(ctx.highlight ? "highlight" : "")' href="/u/$(ctx.user->npubId)">$(ctx.user->username)</a>
+                | <a href="/e/$(ctx.ev->getNoteId())">$(ctx.timestamp)</a>
+                  (<a href="/e/$(ctx.ev->getNoteId())/raw.json">raw</a>)
+                <> | <a href="/e/$(ctx.ev->getRootNoteId())">root</a> </> ?(ctx.ev->root.size())
+
+                <> | <a href="/e/$(ctx.ev->getNoteId())">show full thread</a> </> ?(ctx.ev->root.empty() && !ctx.isFullThreadLoaded)
+                <> | <a href="/e/$(ctx.ev->getNoteId())/export.jsonl">export</a> </> ?(ctx.ev->root.empty() && ctx.isFullThreadLoaded)
+
+                <> | <a href="/e/$(ctx.ev->getParentNoteId())">parent</a> </> ?(ctx.ev->parent.size())
+
+                <br/>
+
+                <a href="">reply</a>
+                | <a href="" class="f">flag</a>
+                <>+$(ctx.ev->upVotes)</> ?(ctx.ev->upVotes)
+                <>-$(ctx.ev->downVotes)</> ?(ctx.ev->downVotes)
+            </div>
+        </div>
+
+        <pre class="content">
+            $!(ctx.content)
+        </pre>
+    </>
+
+    <> ?(!ctx.eventPresent)
+        <div class="event-not-present">Event not found</div>
+    </>
+
+    <div class="replies">
+        <div> @(const auto &r : ctx.replies)
+            $(r.rendered)
+        </div>
+    </div> ?(ctx.replies.size())
+</div>
