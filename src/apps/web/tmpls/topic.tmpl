@@ -1,0 +1,50 @@
+<h2 class="topic-header">
+    <span class="topic-name topic-chip">$(ctx.topicRendered)</span>
+
+    <span class="nav-current">best</span> ?(!ctx.showAll)
+    <a href="$(ctx.urlPath)">best</a> ?(ctx.showAll)
+    |
+    <a href="$(ctx.urlPath)?all=1">all</a> ?(!ctx.showAll)
+    <span class="nav-current">all</span> ?(ctx.showAll)
+
+    <span class="rss-link"> ?(ctx.externalUrl.size() && ctx.topicRendered != "homepage")
+        <a href="$(ctx.urlPath)/rss">RSS</a> ?(!ctx.showAll)
+        <a href="$(ctx.urlPath)/rss?all=1">RSS</a> ?(ctx.showAll)
+    </span>
+</h2>
+
+<div> @(const auto &ev : ctx.events)
+    <div class="topic-item vote-context" data-note="$(ev.noteId)">
+        <div class="left">
+            <div>$(ev.n).</div>
+            <div class="oddbean-post" title="Created with Oddbean!"></div> ?(ev.scores.isOddbean)
+        </div>
+
+        <div class="vote-buttons">
+            <span class="u">▲</span>
+        </div>
+
+        <div class="right">
+            <div class="summary">
+                $!(ev.summaryHtml)
+            </div>
+
+            <div class="info">
+                <span>$(renderPoints(ev.scores.upVotes))</span> points by
+                <a href="/u/$(ev.userNpub)">$(ev.username)</a>
+                $(ev.timestamp) |
+                <span class="f">flag</span> |
+                <a href="/e/$(ev.noteId)">$(ev.scores.comments) comments</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div> ?(ctx.events.size() == 0)
+    <>End of events.</> ?(ctx.startN > 1)
+    <>No events found for this topic. Why not post one?</> ?(ctx.startN == 1)
+</div>
+
+<div class="more-notes"> ?(ctx.nextResumeTime)
+    <a href="$(ctx.urlPath)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for $(ctx.topicRendered)</a>
+</div>

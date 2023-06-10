@@ -1,0 +1,14 @@
+$!(ctx.rssHeader)
+<channel>
+    <title>Oddbean: $(ctx.topicRendered)</title>
+    <description>Recent nostr notes tagged with $(ctx.topicRendered)</description>
+    <link>$(ctx.externalUrl)/t/$(ctx.topic)</link>
+
+    <item> @(const auto &ev : ctx.events)
+        <title>$!(ev.summaryHtml)</title>
+        <link>$(ctx.externalUrl)/e/$(ev.noteId)</link>
+        <guid isPermaLink="false">$(ev.noteId)</guid>
+        <pubDate>$(ev.pubDate())</pubDate>
+    </item>
+</channel>
+$!(ctx.rssFooter)

@@ -1,0 +1,415 @@
+/* general */
+
+@media (min-width: 300px) and (max-width: 750px) {
+    body {
+        padding: 0;
+        margin: 0;
+        width: 100%;
+    }
+}
+
+@media (min-width: 751px) {
+    body {
+        width: 85%;
+        margin: 8px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+
+
+body {
+    font-family: sans-serif;
+    background-color: white;
+    @media (prefers-color-scheme: dark) {
+        background-color: black;
+        color: #aaa;
+    }
+}
+
+a:link, a:visited {
+    text-decoration: none;
+    color: green;
+}
+
+
+
+a:hover {
+    text-decoration: underline;
+}
+
+pre {
+    white-space: pre-line;
+}
+
+h2 {
+    font-size: 125%;
+    margin-bottom: 20px;
+}
+
+/* header */
+
+#ob-header {
+    background-color: #65cb25;
+    @media (prefers-color-scheme: dark) { background-color: #3ea000; }
+    height: 26px;
+    padding: 2px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    img.logo {
+        background-color: white;
+        padding: 2px;
+        border: 2px solid green;
+        height: 18px;
+    }
+
+    .links {
+        display: flex;
+        align-items: center;
+
+        @media only screen and (max-width: 576px){
+            .oddbean-name {
+                display: none;
+            }
+        }
+
+        .sitename {
+            color: black;
+        }
+
+        .oddbean-name {
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .new-post-link {
+            margin-left: 20px;
+        }
+
+        .about {
+            margin-left: 20px;
+        }
+    }
+
+    .login {
+        margin-left: 20px;
+        margin-right: 5px;
+        color: black;
+    }
+
+    .no-js {
+        color: red;
+    }
+
+    a:link, a:visited {
+        color: black;
+    }
+
+    .logout-link:hover {
+        text-decoration: underline;
+    }
+}
+
+#ob-page {
+    padding: 10px 10px 10px 10px;
+    background-color: #f6f6ef;
+    @media (prefers-color-scheme: dark) { background-color: #151515; }
+}
+
+#ob-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    border-top: 1px solid #65cb25;
+    text-align: center;
+}
+
+
+table {
+    width: 100%;
+
+    th {
+        color: white;
+        background-color: black;
+    }
+
+    tr:nth-child(odd) {
+        background-color: #fefefe;
+    }
+
+    tr:nth-child(even) {
+        background-color: #f6f6ef;
+    }
+
+    td,th {
+        padding: 8px 5px 8px 5px;
+    }
+
+    td {
+        line-break: anywhere;
+    }
+}
+
+table.horiz {
+    tr td:nth-child(1) {
+        text-align: right;
+        padding-right: 20px;
+    }
+
+    tr td:nth-child(2) {
+        padding-left: 15px;
+    }
+}
+
+table.vert {
+    tr td:nth-child(1) {
+        text-align: center;
+    }
+
+/*
+    tr td:nth-child(2) {
+        padding-left: 15px;
+    }
+    */
+}
+
+.user-metadata {
+    .user-links {
+        margin-top: 10px;
+
+        display: flex;
+        flex-direction: row;
+        justify-content: space-evenly;
+
+        > a {
+            margin: 3px;
+        }
+    }
+}
+
+
+/* user comments */
+
+.user-comments {
+    .note-thread {
+        margin-bottom: 30px;
+        border-bottom: 1px solid black;
+    }
+}
+
+
+/* event */
+
+.event {
+    margin-bottom: 20px;
+    overflow-x: clip;
+
+    .event-header {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 15px;
+
+        .oddbean-post {
+            margin-left: 20px;
+        }
+    }
+
+    .topic-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+
+        margin-left: 50px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+
+        > span {
+            margin-right: 10px;
+            margin-top: 5px;
+        }
+    }
+
+    .highlight {
+        font-weight: bold;
+    }
+
+    .abbrev {
+    }
+
+    .content {
+        padding-left: 25px;
+        line-height: 1.2;
+    }
+}
+
+.event-root {
+    .replies {
+        margin-top: 20px;
+        padding-left: 20px;
+        border-left: 1px dotted black;
+        @media (prefers-color-scheme: dark) { border-left: 1px dotted #ccc; }
+    }
+}
+
+
+/* new post */
+
+.new-post {
+    .title-bar {
+        margin-top: 10px;
+        margin-bottom: 20px;
+        font-weight: bold;
+        font-size: 110%;
+    }
+
+    .submit-button {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .result-message {
+        color: red;
+        text-weight: bold;
+    }
+
+    #post-text {
+        max-width: 100%;
+    }
+}
+
+
+/* topics */
+
+.topic-header {
+    .topic-name {
+        margin-right: 30px;
+        font-weight: bold;
+    }
+
+    .nav-current {
+        font-weight: bold;
+        @media (prefers-color-scheme: dark) { color: #aaa; }
+    }
+
+    .rss-link > a {
+        margin-left: 30px;
+        color: #ff5500;
+    }
+}
+
+.topic-item {
+    padding-bottom: 10px;
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: row;
+
+    .left {
+        padding-right: 5px;
+        color: #828282;
+    }
+
+    .summary > a:link, .summary > a:visited {
+        text-decoration: none;
+        color: black;
+        @media (prefers-color-scheme: dark) { color: #aaa; }
+    }
+
+    .info {
+        padding-top: 5px;
+        font-size: 75%;
+        color: #828282;
+    }
+
+    .oddbean-post {
+        margin-top: 3px;
+    }
+}
+
+/* voting */
+
+.vote-buttons {
+    padding-right: 5px;
+    color: #828282;
+    font-size: 16px;
+    justify-content: flex-start;
+
+    display: flex;
+    flex-direction: column;
+
+    > span {
+        margin-bottom: 2px;
+    }
+}
+
+
+
+
+/* info/about page */
+
+.info-page {
+    line-height: 1.2;
+
+    padding-left: 10px;
+    padding-right: 10px;
+
+    p {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    b {
+        font-weight: bold;
+    }
+}
+
+
+
+/* misc */
+
+.warning-indicator {
+    color: red;
+    font-size: 110%;
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
+
+.more-notes {
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
+
+.topic-chip {
+    color: white;
+    background-color: #730097;
+    @media (prefers-color-scheme: dark) {
+        color: #aaa;
+    }
+
+    padding: 2px 8px 2px 8px;
+    border-radius: 5px;
+
+    >a {
+        color: white;
+        @media (prefers-color-scheme: dark) {
+            color: #aaa;
+        }
+    }
+}
+
+.oddbean-post {
+    height: 13px;
+    width: 13px;
+
+    background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
+    background-size: 13px 13px;
+    background-repeat: no-repeat;
+    background-position: center;
+}

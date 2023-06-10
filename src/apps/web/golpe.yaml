@@ -1,0 +1,15 @@
+config:
+  - name: web__bind
+    desc: "Interface to listen on. Use 0.0.0.0 to listen on all interfaces"
+    default: "127.0.0.1"
+    noReload: true
+  - name: web__port
+    desc: "Port to open for the http protocol"
+    default: 8080
+    noReload: true
+  - name: web__externalUrl
+    desc: "URL to use for links that must be fully qualified (ex: https://oddbean.com)"
+    default: ""
+  - name: web__staticFilesPrefix
+    desc: "URL or relative path prefix to use for static files (empty string to use versions embedded in binary)"
+    default: ""

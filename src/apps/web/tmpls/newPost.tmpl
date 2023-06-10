@@ -1,0 +1,14 @@
+<div x-data="newPost" data-topic="$(ctx.topicRaw)" class="new-post">
+    <div class="title-bar">
+        New post for <span class="topic-name topic-chip">$(ctx.topicRendered)</span>
+    </div>
+
+    <textarea id="post-text" name="post-text" x-ref="post" rows="8" cols="80" wrap="virtual"></textarea>
+
+    <div @click="submit" class="submit-button">
+        <button>Post Note</button>
+    </div>
+
+    <div class="result-message" x-ref="msg">
+    </div>
+</div>

@@ -1,0 +1,51 @@
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <link href="$(ctx.staticFilesPrefix)/oddbean.css?$(ctx.staticOddbeanCssHash)" rel="stylesheet">
+        <script defer data-turbo-eval="false" src="$(ctx.staticFilesPrefix)/oddbean.js?$(ctx.staticOddbeanJsHash)"></script>
+
+        <title>$(ctx.title)Oddbean</title>
+    </head>
+
+    <body>
+        <div id="ob-header">
+            <span class="links">
+                <a href="/" class="logo-link"><img class="logo" src="$(ctx.staticFilesPrefix)/oddbean.svg?$(ctx.staticOddbeanSvgHash)"></a>
+
+                <span>
+                    <a href="/" class="sitename">
+                        <span class="oddbean-name">Oddbean</span>
+                    </a>
+                </span>
+
+                <a href="/post" class="new-post-link">new post</a> ?(ctx.topic.size() == 0)
+                <a href="/post?t=$(ctx.topic)" class="new-post-link">new post</a> ?(ctx.topic.size() != 0)
+
+                <a href="/about" class="about">about</a>
+            </span>
+
+            <span x-data="obLogin" class="login">
+                <span x-show="!loggedIn" @click="login" class="login-link">login</span>
+                <span x-show="loggedIn">
+                    <a x-text="username" class="username" :href="myProfile"></a>
+                    | <span @click="logout" class="logout-link">logout</span>
+                </span>
+                <noscript>
+                    <span class="no-js">needs JS</span>
+                </noscript>
+            </span>
+        </div>
+
+        <div id="ob-page">
+            $(ctx.body)
+        </div>
+
+        <div id="ob-footer">
+            <form method="get" action="/search">
+                Search: <input type="text" name="q" size="17" autocorrect="off" spellcheck="false" autocapitalize="off" autocomplete="false">
+            </form>
+        </div>
+    </body>
+</html>
