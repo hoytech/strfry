@@ -145,6 +145,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         auto downComp = renderPercent(1.0 - (double)c->stats.bytesDownCompressed / c->stats.bytesDown);
 
         LI << "[" << connId << "] Disconnect from " << renderIP(c->ipAddr)
+           << " (" << code << ": " << (message ? std::string_view(message, length) : "-") << ")"
            << " UP: " << renderSize(c->stats.bytesUp) << " (" << upComp << " compressed)"
            << " DN: " << renderSize(c->stats.bytesDown) << " (" << downComp << " compressed)"
         ;
