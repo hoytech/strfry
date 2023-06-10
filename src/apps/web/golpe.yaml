@@ -1,0 +1,12 @@
+config:
+  - name: web__bind
+    desc: "Interface to listen on. Use 0.0.0.0 to listen on all interfaces"
+    default: "127.0.0.1"
+    noReload: true
+  - name: web__port
+    desc: "Port to open for the http protocol"
+    default: 8080
+    noReload: true
+  - name: web__homepageCommunity
+    desc: "Community descriptor for homepage"
+    default: ""

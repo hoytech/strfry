@@ -1,0 +1,11 @@
+<div class="user-comments">
+    <h2>
+        Notes by <a href="/u/$(ctx.u.npubId)">$(ctx.u.username)</a>
+        | <a href="/u/$(ctx.u.npubId)/export.jsonl">export</a>
+        | <a href="/u/$(ctx.u.npubId)/rss.xml">rss</a>
+    </h2>
+
+    <div> @(auto &r : ctx.renderedThreads)
+        $(r)
+    </div>
+</div>
