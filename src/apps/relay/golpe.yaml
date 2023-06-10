@@ -94,7 +94,3 @@ config:
     desc: negentropy threads: Handle negentropy protocol messages
     default: 2
     noReload: true
-
-  - name: relay__negentropy__maxFilterLimit
-    desc: "Maximum records that can be processed per filter"
-    default: 1000000
