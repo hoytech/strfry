@@ -79,7 +79,7 @@ class WSConnection {
         });
 
         hubGroup->onDisconnection([&](uWS::WebSocket<uWS::CLIENT> *ws, int code, char *message, size_t length) {
-            LI << "Disconnected";
+            LI << "Disconnected: " << code << "/" << (message ? std::string_view(message, length) : "-");
 
             if (ws == currWs) {
                 currWs = nullptr;

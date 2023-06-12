@@ -16,11 +16,12 @@
 static const char USAGE[] =
 R"(
     Usage:
-      sync <url> [--filter=<filter>] [--dir=<dir>]
+      sync <url> [--filter=<filter>] [--dir=<dir>] [--frame-size-limit=<frame-size-limit>]
 
     Options:
       --filter=<filter>  Nostr filter (either single filter object or array of filters)
       --dir=<dir>        Direction: both, down, up, none [default: both]
+      --frame-size-limit=<frame-size-limit>  Limit outgoing negentropy message size (default 60k, 0 for no limit)
 )";
 
 
@@ -35,6 +36,9 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     else filterStr = "{}";
     std::string dir = args["--dir"] ? args["--dir"].asString() : "both";
     if (dir != "both" && dir != "up" && dir != "down" && dir != "none") throw herr("invalid direction: ", dir, ". Should be one of both/up/down/none");
+
+    uint64_t frameSizeLimit = 0;
+    if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
 
     const uint64_t idSize = 16;
     const bool doUp = dir == "both" || dir == "up";
@@ -80,7 +84,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     ws.reconnect = false;
 
     ws.onConnect = [&]{
-        auto neMsg = to_hex(ne.initiate());
+        auto neMsg = to_hex(ne.initiate(frameSizeLimit));
         ws.send(tao::json::to_string(tao::json::value::array({
             "NEG-OPEN",
             "N",
