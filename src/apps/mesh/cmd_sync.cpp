@@ -37,7 +37,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::string dir = args["--dir"] ? args["--dir"].asString() : "both";
     if (dir != "both" && dir != "up" && dir != "down" && dir != "none") throw herr("invalid direction: ", dir, ". Should be one of both/up/down/none");
 
-    uint64_t frameSizeLimit = 0;
+    uint64_t frameSizeLimit = 60'000; // default frame limit is 128k. Halve that (hex encoding) and subtract a bit (JSON msg overhead)
     if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
 
     const uint64_t idSize = 16;
