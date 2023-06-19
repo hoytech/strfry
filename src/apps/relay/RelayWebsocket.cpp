@@ -100,7 +100,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     hubGroup->onHttpRequest([&](uWS::HttpResponse *res, uWS::HttpRequest req, char *data, size_t length, size_t remainingBytes){
         LI << "HTTP request for [" << req.getUrl().toString() << "]";
 
-        if (req.getHeader("accept").toString() == "application/nostr+json") {
+        if (req.getHeader("accept").toStringView() == "application/nostr+json") {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
         } else {
@@ -115,7 +115,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         Connection *c = new Connection(ws, connId);
 
         if (cfg().relay__realIpHeader.size()) {
-            auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString();
+            auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString(); // not string_view: parseIP needs trailing 0 byte
             c->ipAddr = parseIP(header);
             if (c->ipAddr.size() == 0) LW << "Couldn't parse IP from header " << cfg().relay__realIpHeader << ": " << header;
         }
