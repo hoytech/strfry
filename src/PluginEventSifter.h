@@ -15,6 +15,8 @@
 
 #include "golpe.h"
 
+#include "events.h"
+
 
 enum class PluginEventSifterResult {
     Accept,
