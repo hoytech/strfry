@@ -153,11 +153,10 @@ Now let's open the port to the outside world:
 
         sudo ufw allow 'Nginx Full'
         sudo ufw status
-        ufw default deny incoming  
-        ufw default allow outgoing
+        sudo ufw default deny incoming  
+        sudo ufw default allow outgoing
         ufw allow 22/tcp # allow incoming SSH traffic  
-        ufw allow 80/tcp # allow incoming HTTP traffic  
-        ufw allow 443/tcp # allow incoming HTTPS traffic
+        sudo ufw enable
 
 For added security you can `sudo apt install -y fail2ban`
 
