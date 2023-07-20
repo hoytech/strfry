@@ -5,6 +5,18 @@
 
 
 
+static void checkConfig() {
+    if (cfg().relay__info__pubkey.size()) {
+        try {
+            auto p = from_hex(cfg().relay__info__pubkey);
+            if (p.size() != 32) throw herr("bad size");
+        } catch (std::exception &e) {
+            LW << "Your relay.info.pubkey is incorrectly formatted. It should be 64 hex digits.";
+        }
+    }
+}
+
+
 void cmd_relay(const std::vector<std::string> &subArgs) {
     RelayServer s;
     s.run();
@@ -53,12 +65,15 @@ void RelayServer::run() {
 
     // Monitor for config file reloads
 
+    checkConfig();
+
     auto configFileChangeWatcher = hoytech::file_change_monitor(configFile);
 
     configFileChangeWatcher.setDebounce(100);
 
     configFileChangeWatcher.run([&](){
         loadConfig(configFile);
+        checkConfig();
     });
 
 

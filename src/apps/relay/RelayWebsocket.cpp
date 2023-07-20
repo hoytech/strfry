@@ -52,15 +52,18 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     auto getServerInfoHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
-            rendered = preGenerateHttpResponse("application/json", tao::json::to_string(tao::json::value({
-                { "name", cfg().relay__info__name },
-                { "description", cfg().relay__info__description },
-                { "pubkey", cfg().relay__info__pubkey },
-                { "contact", cfg().relay__info__contact },
+            tao::json::value nip11 = tao::json::value({
                 { "supported_nips", supportedNips },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
                 { "version", APP_GIT_VERSION },
-            })));
+            });
+
+            if (cfg().relay__info__name.size()) nip11["name"] = cfg().relay__info__name;
+            if (cfg().relay__info__description.size()) nip11["description"] = cfg().relay__info__description;
+            if (cfg().relay__info__contact.size()) nip11["contact"] = cfg().relay__info__contact;
+            if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = cfg().relay__info__pubkey;
+
+            rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nip11));
             ver = cfg().version();
         }
 
