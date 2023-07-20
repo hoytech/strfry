@@ -208,7 +208,6 @@ A particular connection's requests are always routed to the same ingester.
 This thread is responsible for most DB writes:
 
 * Adding new events to the DB
-* Maintaining the Quadrable merkle tree
 * Performing event deletion (NIP-09)
 * Deleting replaceable events (NIP-16)
 
