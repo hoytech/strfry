@@ -121,7 +121,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
         if (arr.get_array().size() < 5) throw herr("negentropy query missing elements");
 
         NostrFilterGroup filter;
-        auto maxFilterLimit = MAX_U64;
+        auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;
 
         if (arr.at(2).is_string()) {
             auto ev = lookupEventById(txn, from_hex(arr.at(2).get_string()));

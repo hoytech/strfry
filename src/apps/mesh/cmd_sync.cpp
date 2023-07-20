@@ -149,6 +149,9 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             } else if (msg.at(0) == "EOSE") {
                 inFlightDown = false;
                 writer.wait();
+            } else if (msg.at(0) == "NEG-ERR") {
+                LE << "Got NEG-ERR response from relay: " << msg;
+                ::exit(1);
             } else {
                 LW << "Unexpected message from relay: " << msg;
             }

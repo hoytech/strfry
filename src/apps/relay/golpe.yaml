@@ -94,3 +94,7 @@ config:
     desc: negentropy threads: Handle negentropy protocol messages
     default: 2
     noReload: true
+
+  - name: relay__negentropy__maxSyncEvents
+    desc: "Maximum records that sync will process before returning an error"
+    default: 1000000

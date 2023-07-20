@@ -54,6 +54,7 @@ Current reason codes are:
 
 * `RESULTS_TOO_BIG`
   * Relays can optionally reject queries that would require them to process too many records, or records that are too old
+  * The maximum number of records that can be processed can optionally be returned as the 4th element in the response
 * `CLOSED`
   * Because the `NEG-OPEN` queries are stateful, relays may choose to time-out inactive queries to recover memory resources
 * `FILTER_NOT_FOUND`
