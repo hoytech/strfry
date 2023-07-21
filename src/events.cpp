@@ -146,6 +146,10 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
     uint64_t earliest = now - (flat->expiration() == 1 ? cfg().events__rejectEphemeralEventsOlderThanSeconds : cfg().events__rejectEventsOlderThanSeconds);
     uint64_t latest = now + cfg().events__rejectEventsNewerThanSeconds;
 
+    // overflows
+    if (earliest > now) earliest = 0;
+    if (latest < now) latest = MAX_U64 - 1;
+
     if (ts < earliest) throw herr("created_at too early");
     if (ts > latest) throw herr("created_at too late");
 
