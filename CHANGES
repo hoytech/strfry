@@ -1,3 +1,7 @@
+0.9.4
+  * If a client disconnects before its pending EVENT write messages have been processed,
+    drop those messages instead of trying to write them
+
 0.9.3
   * Limit on events that can be processed by a sync
     - Configurable with relay.negentropy.maxSyncEvents

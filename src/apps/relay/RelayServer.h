@@ -70,7 +70,11 @@ struct MsgWriter : NonCopyable {
         std::string jsonStr;
     };
 
-    using Var = std::variant<AddEvent>;
+    struct CloseConn {
+        uint64_t connId;
+    };
+
+    using Var = std::variant<AddEvent, CloseConn>;
     Var msg;
     MsgWriter(Var &&msg_) : msg(std::move(msg_)) {}
 };

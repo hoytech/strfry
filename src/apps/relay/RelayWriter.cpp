@@ -9,6 +9,28 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
 
+        // Filter out messages from already closed sockets
+
+        {
+            flat_hash_set<uint64_t> closedConns;
+
+            for (auto &newMsg : newMsgs) {
+                if (auto msg = std::get_if<MsgWriter::CloseConn>(&newMsg.msg)) closedConns.insert(msg->connId);
+            }
+
+            if (closedConns.size()) {
+                decltype(newMsgs) newMsgsFiltered;
+
+                for (auto &newMsg : newMsgs) {
+                    if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
+                        if (!closedConns.contains(msg->connId)) newMsgsFiltered.emplace_back(std::move(newMsg));
+                    }
+                }
+
+                std::swap(newMsgs, newMsgsFiltered);
+            }
+        }
+
         // Prepare messages
 
         std::vector<EventToWrite> newEvents;
@@ -32,6 +54,10 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 }
             }
         }
+
+        if (!newEvents.size()) continue;
+
+        // Do write
 
         try {
             auto txn = env.txn_rw();

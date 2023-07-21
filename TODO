@@ -15,7 +15,6 @@ features
     * delete by receivedAt, IP addrs, etc
     * inverted filter: delete events that *don't* match the provided filter
   ? less verbose default logging
-  ? if a client disconnects, delete all its pending write messages
   ? kill plugin if it times out
 
 rate limits (maybe not needed now that we have plugins?)

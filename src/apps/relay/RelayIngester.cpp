@@ -71,6 +71,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                 }
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
+                tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
                 tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::CloseConn{connId}});
             }
