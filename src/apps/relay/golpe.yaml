@@ -23,10 +23,10 @@ config:
     default: "This is a strfry instance."
   - name: relay__info__pubkey
     desc: "NIP-11: Administrative nostr pubkey, for contact purposes"
-    default: "unset"
+    default: ""
   - name: relay__info__contact
     desc: "NIP-11: Alternative administrative contact (email, website, etc)"
-    default: "unset"
+    default: ""
 
   - name: relay__maxWebsocketPayloadSize
     desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
