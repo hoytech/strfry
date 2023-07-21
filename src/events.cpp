@@ -149,7 +149,7 @@ void verifyEventTimestamp(const NostrIndex::Event *flat) {
     if (ts < earliest) throw herr("created_at too early");
     if (ts > latest) throw herr("created_at too late");
 
-    if (flat->expiration() != 0 && flat->expiration() <= now) throw herr("event expired");
+    if (flat->expiration() > 1 && flat->expiration() <= now) throw herr("event expired");
 }
 
 void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &flatStr, std::string &jsonStr) {

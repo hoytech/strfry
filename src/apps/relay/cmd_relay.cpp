@@ -14,6 +14,10 @@ static void checkConfig() {
             LW << "Your relay.info.pubkey is incorrectly formatted. It should be 64 hex digits.";
         }
     }
+
+    if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
+        LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";
+    }
 }
 
 
