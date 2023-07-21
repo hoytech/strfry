@@ -1,0 +1,8 @@
+0.9.3
+  * Limit on events that can be processed by a sync
+    - Configurable with relay.negentropy.maxSyncEvents
+  * Warn when NIP-11 pubkey is in incorrect format (#52)
+  * Bugfix: Setting rejectEphemeralEventsOlderThanSeconds larger than ephemeralEventsLifetimeSeconds did
+    not work because events were then considered expired
+  * Config parameter to silence "Rejected invalid event" logs: relay.logging.invalidEvents
+  * Detect overflows when rejectEvents* config params are set very large
