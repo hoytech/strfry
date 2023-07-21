@@ -33,7 +33,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 ingesterProcessEvent(txn, msg->connId, msg->ipAddr, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
                                 sendOKResponse(msg->connId, arr[1].at("id").get_string(), false, std::string("invalid: ") + e.what());
-                                LI << "Rejected invalid event: " << e.what();
+                                if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
                             }
                         } else if (cmd == "REQ") {
                             if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 

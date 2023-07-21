@@ -77,6 +77,9 @@ config:
   - name: relay__logging__dbScanPerf
     desc: "Log performance metrics for initial REQ database scans"
     default: false
+  - name: relay__logging__invalidEvents
+    desc: "Log reason for invalid event rejection? Can be disabled to silence excessive logging"
+    default: true
 
   - name: relay__numThreads__ingester
     desc: Ingester threads: route incoming requests, validate events/sigs
