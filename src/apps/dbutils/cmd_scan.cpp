@@ -34,6 +34,8 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
 
     uint64_t numEvents = 0;
 
+    exitOnSigPipe();
+
     while (1) {
         bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
             if (count) numEvents++;

@@ -54,6 +54,8 @@ void cmd_monitor(const std::vector<std::string> &subArgs) {
         }
     }
 
+    exitOnSigPipe();
+
     env.foreach_Event(txn, [&](auto &ev){
         monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
             for (auto &r : recipients) {

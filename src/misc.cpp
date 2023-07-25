@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <signal.h>
 
 #include <algorithm>
 #include <string>
@@ -108,4 +109,11 @@ uint64_t getDBVersion(lmdb::txn &txn) {
 std::string padBytes(std::string_view str, size_t n, char padChar) {
     if (str.size() > n) throw herr("unable to pad, string longer than expected");
     return std::string(str) + std::string(n - str.size(), padChar);
+}
+
+void exitOnSigPipe() {
+    struct sigaction act;
+    memset(&act, 0, sizeof act);
+    act.sa_sigaction = [](int, siginfo_t*, void*){ ::exit(1); };
+    if (sigaction(SIGPIPE, &act, nullptr)) throw herr("couldn't run sigaction(): ", strerror(errno));
 }

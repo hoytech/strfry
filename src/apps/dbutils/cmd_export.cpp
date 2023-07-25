@@ -32,6 +32,8 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     uint64_t start = reverse ? until : since;
     uint64_t startDup = reverse ? MAX_U64 : 0;
 
+    exitOnSigPipe();
+
     env.generic_foreachFull(txn, env.dbi_Event__created_at, lmdb::to_sv<uint64_t>(start), lmdb::to_sv<uint64_t>(startDup), [&](auto k, auto v) {
         if (reverse) {
             if (lmdb::from_sv<uint64_t>(k) < since) return false;
