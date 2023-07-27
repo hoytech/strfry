@@ -94,6 +94,15 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         })));
     };
 
+    auto doExit = [&](int status){
+        if (doDown) writer.flush();
+        ::exit(status);
+    };
+
+    ws.onDisconnect = ws.onError = [&]{
+        doExit(1);
+    };
+
 
     const uint64_t highWaterUp = 100, lowWaterUp = 50;
     const uint64_t batchSizeDown = 50;
@@ -151,7 +160,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 writer.wait();
             } else if (msg.at(0) == "NEG-ERR") {
                 LE << "Got NEG-ERR response from relay: " << msg;
-                ::exit(1);
+                doExit(1);
             } else {
                 LW << "Unexpected message from relay: " << msg;
             }
@@ -209,8 +218,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         }
 
         if (syncDone && have.size() == 0 && need.size() == 0 && inFlightUp == 0 && !inFlightDown) {
-            if (doDown) writer.flush();
-            ::exit(0);
+            doExit(0);
         }
     };
 

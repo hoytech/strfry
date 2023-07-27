@@ -23,6 +23,8 @@ class WSConnection {
     std::function<void()> onConnect;
     std::function<void(std::string_view, uWS::OpCode, size_t)> onMessage;
     std::function<void()> onTrigger;
+    std::function<void()> onDisconnect;
+    std::function<void()> onError;
     bool reconnect = true;
     uint64_t reconnectDelayMilliseconds = 5'000;
     std::string remoteAddr;
@@ -84,8 +86,8 @@ class WSConnection {
             if (ws == currWs) {
                 currWs = nullptr;
 
-                if (!reconnect) ::exit(1);
-                doConnect(reconnectDelayMilliseconds);
+                if (onDisconnect) onDisconnect();
+                if (reconnect) doConnect(reconnectDelayMilliseconds);
             } else {
                 LI << "Got disconnect for unexpected connection?";
             }
@@ -94,8 +96,8 @@ class WSConnection {
         hubGroup->onError([&](void *) {
             LI << "Websocket connection error";
 
-            if (!reconnect) ::exit(1);
-            doConnect(reconnectDelayMilliseconds);
+            if (onError) onError();
+            if (reconnect) doConnect(reconnectDelayMilliseconds);
         });
 
         hubGroup->onMessage2([&](uWS::WebSocket<uWS::CLIENT> *ws, char *message, size_t length, uWS::OpCode opCode, size_t compressedSize) {
