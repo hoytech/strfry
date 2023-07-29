@@ -6,7 +6,11 @@
 struct QueryScheduler : NonCopyable {
     std::function<void(lmdb::txn &txn, const Subscription &sub, uint64_t levId, std::string_view eventPayload)> onEvent;
     std::function<void(lmdb::txn &txn, const Subscription &sub, const std::vector<uint64_t> &levIds)> onEventBatch;
-    std::function<void(Subscription &sub)> onComplete;
+    std::function<void(lmdb::txn &txn, Subscription &sub)> onComplete;
+
+    // If false, then levIds returned to above callbacks can be stale (because they were deleted)
+    // If false, then onEvent's eventPayload will always be ""
+    bool ensureExists = true;
 
     using ConnQueries = flat_hash_map<SubId, DBQuery*>;
     flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBQuery*
@@ -74,7 +78,16 @@ struct QueryScheduler : NonCopyable {
             return;
         }
 
-        bool complete = q->process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
+        auto eventPayloadCursor = lmdb::cursor::open(txn, env.dbi_EventPayload);
+
+        bool complete = q->process(txn, [&](const auto &sub, uint64_t levId){
+            std::string_view eventPayload;
+
+            if (ensureExists) {
+                std::string_view key = lmdb::to_sv<uint64_t>(levId);
+                if (!eventPayloadCursor.get(key, eventPayload, MDB_SET_KEY)) return; // If not found, was deleted while scan was paused
+            }
+
             if (onEvent) onEvent(txn, sub, levId, eventPayload);
             if (onEventBatch) levIdBatch.push_back(levId);
         }, cfg().relay__queryTimesliceBudgetMicroseconds, cfg().relay__logging__dbScanPerf);
@@ -88,7 +101,7 @@ struct QueryScheduler : NonCopyable {
             auto connId = q->sub.connId;
             removeSub(connId, q->sub.subId);
 
-            if (onComplete) onComplete(q->sub);
+            if (onComplete) onComplete(txn, q->sub);
 
             delete q;
         } else {

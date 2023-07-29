@@ -50,7 +50,7 @@ void cmd_dict(const std::vector<std::string> &subArgs) {
     DBQuery query(tao::json::from_string(filterStr));
 
     while (1) {
-        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view){
+        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
             levIds.push_back(levId);
         });
 

@@ -57,16 +57,22 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
 
         uint64_t numEvents = 0;
+        std::vector<uint64_t> levIds;
 
         while (1) {
-            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
-                auto ev = lookupEventByLevId(txn, levId);
-                ne.addItem(ev.flat_nested()->created_at(), sv(ev.flat_nested()->id()).substr(0, ne.idSize));
-
+            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+                levIds.push_back(levId);
                 numEvents++;
             });
 
             if (complete) break;
+        }
+
+        std::sort(levIds.begin(), levIds.end());
+
+        for (auto levId : levIds) {
+            auto ev = lookupEventByLevId(txn, levId);
+            ne.addItem(ev.flat_nested()->created_at(), sv(ev.flat_nested()->id()).substr(0, ne.idSize));
         }
 
         LI << "Filter matches " << numEvents << " events";

@@ -1,5 +1,4 @@
 #include "RelayServer.h"
-#include "DBQuery.h"
 #include "QueryScheduler.h"
 
 
@@ -11,7 +10,7 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
     };
 
-    queries.onComplete = [&](Subscription &sub){
+    queries.onComplete = [&](lmdb::txn &, Subscription &sub){
         sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "EOSE", sub.subId.str() })));
         tpReqMonitor.dispatch(sub.connId, MsgReqMonitor{MsgReqMonitor::NewSub{std::move(sub)}});
     };

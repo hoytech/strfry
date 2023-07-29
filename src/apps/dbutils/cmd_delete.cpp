@@ -50,7 +50,7 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
 
         while (1) {
-            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view){
+            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
                 levIds.insert(levId);
             });
 

@@ -37,9 +37,9 @@ void cmd_scan(const std::vector<std::string> &subArgs) {
     exitOnSigPipe();
 
     while (1) {
-        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId, std::string_view eventPayload){
+        bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
             if (count) numEvents++;
-            else std::cout << getEventJson(txn, decomp, levId, eventPayload) << "\n";
+            else std::cout << getEventJson(txn, decomp, levId) << "\n";
         }, pause ? pause : MAX_U64, metrics);
 
         if (complete) break;
