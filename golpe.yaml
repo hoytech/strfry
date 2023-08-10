@@ -115,6 +115,10 @@ config:
     desc: "Size of mmap() to use when loading LMDB (default is 10TB, does *not* correspond to disk-space used)"
     default: 10995116277760
     noReload: true
+  - name: dbParams__noReadAhead
+    desc: "Disables read-ahead when accessing the LMDB mapping. Reduces IO activity when DB size is larger than RAM."
+    default: false
+    noReload: true
 
   - name: events__maxEventSize
     desc: "Maximum size of normalised JSON, in bytes"

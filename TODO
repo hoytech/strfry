@@ -28,4 +28,3 @@ rate limits (maybe not needed now that we have plugins?)
 
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
-  ? why isn't the LMDB mapping CLOEXEC
