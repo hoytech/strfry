@@ -42,7 +42,7 @@ While you wait for your server to provision, go to your DNS provider and point a
         cd strfry
 
         # Install complication dependencies
-        sudo apt install -y git build-essential libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+        sudo apt install -y git build-essential libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev ufw
 
         # Build it
         git submodule update --init
@@ -100,6 +100,10 @@ Note here you'll use the DNS name you configured above
 
 Edit the `db = "./strfry-db/"` line to: `db = "/var/lib/strfry/"`
 
+Check system hard limit `ulimit -Hn` 
+
+If for example `524288` can set this to `nofiles = 524288` in strfry.conf (or set to 0)
+
 Copy the strfry.conf file to /etc and change ownership:
 
         sudo cp strfry.conf /etc/strfry.conf
@@ -149,6 +153,12 @@ Now let's open the port to the outside world:
 
         sudo ufw allow 'Nginx Full'
         sudo ufw status
+        sudo ufw default deny incoming  
+        sudo ufw default allow outgoing
+        ufw allow 22/tcp # allow incoming SSH traffic  
+        sudo ufw enable
+
+For added security you can `sudo apt install -y fail2ban`
 
         sudo certbot --nginx -d relay.yourdomain.com
 
