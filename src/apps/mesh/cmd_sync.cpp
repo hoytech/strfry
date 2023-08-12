@@ -48,7 +48,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     tao::json::value filter = tao::json::from_string(filterStr);
 
 
-    Negentropy ne(idSize);
+    Negentropy ne(idSize, frameSizeLimit);
 
     {
         DBQuery query(filter);
@@ -90,7 +90,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     ws.reconnect = false;
 
     ws.onConnect = [&]{
-        auto neMsg = to_hex(ne.initiate(frameSizeLimit));
+        auto neMsg = to_hex(ne.initiate());
         ws.send(tao::json::to_string(tao::json::value::array({
             "NEG-OPEN",
             "N",
@@ -137,6 +137,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 if (neMsg.size() == 0) {
                     syncDone = true;
                     LI << "Set reconcile complete. Have " << totalHaves << " need " << totalNeeds;
+
+                    ws.send(tao::json::to_string(tao::json::value::array({
+                        "NEG-CLOSE",
+                        "N",
+                    })));
                 } else {
                     ws.send(tao::json::to_string(tao::json::value::array({
                         "NEG-MSG",

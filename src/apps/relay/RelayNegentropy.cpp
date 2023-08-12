@@ -28,7 +28,7 @@ struct NegentropyViews {
             return false;
         }
 
-        connViews.try_emplace(subId, UserView{ Negentropy(idSize), initialMsg });
+        connViews.try_emplace(subId, UserView{ Negentropy(idSize, 500'000), initialMsg });
 
         return true;
     }
