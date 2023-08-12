@@ -78,11 +78,11 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         auto *view = views.findView(sub.connId, sub.subId);
         if (!view) return;
 
-        LI << "[" << sub.connId << "] Negentropy query matched " << view->ne.items.size() << " events in "
+        LI << "[" << sub.connId << "] Negentropy query matched " << view->levIds.size() << " events in "
            << (hoytech::curr_time_us() - view->startTime) << "us";
 
-        if (view->ne.items.size() > cfg().relay__negentropy__maxSyncEvents) {
-            LI << "[" << sub.connId << "] Negentropy query size exceeeded " << cfg().relay__negentropy__maxSyncEvents;
+        if (view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
+            LI << "[" << sub.connId << "] Negentropy query size exceeded " << cfg().relay__negentropy__maxSyncEvents;
 
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
                 "NEG-ERR",
