@@ -29,3 +29,4 @@ rate limits (maybe not needed now that we have plugins?)
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
   ? warn when run as root
+  docs: mention you have to run `make update-submodules` after a pull
