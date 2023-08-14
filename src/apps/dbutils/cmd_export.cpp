@@ -41,9 +41,9 @@ void cmd_export(const std::vector<std::string> &subArgs) {
             if (lmdb::from_sv<uint64_t>(k) > until) return false;
         }
 
-        auto view = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+        auto levId = lmdb::from_sv<uint64_t>(v);
 
-        std::cout << getEventJson(txn, decomp, view.primaryKeyId) << "\n";
+        std::cout << getEventJson(txn, decomp, levId) << "\n";
 
         return true;
     }, reverse);
