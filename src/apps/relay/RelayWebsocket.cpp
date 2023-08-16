@@ -39,7 +39,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     };
 
     uWS::Hub hub;
-    uWS::Group<uWS::SERVER> *hubGroup;
+    uWS::Group<uWS::SERVER> *hubGroup = nullptr;
     flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
     bool gracefulShutdown = false;
@@ -219,7 +219,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         }
     };
 
-    hubTrigger = std::make_unique<uS::Async>(hub.getLoop());
+    hubTrigger = new uS::Async(hub.getLoop());
     hubTrigger->setData(&asyncCb);
 
     hubTrigger->start([](uS::Async *a){

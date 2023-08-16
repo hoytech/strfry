@@ -149,7 +149,7 @@ struct MsgNegentropy : NonCopyable {
 
 
 struct RelayServer {
-    std::unique_ptr<uS::Async> hubTrigger;
+    uS::Async *hubTrigger = nullptr;
 
     // Thread Pools
 
