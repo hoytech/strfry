@@ -151,6 +151,12 @@ struct WriterPipeline {
         });
     }
 
+    ~WriterPipeline() {
+        flush();
+        validatorThread.join();
+        writerThread.join();
+    }
+
     void write(WriterPipelineInput &&inp) {
         numLive++;
         validatorInbox.push_move(std::move(inp));
