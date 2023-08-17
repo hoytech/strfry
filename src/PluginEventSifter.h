@@ -155,7 +155,7 @@ struct PluginEventSifter {
         Pipe inPipe;
 
         pid_t pid;
-        char *argv[] = { nullptr, };
+        const char * const argv[] = { "/bin/sh", "-c", pluginCmd.c_str(), nullptr, };
 
         posix_spawn_file_actions_t file_actions;
 
@@ -169,7 +169,7 @@ struct PluginEventSifter {
             posix_spawn_file_actions_addclose(&file_actions, inPipe.fds[1])
         ) throw herr("posix_span_file_actions failed: ", strerror(errno));
 
-        auto ret = posix_spawn(&pid, pluginCmd.c_str(), &file_actions, nullptr, argv, nullptr);
+        auto ret = posix_spawnp(&pid, "sh", &file_actions, nullptr, (char* const*)(&argv[0]), environ);
         if (ret) throw herr("posix_spawn failed to invoke '", pluginCmd, "': ", strerror(errno));
 
         running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), pluginCmd);
