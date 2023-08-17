@@ -21,7 +21,7 @@ struct EventStreamer : NonCopyable {
 
   public:
 
-    EventStreamer(const std::string &url, const std::string &dir, tao::json::value filter = tao::json::empty_object) : url(url), ws(url), dir(dir), filter(filter) {
+    EventStreamer(const std::string &url, const std::string &dir, tao::json::value filter_ = tao::json::empty_object) : url(url), ws(url), dir(dir), filter(filter_) {
         filter["limit"] = 0;
     }
 
