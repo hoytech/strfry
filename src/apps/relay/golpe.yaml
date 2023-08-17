@@ -52,9 +52,6 @@ config:
   - name: relay__writePolicy__plugin
     desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
     default: ""
-  - name: relay__writePolicy__lookbackSeconds
-    desc: "Number of seconds to search backwards for lookback events when starting the writePolicy plugin (0 for no lookback)"
-    default: 0
 
   - name: relay__compression__enabled
     desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"

@@ -10,17 +10,15 @@ A plugin can be implemented in any programming language that supports reading li
 
 Whenever the script's modification-time changes, or the plugin settings in `strfry.conf` change, the plugin will be reloaded upon the next write attempt.
 
-If configured, When a plugin is loaded some number of recently stored events will be sent to it as a "lookback". This is useful for populating the initial rate-limiting state. Plugins should print nothing in response to a lookback message.
-
 
 ## Input messages
 
 Input messages contain the following keys:
 
-* `type`: Either `new` or `lookback`
+* `type`: Currently always `new`
 * `event`: The event posted by the client, with all the required fields such as `id`, `pubkey`, etc
 * `receivedAt`: Unix timestamp of when this event was received by the relay
-* `sourceType`: Where this event came from. Typically will be `IP4` or `IP6`, but in lookback can also be `Import`, `Stream`, or `Sync`.
+* `sourceType`: The channel where this event came from: `IP4`, `IP6`, `Import`, `Stream`, or `Sync`.
 * `sourceInfo`: Specifics of the event's source. Either an IP address or a relay URL (for stream/sync)
 
 
@@ -51,10 +49,6 @@ Here is a simple example `whitelist.js` plugin that will reject all events excep
 
     rl.on('line', (line) => {
         let req = JSON.parse(line);
-
-        if (req.type === 'lookback') { 
-            return; // do nothing
-        } 
 
         if (req.type !== 'new') {
             console.error("unexpected request type"); // will appear in strfry logs

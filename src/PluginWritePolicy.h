@@ -27,12 +27,11 @@ struct PluginWritePolicy {
     struct RunningPlugin {
         pid_t pid;
         std::string currPluginPath;
-        uint64_t lookbackSeconds;
         struct timespec lastModTime;
         FILE *r;
         FILE *w;
 
-        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginPath, uint64_t lookbackSeconds) : pid(pid), currPluginPath(currPluginPath), lookbackSeconds(lookbackSeconds) {
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginPath) : pid(pid), currPluginPath(currPluginPath) {
             r = fdopen(rfd, "r");
             w = fdopen(wfd, "w");
             setlinebuf(w);
@@ -63,7 +62,7 @@ struct PluginWritePolicy {
 
         try {
             if (running) {
-                if (pluginPath != running->currPluginPath || cfg().relay__writePolicy__lookbackSeconds != running->lookbackSeconds) {
+                if (pluginPath != running->currPluginPath) {
                     running.reset();
                 } else {
                     struct stat statbuf;
@@ -76,7 +75,6 @@ struct PluginWritePolicy {
 
             if (!running) {
                 setupPlugin();
-                sendLookbackEvents();
             }
 
             auto request = tao::json::value({
@@ -176,40 +174,6 @@ struct PluginWritePolicy {
         auto ret = posix_spawn(&pid, path.c_str(), &file_actions, nullptr, argv, nullptr);
         if (ret) throw herr("posix_spawn failed to invoke '", path, "': ", strerror(errno));
 
-        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path, cfg().relay__writePolicy__lookbackSeconds);
-    }
-
-    void sendLookbackEvents() {
-        if (running->lookbackSeconds == 0) return;
-
-        Decompressor decomp;
-        auto now = hoytech::curr_time_us();
-
-        uint64_t start = now - (running->lookbackSeconds * 1'000'000);
-
-        auto txn = env.txn_ro();
-
-        env.generic_foreachFull(txn, env.dbi_Event__receivedAt, lmdb::to_sv<uint64_t>(start), lmdb::to_sv<uint64_t>(0), [&](auto k, auto v) {
-            if (lmdb::from_sv<uint64_t>(k) > now) return false;
-
-            auto ev = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
-            auto sourceType = (EventSourceType)ev.sourceType();
-            std::string_view sourceInfo = ev.sourceInfo();
-
-            auto request = tao::json::value({
-                { "type", "lookback" },
-                { "event", tao::json::from_string(getEventJson(txn, decomp, ev.primaryKeyId)) },
-                { "receivedAt", ev.receivedAt() / 1000000 },
-                { "sourceType", eventSourceTypeToStr(sourceType) },
-                { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
-            });
-
-            std::string output = tao::json::to_string(request);
-            output += "\n";
-
-            if (::fwrite(output.data(), 1, output.size(), running->w) != output.size()) throw herr("error writing to plugin");
-
-            return true;
-        });
+        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path);
     }
 };
