@@ -16,28 +16,28 @@
 #include "golpe.h"
 
 
-enum class WritePolicyResult {
+enum class PluginEventSifterResult {
     Accept,
     Reject,
     ShadowReject,
 };
 
 
-struct PluginWritePolicy {
+struct PluginEventSifter {
     struct RunningPlugin {
         pid_t pid;
-        std::string currPluginPath;
+        std::string currPluginCmd;
         struct timespec lastModTime;
         FILE *r;
         FILE *w;
 
-        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginPath) : pid(pid), currPluginPath(currPluginPath) {
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginCmd) : pid(pid), currPluginCmd(currPluginCmd) {
             r = fdopen(rfd, "r");
             w = fdopen(wfd, "w");
             setlinebuf(w);
             {
                 struct stat statbuf;
-                if (stat(currPluginPath.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", currPluginPath);
+                if (stat(currPluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", currPluginCmd);
                 lastModTime = statbuf.st_mtim;
             }
         }
@@ -52,21 +52,19 @@ struct PluginWritePolicy {
 
     std::unique_ptr<RunningPlugin> running; 
 
-    WritePolicyResult acceptEvent(const tao::json::value &evJson, uint64_t receivedAt, EventSourceType sourceType, std::string_view sourceInfo, std::string &okMsg) {
-        const auto &pluginPath = cfg().relay__writePolicy__plugin;
-
-        if (pluginPath.size() == 0) {
+    PluginEventSifterResult acceptEvent(const std::string &pluginCmd, const tao::json::value &evJson, uint64_t receivedAt, EventSourceType sourceType, std::string_view sourceInfo, std::string &okMsg) {
+        if (pluginCmd.size() == 0) {
             running.reset();
-            return WritePolicyResult::Accept;
+            return PluginEventSifterResult::Accept;
         }
 
         try {
             if (running) {
-                if (pluginPath != running->currPluginPath) {
+                if (pluginCmd != running->currPluginCmd) {
                     running.reset();
                 } else {
                     struct stat statbuf;
-                    if (stat(pluginPath.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", pluginPath);
+                    if (stat(pluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", pluginCmd);
                     if (statbuf.st_mtim.tv_sec != running->lastModTime.tv_sec || statbuf.st_mtim.tv_nsec != running->lastModTime.tv_nsec) {
                         running.reset();
                     }
@@ -74,7 +72,7 @@ struct PluginWritePolicy {
             }
 
             if (!running) {
-                setupPlugin();
+                setupPlugin(pluginCmd);
             }
 
             auto request = tao::json::value({
@@ -111,15 +109,15 @@ struct PluginWritePolicy {
             okMsg = response.optional<std::string>("msg").value_or("");
 
             auto action = response.at("action").get_string();
-            if (action == "accept") return WritePolicyResult::Accept;
-            else if (action == "reject") return WritePolicyResult::Reject;
-            else if (action == "shadowReject") return WritePolicyResult::ShadowReject;
+            if (action == "accept") return PluginEventSifterResult::Accept;
+            else if (action == "reject") return PluginEventSifterResult::Reject;
+            else if (action == "shadowReject") return PluginEventSifterResult::ShadowReject;
             else throw herr("unknown action: ", action);
         } catch (std::exception &e) {
-            LE << "Couldn't setup PluginWritePolicy: " << e.what();
+            LE << "Couldn't setup plugin: " << e.what();
             running.reset();
             okMsg = "error: internal error";
-            return WritePolicyResult::Reject;
+            return PluginEventSifterResult::Reject;
         }
     }
 
@@ -149,9 +147,9 @@ struct PluginWritePolicy {
         }
     };
 
-    void setupPlugin() {
-        auto path = cfg().relay__writePolicy__plugin;
-        LI << "Setting up write policy plugin: " << path;
+  private:
+    void setupPlugin(const std::string &pluginCmd) {
+        LI << "Setting up write policy plugin: " << pluginCmd;
 
         Pipe outPipe;
         Pipe inPipe;
@@ -171,9 +169,9 @@ struct PluginWritePolicy {
             posix_spawn_file_actions_addclose(&file_actions, inPipe.fds[1])
         ) throw herr("posix_span_file_actions failed: ", strerror(errno));
 
-        auto ret = posix_spawn(&pid, path.c_str(), &file_actions, nullptr, argv, nullptr);
-        if (ret) throw herr("posix_spawn failed to invoke '", path, "': ", strerror(errno));
+        auto ret = posix_spawn(&pid, pluginCmd.c_str(), &file_actions, nullptr, argv, nullptr);
+        if (ret) throw herr("posix_spawn failed to invoke '", pluginCmd, "': ", strerror(errno));
 
-        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), path);
+        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), pluginCmd);
     }
 };
