@@ -7,7 +7,7 @@
 #include "WSConnection.h"
 
 
-struct EventStreamer {
+struct EventStreamer : NonCopyable {
     std::string url;
     WSConnection ws;
     std::string dir;

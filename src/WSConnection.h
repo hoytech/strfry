@@ -6,7 +6,7 @@
 #include "golpe.h"
 
 
-class WSConnection {
+class WSConnection : NonCopyable {
     std::string url;
 
     uWS::Hub hub;
