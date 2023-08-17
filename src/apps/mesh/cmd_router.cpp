@@ -6,7 +6,7 @@
 
 #include "EventStreamer.h"
 #include "WriterPipeline.h"
-#include "PluginWritePolicy.h"
+#include "PluginEventSifter.h"
 #include "events.h"
 #include "filters.h"
 
@@ -29,8 +29,8 @@ struct StreamGroup : NonCopyable {
     std::string filterStr;
     NostrFilterGroup filterCompiled;
 
-    std::optional<PluginWritePolicy> pluginDown;
-    std::optional<PluginWritePolicy> pluginUp;
+    std::optional<PluginEventSifter> pluginDown;
+    std::optional<PluginEventSifter> pluginUp;
 
     struct StreamerInstance : NonCopyable {
         EventStreamer es;

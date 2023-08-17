@@ -6,7 +6,7 @@
 
 #include "EventStreamer.h"
 #include "WriterPipeline.h"
-#include "PluginWritePolicy.h"
+#include "PluginEventSifter.h"
 #include "events.h"
 
 
@@ -33,12 +33,12 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     EventStreamer streamer(url, dir);
     WriterPipeline writer;
     Decompressor decomp;
-    PluginWritePolicy writePolicy;
+    PluginEventSifter writePolicyPlugin;
 
     streamer.onEvent = [&](tao::json::value &&evJson, const WSConnection &ws) {
         std::string okMsg;
-        auto res = writePolicy.acceptEvent(evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
-        if (res == WritePolicyResult::Accept) {
+        auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
+        if (res == PluginEventSifterResult::Accept) {
             downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
             writer.write({ std::move(evJson), EventSourceType::Stream, url });
         } else {

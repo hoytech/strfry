@@ -1,10 +1,10 @@
 #include "RelayServer.h"
 
-#include "PluginWritePolicy.h"
+#include "PluginEventSifter.h"
 
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
-    PluginWritePolicy writePolicy;
+    PluginEventSifter writePolicyPlugin;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -40,9 +40,9 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 tao::json::value evJson = tao::json::from_string(msg->jsonStr);
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
                 std::string okMsg;
-                auto res = writePolicy.acceptEvent(evJson, msg->receivedAt, sourceType, msg->ipAddr, okMsg);
+                auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, msg->receivedAt, sourceType, msg->ipAddr, okMsg);
 
-                if (res == WritePolicyResult::Accept) {
+                if (res == PluginEventSifterResult::Accept) {
                     newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
                 } else {
                     auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(msg->flatStr.data());
@@ -50,7 +50,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
                     LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
 
-                    sendOKResponse(msg->connId, eventIdHex, res == WritePolicyResult::ShadowReject, okMsg);
+                    sendOKResponse(msg->connId, eventIdHex, res == PluginEventSifterResult::ShadowReject, okMsg);
                 }
             }
         }
