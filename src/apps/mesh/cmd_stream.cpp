@@ -35,14 +35,14 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     Decompressor decomp;
     PluginEventSifter writePolicyPlugin;
 
-    streamer.onEvent = [&](tao::json::value &&evJson, const WSConnection &ws) {
+    streamer.onIncomingEvent = [&](tao::json::value &&evJson) {
         std::string okMsg;
-        auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
+        auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, hoytech::curr_time_s(), EventSourceType::Stream, url, okMsg);
         if (res == PluginEventSifterResult::Accept) {
             downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
             writer.write({ std::move(evJson), EventSourceType::Stream, url });
         } else {
-            LI << "[" << ws.remoteAddr << "] write policy blocked event from " << url << " : " << evJson.at("id").get_string() << " -> " << okMsg;
+            LI << "write policy blocked event from " << url << " : " << evJson.at("id").get_string() << " -> " << okMsg;
         }
     };
 
@@ -78,7 +78,6 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                 msg += "]";
 
                 auto msgPtr = std::make_shared<std::string>(std::move(msg));
-
                 streamer.sendEvent(msgPtr);
 
                 return true;

@@ -13,7 +13,7 @@ struct EventStreamer : NonCopyable {
     std::string dir;
     tao::json::value filter;
 
-    std::function<void(tao::json::value &&, const WSConnection &ws)> onEvent;
+    std::function<void(tao::json::value &&)> onIncomingEvent;
 
   private:
 
@@ -31,6 +31,10 @@ struct EventStreamer : NonCopyable {
 
     void trigger() {
         ws.trigger();
+    }
+
+    void close() {
+        ws.close();
     }
 
     void run() {
@@ -63,7 +67,7 @@ struct EventStreamer : NonCopyable {
                         auto &evJson = origJson.at(2);
 
                         // FIXME: validate that the event actually matches provided filter?
-                        if (onEvent) onEvent(std::move(evJson), ws);
+                        if (onIncomingEvent) onIncomingEvent(std::move(evJson));
                     } else {
                         LW << "Unexpected EVENT from " << url;
                     }

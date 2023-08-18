@@ -24,32 +24,63 @@ R"(
 static std::unique_ptr<WriterPipeline> globalRouterWriter;
 
 
-struct StreamGroup : NonCopyable {
-    std::string dir;
-    std::string filterStr;
-    NostrFilterGroup filterCompiled;
-
-    std::optional<PluginEventSifter> pluginDown;
-    std::optional<PluginEventSifter> pluginUp;
-
-    struct StreamerInstance : NonCopyable {
-        EventStreamer es;
-        std::thread t;
-
-        StreamerInstance(const std::string &url, const std::string &dir, tao::json::value filter) : es(url, dir, filter) {
-            es.onEvent = [&](tao::json::value &&evJson, const WSConnection &ws) {
-                globalRouterWriter->write({ std::move(evJson), EventSourceType::Stream, es.url });
-            };
-
-            t = std::thread([this]{
-                es.run();
-            });
-        }
+struct IncomingEvent : NonCopyable {
+    struct Down {
+        tao::json::value evJson;
+        std::string url;
     };
 
+    struct Up {
+        std::shared_ptr<std::string> evStr;
+        std::shared_ptr<tao::json::value> evJson;
+    };
+
+    struct Shutdown {
+    };
+
+    using Var = std::variant<Down, Up, Shutdown>;
+    Var msg;
+    IncomingEvent(Var &&msg_) : msg(std::move(msg_)) {}
+};
+
+struct StreamerInstance : NonCopyable {
+    hoytech::protected_queue<IncomingEvent> &inbox;
+    EventStreamer es;
+    std::thread t;
+
+    StreamerInstance(hoytech::protected_queue<IncomingEvent> &inbox, const std::string &url, const std::string &dir, tao::json::value filter) : inbox(inbox), es(url, dir, filter) {
+        es.onIncomingEvent = [&](tao::json::value &&evJson) {
+            inbox.push_move(IncomingEvent{IncomingEvent::Down{ std::move(evJson), es.url }});
+        };
+
+        t = std::thread([this]{
+            es.run();
+        });
+    }
+
+    ~StreamerInstance() {
+        es.close();
+        t.join();
+    }
+};
+
+struct StreamGroup : NonCopyable {
+    std::string groupName;
+
+    std::string dir;
+    std::string filterStr;
+    std::string pluginDownCmd;
+    std::string pluginUpCmd;
     std::map<std::string, StreamerInstance> streams; // url -> StreamerInstance
 
-    StreamGroup(const tao::config::value &spec) {
+    std::thread t;
+    hoytech::protected_queue<IncomingEvent> inbox;
+
+    NostrFilterGroup filterCompiled;
+    PluginEventSifter pluginDown;
+    PluginEventSifter pluginUp;
+
+    StreamGroup(std::string groupName, const tao::config::value &spec) : groupName(groupName) {
         if (!spec.find("dir")) throw herr("no dir field");
         dir = spec.at("dir").get_string();
 
@@ -62,9 +93,64 @@ struct StreamGroup : NonCopyable {
         filterCompiled = NostrFilterGroup::unwrapped(filter);
 
 
+        if (spec.find("pluginDown")) pluginDownCmd = spec.at("pluginDown").get_string();
+        if (spec.find("pluginUp")) pluginUpCmd = spec.at("pluginUp").get_string();
+
+
         if (!spec.find("urls")) throw herr("no urls field");
         for (const auto &url : spec.at("urls").get_array()) {
-            streams.try_emplace(url.get_string(), url.get_string(), dir, filter);
+            streams.try_emplace(url.get_string(), inbox, url.get_string(), dir, filter);
+        }
+
+
+        t = std::thread([this]{
+            while (1) {
+                auto newMsgs = inbox.pop_all();
+
+                for (auto &m : newMsgs) {
+                    if (std::get_if<IncomingEvent::Shutdown>(&m.msg)) return;
+                    handleIncomingEvent(m);
+                }
+            }
+        });
+    }
+
+    void sendEvent(std::shared_ptr<std::string> evStr, std::shared_ptr<tao::json::value> evJson) {
+        inbox.push_move(IncomingEvent{IncomingEvent::Up{ std::move(evStr), std::move(evJson) }});
+    }
+
+    ~StreamGroup() {
+        inbox.push_move(IncomingEvent{IncomingEvent::Shutdown{}});
+        t.join();
+    }
+
+  private:
+    void handleIncomingEvent(IncomingEvent &m) {
+        if (auto ev = std::get_if<IncomingEvent::Down>(&m.msg)) {
+            if (dir == "up") return;
+
+            std::string okMsg;
+
+            auto res = pluginDown.acceptEvent(pluginDownCmd, ev->evJson, hoytech::curr_time_s(), EventSourceType::Stream, ev->url, okMsg);
+            if (res == PluginEventSifterResult::Accept) {
+                globalRouterWriter->write({ std::move(ev->evJson), EventSourceType::Stream, ev->url });
+            } else {
+                LI << "[" << groupName << "] " << ev->url << ": pluginDown blocked event " << ev->evJson.at("id").get_string() << ": " << okMsg;
+            }
+        } else if (auto ev = std::get_if<IncomingEvent::Up>(&m.msg)) {
+            if (dir == "down") return;
+
+            std::string okMsg;
+
+            auto res = pluginUp.acceptEvent(pluginUpCmd, ev->evJson, hoytech::curr_time_s(), EventSourceType::Stream, "", okMsg);
+            if (res == PluginEventSifterResult::Accept) {
+                for (auto &[url, streamer] : streams) {
+                    streamer.es.sendEvent(ev->evStr);
+                    streamer.es.trigger();
+                }
+            } else {
+                LI << "[" << groupName << "] pluginUp blocked event " << ev->evJson->at("id").get_string() << ": " << okMsg;
+            }
         }
     }
 };
@@ -80,11 +166,13 @@ void cmd_router(const std::vector<std::string> &subArgs) {
     globalRouterWriter = std::make_unique<WriterPipeline>();
     Decompressor decomp;
 
-    std::mutex groupMutex;
+    std::mutex groupsMutex;
     std::map<std::string, StreamGroup> streamGroups; // group name -> StreamGroup
 
 
     // Config
+
+    bool configLoadSuccess = false;
 
     auto reconcileConfig = [&]{
         LI << "Loading router config file: " << routerConfigFile;
@@ -92,18 +180,21 @@ void cmd_router(const std::vector<std::string> &subArgs) {
         try {
             auto routerConfig = loadRawTaoConfig(routerConfigFile);
 
-            std::lock_guard<std::mutex> guard(groupMutex);
+            std::lock_guard<std::mutex> guard(groupsMutex);
 
             for (const auto &[k, v] : routerConfig.at("streams").get_object()) {
                 if (!streamGroups.contains(k)) {
                     LI << "New stream group [" << k << "]";
-                    streamGroups.emplace(k, v);
+                    streamGroups.try_emplace(k, k, v);
                 }
             }
         } catch (std::exception &e) {
             LE << "Failed to parse router config: " << e.what();
+            if (!configLoadSuccess) ::exit(1);
             return;
         }
+
+        configLoadSuccess = true;
     };
 
     hoytech::file_change_monitor configFileWatcher(routerConfigFile);
@@ -127,28 +218,26 @@ void cmd_router(const std::vector<std::string> &subArgs) {
     dbChangeWatcher.setDebounce(100);
 
     dbChangeWatcher.run([&](){
-        std::lock_guard<std::mutex> guard(groupMutex);
+        std::lock_guard<std::mutex> guard(groupsMutex);
 
         auto txn = env.txn_ro();
 
         env.foreach_Event(txn, [&](auto &ev){
             currEventId = ev.primaryKeyId;
 
+            auto evStr = getEventJson(txn, decomp, ev.primaryKeyId);
+
             std::string msg = std::string("[\"EVENT\",");
-            msg += getEventJson(txn, decomp, ev.primaryKeyId);
+            msg += evStr;
             msg += "]";
 
             auto msgPtr = std::make_shared<std::string>(std::move(msg));
+            auto jsonPtr = std::make_shared<tao::json::value>(tao::json::from_string(evStr));
 
             {
                 for (auto &[groupName, streamGroup] : streamGroups) {
-                    if (streamGroup.dir == "down") continue;
-                    if (!streamGroup.filterCompiled.doesMatch(ev.flat_nested())) continue;
-
-                    for (auto &[url, streamer] : streamGroup.streams) {
-                        streamer.es.sendEvent(msgPtr);
-                        streamer.es.trigger(); // FIXME: do once at end
-                    }
+                    if (!streamGroup.filterCompiled.doesMatch(ev.flat_nested())) continue; // OK to access streamGroup innards because mutex
+                    streamGroup.sendEvent(msgPtr, jsonPtr);
                 }
             }
 
