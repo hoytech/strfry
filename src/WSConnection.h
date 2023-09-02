@@ -6,7 +6,7 @@
 #include "golpe.h"
 
 
-class WSConnection {
+class WSConnection : NonCopyable {
     std::string url;
 
     uWS::Hub hub;
@@ -26,19 +26,17 @@ class WSConnection {
     std::function<void()> onDisconnect;
     std::function<void()> onError;
     bool reconnect = true;
+    std::atomic<bool> shutdown = false;
     uint64_t reconnectDelayMilliseconds = 5'000;
     std::string remoteAddr;
 
     ~WSConnection() {
-        close();
+        if (hubGroup || hubTrigger || currWs) LW << "WSConnection destroyed before close";
     }
 
     void close() {
-        if (hubGroup) hubGroup->close();
-        hubGroup = nullptr;
-
-        if (hubTrigger) hubTrigger->close();
-        hubTrigger = nullptr;
+        shutdown = true;
+        trigger();
     }
 
     // Should only be called from the websocket thread (ie within an onConnect or onMessage callback)
@@ -58,22 +56,24 @@ class WSConnection {
     void run() {
         hubGroup = hub.createGroup<uWS::CLIENT>(uWS::PERMESSAGE_DEFLATE | uWS::SLIDING_DEFLATE_WINDOW);
 
-
         auto doConnect = [&](uint64_t delay = 0){
             if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+            if (shutdown) return;
             LI << "Attempting to connect to " << url;
             hub.connect(url, nullptr, {}, 5000, hubGroup);
         };
 
 
         hubGroup->onConnection([&](uWS::WebSocket<uWS::CLIENT> *ws, uWS::HttpRequest req) {
+            if (shutdown) return;
+
             if (currWs) {
                 currWs->terminate();
                 currWs = nullptr;
             }
 
             remoteAddr = ws->getAddress().address;
-            LI << "Connected to " << remoteAddr;
+            LI << "Connected to " << url << " (" << remoteAddr << ")";
 
             {
                 int optval = 1;
@@ -93,7 +93,9 @@ class WSConnection {
         });
 
         hubGroup->onDisconnection([&](uWS::WebSocket<uWS::CLIENT> *ws, int code, char *message, size_t length) {
-            LI << "Disconnected: " << code << "/" << (message ? std::string_view(message, length) : "-");
+            LI << "Disconnected from " << url << " : " << code << "/" << (message ? std::string_view(message, length) : "-");
+
+            if (shutdown) return;
 
             if (ws == currWs) {
                 currWs = nullptr;
@@ -123,6 +125,11 @@ class WSConnection {
         });
 
         std::function<void()> asyncCb = [&]{
+            if (shutdown) {
+                terminate();
+                return;
+            }
+
             if (!onTrigger) return;
 
             try {
@@ -144,5 +151,25 @@ class WSConnection {
         doConnect();
 
         hub.run();
+    }
+
+
+  private:
+
+    void terminate() {
+        if (hubGroup) {
+            hubGroup->close();
+            hubGroup = nullptr;
+        }
+
+        if (hubTrigger) {
+            hubTrigger->close();
+            hubTrigger = nullptr;
+        }
+
+        if (currWs) {
+            currWs->terminate();
+            currWs = nullptr;
+        }
     }
 };
