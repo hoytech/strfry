@@ -1,6 +1,14 @@
 0.9.4
+  * INCOMPATIBLE change to negentropy sync protocol!
+    - Necessary because the protocol had an unfixable issue when syncing a very large DB
+      into a small DB while using frameSizeLimit (sorry!)
   * If a client disconnects before its pending EVENT write messages have been processed,
     drop those messages instead of trying to write them
+  * Bulk export commands now exit gracefully on a SIGPIPE
+  * Fixed a race condition when sync command exits
+  * Some optimisations in sync and export
+  * noReadAhead config option: can reduce IO usage on instances where DB size > memory
+  * Close the LMDB map file when execing plugins (works around LMDB bug)
 
 0.9.3
   * Limit on events that can be processed by a sync
