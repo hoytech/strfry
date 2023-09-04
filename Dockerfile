@@ -1,24 +1,55 @@
-FROM ubuntu:jammy as build
+# Built by Akito
+# npub1wprtv89px7z2ut04vvquscpmyfuzvcxttwy2csvla5lvwyj807qqz5aqle
+
+FROM alpine:3.18.3 AS build
+
 ENV TZ=Europe/London
+
 WORKDIR /build
-RUN apt update && apt install -y --no-install-recommends \
-    git g++ make pkg-config libtool ca-certificates \
-    libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
-    liblmdb-dev libflatbuffers-dev libsecp256k1-dev \
-    libzstd-dev
 
 COPY . .
-RUN git submodule update --init
-RUN make setup-golpe
-RUN make -j4
 
-FROM ubuntu:jammy as runner
+RUN \
+  apk --no-cache add \
+    linux-headers \
+    git \
+    g++ \
+    make \
+    pkgconfig \
+    libtool \
+    ca-certificates \
+    perl-yaml \
+    perl-template-toolkit \
+    perl-app-cpanminus \
+    libressl-dev \
+    zlib-dev \
+    lmdb-dev \
+    flatbuffers-dev \
+    libsecp256k1-dev \
+    zstd-dev \
+  && rm -rf /var/cache/apk/* \
+  && cpanm Regexp::Grammars \
+  && git submodule update --init \
+  && make setup-golpe \
+  && make -j4
+
+FROM alpine:3.18.3
+
 WORKDIR /app
 
-RUN apt update && apt install -y --no-install-recommends \
-    liblmdb0 libflatbuffers1 libsecp256k1-0 libb2-1 libzstd1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN \
+  apk --no-cache add \
+    lmdb \
+    flatbuffers \
+    libsecp256k1 \
+    libb2 \
+    zstd \
+    libressl \
+  && rm -rf /var/cache/apk/*
 
 COPY --from=build /build/strfry strfry
+
+EXPOSE 7777
+
 ENTRYPOINT ["/app/strfry"]
 CMD ["relay"]
