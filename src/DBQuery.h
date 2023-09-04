@@ -265,7 +265,8 @@ struct DBScan : NonCopyable {
                 if (f.doesMatchTimes(ev.created())) doSend = true;
             } else {
                 approxWork += 10;
-                if (f.doesMatch(lookupEventByLevId(txn, levId).flat_nested())) doSend = true;
+                auto view = env.lookup_Event(txn, levId);
+                if (view && f.doesMatch(view->flat_nested())) doSend = true;
             }
 
             if (doSend) {
