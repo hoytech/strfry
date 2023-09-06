@@ -1,3 +1,13 @@
+next
+  * New feature: strfry router!
+  * INCOMPATIBLE change: The "lookbehind" feature of plugins was removed
+  * Bugfix: Prevent a crash when a non-indexOnly scan was paused and then one of the
+    buffered levIds was deleted or replaced before the scan resumed
+  * Plugins can now be specified as shell commands, so you can pass command-line switches
+    to them, set environment variables, use pipes/redirects, etc.
+  * Plugins now propagate the environment variables of the strfry process to the
+    plugin processes
+
 0.9.4
   * INCOMPATIBLE change to negentropy sync protocol!
     - Necessary because the protocol had an unfixable issue when syncing a very large DB
