@@ -263,6 +263,17 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         }
     } else if (u.path[0] == "post") {
         body = tmpl::newPost(nullptr);
+    } else if (u.path[0] == "static" && u.path.size() >= 2) {
+        if (u.path[1] == "oddbean.js") {
+            rawBody = std::string(oddbeanStatic__oddbean_js());
+            contentType = "application/javascript";
+        } else if (u.path[1] == "oddbean.css") {
+            rawBody = std::string(oddbeanStatic__oddbean_css());
+            contentType = "text/css";
+        } else if (u.path[1] == "oddbean.svg") {
+            rawBody = std::string(oddbeanStatic__oddbean_svg());
+            contentType = "image/svg+xml";
+        }
     }
 
 
@@ -282,7 +293,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             *body,
             communitySpec,
             title,
-            "http://127.0.0.1:8081",
+            cfg().web__staticFilesPrefix.size() ? cfg().web__staticFilesPrefix : "/static",
         };
 
         responseData = std::move(tmpl::main(ctx).str);
