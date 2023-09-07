@@ -357,6 +357,23 @@ inline std::string stripUrls(std::string &content) {
 }
 
 
+struct ReplyCtx {
+    uint64_t timestamp;
+    TemplarResult rendered;
+};
+
+struct RenderedEventCtx {
+    std::string content;
+    std::string timestamp;
+    const Event *ev = nullptr;
+    const User *user = nullptr;
+    bool isFullThreadLoaded = false;
+    bool eventPresent = true;
+    bool abbrev = false;
+    bool highlight = false;
+    bool showActions = true;
+    std::vector<ReplyCtx> replies;
+};
 
 
 struct EventThread {
@@ -444,25 +461,9 @@ struct EventThread {
         auto now = hoytech::curr_time_s();
         flat_hash_set<uint64_t> processedLevIds;
 
-        struct Reply {
-            uint64_t timestamp;
-            TemplarResult rendered;
-        };
-
-        struct RenderedEvent {
-            std::string content;
-            std::string timestamp;
-            const Event *ev = nullptr;
-            const User *user = nullptr;
-            bool isFullThreadLoaded = false;
-            bool eventPresent = true;
-            bool abbrev = false;
-            bool highlight = false;
-            std::vector<Reply> replies;
-        };
 
         std::function<TemplarResult(const std::string &)> process = [&](const std::string &id){
-            RenderedEvent ctx;
+            RenderedEventCtx ctx;
 
             auto p = eventCache.find(id);
             if (p != eventCache.end()) {
@@ -508,7 +509,7 @@ struct EventThread {
 
         struct {
             TemplarResult foundEvents;
-            std::vector<Reply> orphanNodes;
+            std::vector<ReplyCtx> orphanNodes;
         } ctx;
 
         ctx.foundEvents = process(rootEventId);
