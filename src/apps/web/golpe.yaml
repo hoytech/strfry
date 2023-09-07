@@ -10,3 +10,6 @@ config:
   - name: web__homepageCommunity
     desc: "Community descriptor for homepage"
     default: ""
+  - name: web__staticFilesPrefix
+    desc: "URL or relative path prefix to use for static files (empty string to use versions embedded in binary)"
+    default: ""
