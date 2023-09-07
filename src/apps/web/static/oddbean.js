@@ -86,6 +86,91 @@ document.addEventListener('alpine:init', () => {
                 console.error(json);
             }
         },
+    }));
+
+    Alpine.data('newReply', (note) => ({
+        async init() {
+            let resp = await fetch(`/e/${note}/raw.json`);
+            this.repliedTo = await resp.json();
+        },
+
+        async submit() {
+            this.$refs.msg.innerText = '';
+
+            let ev = {
+                created_at: Math.floor(((new Date()) - 0) / 1000),
+                kind: 1,
+                tags: [],
+                content: this.$refs.post.value,
+            };
+
+            {
+                // e tags
+
+                let rootId;
+                for (let t of this.repliedTo.tags) {
+                    if (t[0] === 'e' && t[3] === 'root') {
+                        rootId = t[1];
+                        break;
+                    }
+                }
+
+                if (!rootId) {
+                    for (let t of this.repliedTo.tags) {
+                        if (t[0] === 'e') {
+                            rootId = t[1];
+                            break;
+                        }
+                    }
+                }
+
+                if (rootId) {
+                    ev.tags.push(['e', rootId, '', 'root']);
+                    ev.tags.push(['e', this.repliedTo.id, '', 'reply']);
+                } else {
+                    ev.tags.push(['e', this.repliedTo.id, '', 'root']);
+                }
+
+                // p tags
+
+                let seenPTags = {};
+
+                for (let t of this.repliedTo.tags) {
+                    if (t[0] === 'p' && !seenPTags[t[1]]) {
+                        ev.tags.push(['p', t[1]]);
+                        seenPTags[t[1]] = true;
+                    }
+                }
+
+                if (!seenPTags[this.repliedTo.pubkey]) {
+                    ev.tags.push(['p', this.repliedTo.pubkey]);
+                }
+
+                // t tags
+
+                ev.tags.push(['t', 'oddbean']);
+            }
+
+            ev = await window.nostr.signEvent(ev);
+
+            let resp = await fetch("/submit-post", {
+                method: "post",
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(ev),
+            });
+
+            let json = await resp.json();
+
+            if (json.message === 'ok' && json.written === true) {
+                window.location = `/e/${json.event}`
+            } else {
+                this.$refs.msg.innerText = `Sending note failed: ${json.message}`;
+                console.error(json);
+            }
+        },
     }))
 });
 
