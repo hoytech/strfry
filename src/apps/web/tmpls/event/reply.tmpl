@@ -1,0 +1,12 @@
+<div x-data="newReply('$(ctx.ev->getNoteId())')" class="new-post">
+    $(event::event(ctx))
+
+    <textarea id="post-text" name="post-text" x-ref="post" rows="8" cols="80" wrap="virtual"></textarea>
+
+    <div @click="submit" class="submit-button">
+        <button>Reply</button>
+    </div>
+
+    <div class="result-message" x-ref="msg">
+    </div>
+</div>
