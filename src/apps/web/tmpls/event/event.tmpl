@@ -17,10 +17,11 @@
 
                 <> | <a href="/e/$(ctx.ev->getParentNoteId())">parent</a> </> ?(ctx.ev->parent.size())
 
-                <br/>
+                <>
+                    | <a href="/e/$(ctx.ev->getNoteId())/reply">reply</a>
+                    | <a href="" class="f">flag</a>
+                </> ?(ctx.showActions)
 
-                <a href="">reply</a>
-                | <a href="" class="f">flag</a>
                 <>+$(ctx.ev->upVotes)</> ?(ctx.ev->upVotes)
                 <>-$(ctx.ev->downVotes)</> ?(ctx.ev->downVotes)
             </div>

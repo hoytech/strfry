@@ -2,6 +2,9 @@
 #include "WebData.h"
 
 
+#include "WebStaticFiles.h"
+
+
 
 
 
@@ -93,7 +96,7 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 TemplarResult renderCommunityEvents(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const CommunitySpec &communitySpec) {
     AlgoScanner a(txn, communitySpec.algo);
-    auto events = a.getEvents(txn, decomp, 300);
+    auto events = a.getEvents(txn, decomp, 60);
 
     std::vector<TemplarResult> rendered;
     auto now = hoytech::curr_time_s();
@@ -176,7 +179,20 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
             body = et.render(txn, decomp, userCache);
         } else if (u.path.size() == 3) {
-            if (u.path[2] == "raw.json") {
+            if (u.path[2] == "reply") {
+                auto ev = Event::fromIdExternal(txn, u.path[1]);
+                ev.populateJson(txn, decomp);
+
+                RenderedEventCtx ctx;
+
+                ctx.timestamp = renderTimestamp(startTime / 1'000'000, ev.getCreatedAt());
+                ctx.content = templarInternal::htmlEscape(ev.json.at("content").get_string(), false);
+                ctx.ev = &ev;
+                ctx.user = userCache.getUser(txn, decomp, ev.getPubkey());
+                ctx.showActions = false;
+
+                body = tmpl::event::reply(ctx);
+            } else if (u.path[2] == "raw.json") {
                 auto ev = Event::fromIdExternal(txn, u.path[1]);
                 ev.populateJson(txn, decomp);
                 rawBody = tao::json::to_string(ev.json, 4);
