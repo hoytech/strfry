@@ -67,7 +67,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
                     auto &evJson = origJson.at(2);
 
                     std::string okMsg;
-                    auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, hoytech::curr_time_s(), EventSourceType::Stream, ws.remoteAddr, okMsg);
+                    auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, hoytech::curr_time_us(), EventSourceType::Stream, ws.remoteAddr, okMsg);
                     if (res == PluginEventSifterResult::Accept) {
                         downloadedIds.emplace(from_hex(evJson.at("id").get_string()));
                         writer.write({ std::move(evJson), EventSourceType::Stream, url });

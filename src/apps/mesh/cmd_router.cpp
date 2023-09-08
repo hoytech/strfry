@@ -183,7 +183,7 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, hoytech::curr_time_s(), EventSourceType::Stream, url, okMsg);
+            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, hoytech::curr_time_us(), EventSourceType::Stream, url, okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 router->writer.write({ std::move(evJson), EventSourceType::Stream, url });
             } else {
@@ -191,7 +191,7 @@ struct Router {
             }
         }
 
-        void outgoingEvent(lmdb::txn &txn, const defaultDb::environment::View_Event &ev, std::string &responseStr, tao::json::value &evJson) {
+        void outgoingEvent(lmdb::txn &txn, defaultDb::environment::View_Event &ev, std::string &responseStr, tao::json::value &evJson) {
             if (dir == "down") return;
             if (!filterCompiled.doesMatch(ev.flat_nested())) return;
 
@@ -206,7 +206,7 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, hoytech::curr_time_s(), EventSourceType::Stream, "", okMsg);
+            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, ev.receivedAt(), (EventSourceType)ev.sourceType(), ev.sourceInfo(), okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 for (auto &[url, c] : conns) {
                     if (c.ws) c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);
