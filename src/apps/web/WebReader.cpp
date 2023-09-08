@@ -290,6 +290,9 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             rawBody = std::string(oddbeanStatic__oddbean_svg());
             contentType = "image/svg+xml";
         }
+    } else if (u.path[0] == "favicon.ico") {
+        rawBody = std::string(oddbeanStatic__favicon_ico());
+        contentType = "image/x-icon";
     }
 
 
