@@ -29,9 +29,10 @@ BuildLib::fpm({
         zlib1g
         libssl-dev
         liblmdb0
-        libflatbuffers1
-        libsecp256k1-0
+        libflatbuffers2
+        libsecp256k1-1
         libzstd1
+        libre2-9
         systemd-coredump
     /],
 });
