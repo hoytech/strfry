@@ -37,7 +37,7 @@ struct PluginEventSifter {
             r = fdopen(rfd, "r");
             w = fdopen(wfd, "w");
             setlinebuf(w);
-            {
+            if (currPluginCmd.find(' ') == std::string::npos) {
                 struct stat statbuf;
                 if (stat(currPluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", currPluginCmd);
                 lastModTime = statbuf.st_mtim;
@@ -64,7 +64,7 @@ struct PluginEventSifter {
             if (running) {
                 if (pluginCmd != running->currPluginCmd) {
                     running.reset();
-                } else {
+                } else if (pluginCmd.find(' ') == std::string::npos) {
                     struct stat statbuf;
                     if (stat(pluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", pluginCmd);
                     if (statbuf.st_mtim.tv_sec != running->lastModTime.tv_sec || statbuf.st_mtim.tv_nsec != running->lastModTime.tv_nsec) {
