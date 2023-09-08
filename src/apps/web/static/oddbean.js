@@ -62,7 +62,7 @@ document.addEventListener('alpine:init', () => {
             let ev = {
                 created_at: Math.floor(((new Date()) - 0) / 1000),
                 kind: 1,
-                tags: [],
+                tags: [['t', 'oddbean']],
                 content: this.$refs.post.value,
             };
 
@@ -145,10 +145,6 @@ document.addEventListener('alpine:init', () => {
                 if (!seenPTags[this.repliedTo.pubkey]) {
                     ev.tags.push(['p', this.repliedTo.pubkey]);
                 }
-
-                // t tags
-
-                ev.tags.push(['t', 'oddbean']);
             }
 
             ev = await window.nostr.signEvent(ev);
