@@ -1,4 +1,5 @@
 /build/
+/dist/
 *.d
 *.o
 /strfry
