@@ -187,7 +187,7 @@ struct Router {
             if (res == PluginEventSifterResult::Accept) {
                 router->writer.write({ std::move(evJson), EventSourceType::Stream, url });
             } else {
-                LI << groupName << " / " << url << " : pluginDown blocked event " << evJson.at("id").get_string() << ": " << okMsg;
+                if (okMsg.size()) LI << groupName << " / " << url << " : pluginDown blocked event " << evJson.at("id").get_string() << ": " << okMsg;
             }
         }
 
@@ -212,7 +212,7 @@ struct Router {
                     if (c.ws) c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);
                 }
             } else {
-                LI << groupName << " : pluginUp blocked event " << evJson.at("id").get_string() << ": " << okMsg;
+                if (okMsg.size()) LI << groupName << " : pluginUp blocked event " << evJson.at("id").get_string() << ": " << okMsg;
             }
         }
     };

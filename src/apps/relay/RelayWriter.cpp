@@ -48,7 +48,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                     auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(msg->flatStr.data());
                     auto eventIdHex = to_hex(sv(flat->id()));
 
-                    LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
+                    if (okMsg.size()) LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
 
                     sendOKResponse(msg->connId, eventIdHex, res == PluginEventSifterResult::ShadowReject, okMsg);
                 }
