@@ -14,6 +14,37 @@
 std::string stripUrls(std::string &content);
 
 
+inline void preprocessMetaFieldContent(std::string &content) {
+    static RE2 matcher(R"((?is)(.*?)(https?://\S+))");
+
+    std::string output;
+
+    std::string_view contentSv(content);
+    re2::StringPiece input(contentSv);
+    re2::StringPiece prefix, match;
+
+    auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
+    auto appendLink = [&](std::string_view url, std::string_view text){
+        output += "<a href=\"";
+        output += url;
+        output += "\">";
+        output += text;
+        output += "</a>";
+    };
+
+    while (RE2::Consume(&input, matcher, &prefix, &match)) {
+        output += sv(prefix);
+
+        if (match.starts_with("http")) {
+            appendLink(sv(match), sv(match));
+        }
+    }
+
+    if (output.size()) {
+        output += std::string_view(input.data(), input.size());
+        std::swap(output, content);
+    }
+}
 
 
 struct User {
@@ -83,9 +114,15 @@ struct User {
     }
 
     std::string getMeta(std::string_view field) const {
+        std::string output;
+
         if (!kind0Json) throw herr("can't getMeta because user doesn't have kind 0");
-        if (kind0Json->get_object().contains(field) && kind0Json->at(field).is_string()) return kind0Json->at(field).get_string();
-        return "";
+        if (kind0Json->get_object().contains(field) && kind0Json->at(field).is_string()) output = kind0Json->at(field).get_string();
+
+        output = templarInternal::htmlEscape(output, false);
+        preprocessMetaFieldContent(output);
+
+        return output;
     }
 
     void populateContactList(lmdb::txn &txn, Decompressor &decomp) {
@@ -274,9 +311,8 @@ struct Event {
 };
 
 
-
-inline void preprocessContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]))");
+inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
+    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:note1\w+))");
 
     std::string output;
 
@@ -298,6 +334,10 @@ inline void preprocessContent(lmdb::txn &txn, Decompressor &decomp, const Event 
 
         if (match.starts_with("http")) {
             appendLink(sv(match), sv(match));
+        } else if (match.starts_with("nostr:note1")) {
+            std::string path = "/e/";
+            path += sv(match).substr(6);
+            appendLink(path, sv(match));
         } else if (match.starts_with("#[")) {
             bool didTransform = false;
             auto offset = std::stoull(std::string(sv(match)).substr(2, match.size() - 3));
@@ -483,7 +523,7 @@ struct EventThread {
                     ctx.content = elem.summaryHtml();
                 } else {
                     ctx.content = templarInternal::htmlEscape(elem.json.at("content").get_string(), false);
-                    preprocessContent(txn, decomp, elem, userCache, ctx.content);
+                    preprocessEventContent(txn, decomp, elem, userCache, ctx.content);
                 }
 
                 ctx.ev = &elem;

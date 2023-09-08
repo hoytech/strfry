@@ -11,13 +11,13 @@
 
         <tr>
             <th>$(field)</th>
-            <td>$(ctx.getMeta(field))</td>
+            <td>$!(ctx.getMeta(field))</td>
         </tr> @(const auto &field : { "name", "about" })
 
         <>
             <tr>
                 <th>$(field)</th>
-                <td>$(ctx.getMeta(field))</td>
+                <td>$!(ctx.getMeta(field))</td>
             </tr> ?(field != "name" && field != "about")
         </> @(const auto &[field, v] : ctx.kind0Json->get_object())
 
