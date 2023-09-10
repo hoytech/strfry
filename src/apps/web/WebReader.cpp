@@ -293,6 +293,10 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
     } else if (u.path[0] == "favicon.ico") {
         rawBody = std::string(oddbeanStatic__favicon_ico());
         contentType = "image/x-icon";
+    } else if (u.path[0] == "login") {
+        body = tmpl::login(0);
+    } else if (u.path[0] == "about") {
+        body = tmpl::about(0);
     }
 
 
