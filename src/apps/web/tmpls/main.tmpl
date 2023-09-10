@@ -23,6 +23,8 @@
                 <a href="/algo" class="community-rules">(algo)</a> ?(ctx.communitySpec)
 
                 <a href="/post" class="new-post">new post</a>
+
+                <a href="/about" class="about">about</a>
             </span>
 
             <span x-data="obLogin" class="login">
@@ -31,6 +33,9 @@
                     <a x-text="username" class="username" :href="myProfile"></a>
                     | <span @click="logout" class="logout-link">logout</span>
                 </span>
+                <noscript>
+                    <span class="no-js">needs JS</span>
+                </noscript>
             </span>
         </div>
 
