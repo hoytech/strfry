@@ -24,6 +24,11 @@ document.addEventListener('alpine:init', () => {
         },
 
         async login() {
+            if (!window.nostr) {
+                window.location = "/login";
+                return;
+            }
+
             let pubkey = await nostr.getPublicKey();
 
             let response = await fetch(`/u/${pubkey}/metadata.json`);
