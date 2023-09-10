@@ -312,7 +312,7 @@ struct Event {
 
 
 inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:note1\w+))");
+    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub)1\w+))");
 
     std::string output;
 
@@ -338,6 +338,18 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
             std::string path = "/e/";
             path += sv(match).substr(6);
             appendLink(path, sv(match));
+        } else if (match.starts_with("nostr:npub1")) {
+            bool didTransform = false;
+
+            try {
+                const auto *u = userCache.getUser(txn, decomp, decodeBech32Simple(sv(match).substr(6)));
+                appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
+                didTransform = true;
+            } catch(std::exception &e) {
+                //LW << "tag parse error: " << e.what();
+            }
+
+            if (!didTransform) output += sv(match);
         } else if (match.starts_with("#[")) {
             bool didTransform = false;
             auto offset = std::stoull(std::string(sv(match)).substr(2, match.size() - 3));
