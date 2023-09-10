@@ -79,10 +79,18 @@ h2 {
         .new-post {
             margin-left: 20px;
         }
+
+        .about {
+            margin-left: 20px;
+        }
     }
 
     .login {
         margin-right: 5px;
+    }
+
+    .no-js {
+        color: red;
     }
 
     a:link, a:visited {
@@ -297,5 +305,22 @@ table.vert {
 
     > span {
         margin-bottom: 2px;
+    }
+}
+
+
+
+
+.info-page {
+    padding-left: 10px;
+    padding-right: 10px;
+
+    p {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    b {
+        font-weight: bold;
     }
 }
