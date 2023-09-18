@@ -20,3 +20,11 @@ rate limits (maybe not needed now that we have plugins?)
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
   ? warn when run as root
+
+web
+  - messed up top-bar on mobile
+  - slightly grey out visited links
+  - reduce green colour, test dark mode
+  - increase line-spacing
+  - if nostr:npub1... appears in note content when users is posting, add it as p-tag "mention"
+  - nostr: links not replaced in community titles
