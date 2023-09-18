@@ -1,3 +1,11 @@
+web
+  - messed up top-bar on mobile
+  - slightly grey out visited links
+  - reduce green colour, test dark mode
+  - increase line-spacing
+  - if nostr:npub1... appears in note content when users is posting, add it as p-tag "mention"
+  - nostr: links not replaced in community titles
+
 set argv in plugin processes, propagate environment
 remove lookbehind, receivedAt index
 get rid of "too many tags in filter" error
