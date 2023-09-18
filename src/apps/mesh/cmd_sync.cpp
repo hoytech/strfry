@@ -134,19 +134,19 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 if (!doUp) have.clear();
                 if (!doDown) need.clear();
 
-                if (neMsg.size() == 0) {
+                if (neMsg) {
+                    ws.send(tao::json::to_string(tao::json::value::array({
+                        "NEG-MSG",
+                        "N",
+                        to_hex(*neMsg),
+                    })));
+                } else {
                     syncDone = true;
                     LI << "Set reconcile complete. Have " << totalHaves << " need " << totalNeeds;
 
                     ws.send(tao::json::to_string(tao::json::value::array({
                         "NEG-CLOSE",
                         "N",
-                    })));
-                } else {
-                    ws.send(tao::json::to_string(tao::json::value::array({
-                        "NEG-MSG",
-                        "N",
-                        to_hex(neMsg),
                     })));
                 }
             } else if (msg.at(0) == "OK") {
