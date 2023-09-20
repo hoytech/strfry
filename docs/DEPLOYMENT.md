@@ -52,7 +52,7 @@ While you wait for your server to provision, go to your DNS provider and point a
         # Go get coffee, this takes a few minutes on a single vCPU
 
         # Install strfry
-        cp strfry /usr/local/bin
+        sudo cp strfry /usr/local/bin
 
         # Install web hosting dependencies
         sudo apt install nginx certbot python3-certbot-nginx
