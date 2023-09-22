@@ -52,6 +52,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
                             }
                         } else if (cmd.starts_with("NEG-")) {
+                            if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
+
                             try {
                                 ingesterProcessNegentropy(txn, decomp, msg->connId, arr);
                             } catch (std::exception &e) {
