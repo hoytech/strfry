@@ -111,7 +111,23 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
 
         view->ne.seal();
 
-        auto resp = view->ne.reconcile(view->initialMsg);
+        std::string resp;
+
+        try {
+            resp = view->ne.reconcile(view->initialMsg);
+        } catch (std::exception &e) {
+            LI << "[" << sub.connId << "] Error parsing negentropy initial message: " << e.what();
+
+            sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
+                "NEG-ERR",
+                sub.subId.str(),
+                "PROTOCOL-ERROR"
+            })));
+
+            views.removeView(sub.connId, sub.subId);
+            return;
+        }
+
         view->initialMsg = "";
 
         sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
@@ -150,15 +166,30 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                         "CLOSED"
                     })));
 
-                    return;
+                    continue;
                 }
 
                 if (!view->ne.sealed) {
                     sendNoticeError(msg->connId, "negentropy error: got NEG-MSG before NEG-OPEN complete");
-                    return;
+                    continue;
                 }
 
-                auto resp = view->ne.reconcile(msg->negPayload);
+                std::string resp;
+
+                try {
+                    resp = view->ne.reconcile(msg->negPayload);
+                } catch (std::exception &e) {
+                    LI << "[" << msg->connId << "] Error parsing negentropy continuation message: " << e.what();
+
+                    sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
+                        "NEG-ERR",
+                        msg->subId.str(),
+                        "PROTOCOL-ERROR"
+                    })));
+
+                    views.removeView(msg->connId, msg->subId);
+                    continue;
+                }
 
                 sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
                     "NEG-MSG",

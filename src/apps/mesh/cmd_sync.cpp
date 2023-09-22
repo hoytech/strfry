@@ -126,7 +126,14 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             if (msg.at(0) == "NEG-MSG") {
                 uint64_t origHaves = have.size(), origNeeds = need.size();
 
-                auto neMsg = ne.reconcile(from_hex(msg.at(2).get_string()), have, need);
+                std::optional<std::string> neMsg;
+
+                try {
+                    neMsg = ne.reconcile(from_hex(msg.at(2).get_string()), have, need);
+                } catch (std::exception &e) {
+                    LE << "Unable to parse negentropy message from relay: " << e.what();
+                    doExit(1);
+                }
 
                 totalHaves += have.size() - origHaves;
                 totalNeeds += need.size() - origNeeds;
