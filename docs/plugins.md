@@ -77,7 +77,9 @@ To install:
 
 ## Notes
 
-* If applicable, you should ensure stdout is *line buffered* (for example, in perl use `$|++`).
+* If applicable, you should ensure stdout is *line buffered*
+  * In perl use `$|++`
+  * In python, write with `print(response, flush=True)`
 * If events are being rejected with `error: internal error`, then check the strfry logs. The plugin is misconfigured or failing.
 * Normally when a plugin blocks an event, it will log a message. Especially when using plugins in `stream`, `router`, etc, this might be too verbose. In order to silence these logs, return an empty string for `msg` (or no `msg` at all).
 * When returning an action of `accept`, it doesn't necessarily guarantee that the event will be accepted. The regular strfry checks are still subsequently applied, such as expiration, deletion, etc.
