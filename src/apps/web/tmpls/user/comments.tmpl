@@ -1,10 +1,14 @@
 <div class="user-comments">
-    <h2>
+    <h2 class="notes-header">
         Notes by <a href="/u/$(ctx.u.npubId)">$(ctx.u.username)</a>
         | <a href="/u/$(ctx.u.npubId)/export.jsonl">export</a>
     </h2>
 
-    <div> @(auto &r : ctx.renderedThreads)
+    <div class="note-thread"> @(auto &r : ctx.renderedThreads)
         $(r)
+    </div>
+
+    <div class="more-notes"> ?(ctx.nextResumeTime)
+        <a href="/u/$(ctx.u.npubId)/notes?next=$(*ctx.nextResumeTime)">More notes by $(ctx.u.username)</a>
     </div>
 </div>

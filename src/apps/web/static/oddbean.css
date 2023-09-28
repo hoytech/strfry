@@ -180,9 +180,16 @@ table.vert {
 
 /* user comments */
 
-.user-comments > div {
-    margin-bottom: 30px;
-    border-bottom: 1px solid black;
+.user-comments {
+    .note-thread {
+        margin-bottom: 30px;
+        border-bottom: 1px solid black;
+    }
+
+    .more-notes {
+        margin-left: 20px;
+        margin-bottom: 20px;
+    }
 }
 
 

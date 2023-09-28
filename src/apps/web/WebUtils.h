@@ -22,6 +22,34 @@ struct Url {
 
         if (u.size()) path.emplace_back(u);
     }
+
+    std::optional<std::string_view> lookupQuery(std::string_view key) {
+        std::string_view curr = query;
+
+        while (curr.size()) {
+            auto nextPos = curr.find("&");
+
+            {
+                std::string_view currKV = nextPos == std::string::npos ? curr : curr.substr(0, nextPos);
+                std::string_view k, v;
+
+                auto equalsPos = currKV.find("=");
+                if (equalsPos == std::string::npos) {
+                    k = currKV;
+                } else {
+                    k = currKV.substr(0, equalsPos);
+                    v = currKV.substr(equalsPos + 1);
+                }
+
+                if (k == key) return v;
+            }
+
+            if (nextPos == std::string::npos) break;
+            curr = curr.substr(nextPos + 1);
+        }
+
+        return std::nullopt;
+    }
 };
 
 inline std::string renderTimestamp(uint64_t now, uint64_t ts) {
