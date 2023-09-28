@@ -11,18 +11,20 @@
     <body>
         <div id="ob-header">
             <span class="links">
-                <a href="/"><img class="logo" src="$(ctx.staticFilesPrefix)/oddbean.svg?$(ctx.staticOddbeanSvgHash)"></a>
+                <a href="/" class="logo-link"><img class="logo" src="$(ctx.staticFilesPrefix)/oddbean.svg?$(ctx.staticOddbeanSvgHash)"></a>
 
-                <a href="/" class="sitename">
-                    <span class="oddbean-name">Oddbean</span>
-                    <> ?(ctx.communitySpec)
-                        / $(ctx.communitySpec->name)
-                    </>
-                </a>
+                <span>
+                    <a href="/" class="sitename">
+                        <span class="oddbean-name">Oddbean</span>
+                        <> ?(ctx.communitySpec)
+                            / $(ctx.communitySpec->name)
+                        </>
+                    </a>
 
-                <a href="/algo" class="community-rules">(algo)</a> ?(ctx.communitySpec)
+                    <a href="/algo" class="community-rules">(algo)</a> ?(ctx.communitySpec)
+                </span>
 
-                <a href="/post" class="new-post">new post</a>
+                <a href="/post" class="new-post-link">new post</a>
 
                 <a href="/about" class="about">about</a>
             </span>
