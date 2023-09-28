@@ -217,7 +217,14 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             }
 
             if (u.path[2] == "notes") {
-                UserEvents uc(txn, decomp, userPubkey);
+                uint64_t resumeTime = MAX_U64;
+
+                try {
+                    auto resumeTimeStr = u.lookupQuery("next");
+                    if (resumeTimeStr) resumeTime = std::stoull(std::string(*resumeTimeStr));
+                } catch(...) {}
+
+                UserEvents uc(txn, decomp, userPubkey, resumeTime);
                 title = std::string("notes: ") + uc.u.username;
                 body = uc.render(txn, decomp);
             } else if (u.path[2] == "export.jsonl") {

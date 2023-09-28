@@ -595,11 +595,14 @@ struct UserEvents {
     };
 
     std::vector<EventCluster> eventClusterArr;
+    uint64_t totalEvents = 0;
+    std::optional<uint64_t> timestampCutoff;
+    std::optional<uint64_t> nextResumeTime;
 
-    UserEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &pubkey) : u(txn, decomp, pubkey) {
+    UserEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &pubkey, uint64_t resumeTime) : u(txn, decomp, pubkey) {
         flat_hash_map<std::string, EventCluster> eventClusters; // eventId (root) -> EventCluster
 
-        env.generic_foreachFull(txn, env.dbi_Event__pubkeyKind, makeKey_StringUint64Uint64(pubkey, 1, MAX_U64), "", [&](std::string_view k, std::string_view v){
+        env.generic_foreachFull(txn, env.dbi_Event__pubkeyKind, makeKey_StringUint64Uint64(pubkey, 1, resumeTime), "", [&](std::string_view k, std::string_view v){
             ParsedKey_StringUint64Uint64 parsedKey(k);
             if (parsedKey.s != pubkey || parsedKey.n1 != 1) return false;
 
@@ -617,6 +620,7 @@ struct UserEvents {
                 cluster.isRootEventFromUser = rootEvent.getPubkey() == u.pubkey;
                 cluster.rootEventTimestamp = rootEvent.getCreatedAt();
                 cluster.eventCache.emplace(rootId, std::move(rootEvent));
+                totalEvents++;
             };
 
             if (ev.root.size()) {
@@ -635,12 +639,22 @@ struct UserEvents {
                 }
 
                 eventClusters.at(ev.root).eventCache.emplace(id, std::move(ev));
+                totalEvents++;
             } else {
                 // Event is root
 
                 if (!eventClusters.contains(ev.root)) {
                     installRoot(id, std::move(ev));
                 }
+            }
+
+            if (timestampCutoff) {
+                if (*timestampCutoff != parsedKey.n2) {
+                    nextResumeTime = *timestampCutoff - 1;
+                    return false;
+                }
+            } else if (totalEvents > 100) {
+                timestampCutoff = parsedKey.n2;
             }
 
             return true;
@@ -666,9 +680,11 @@ struct UserEvents {
         struct {
             std::vector<TemplarResult> &renderedThreads;
             User &u;
+            std::optional<uint64_t> nextResumeTime;
         } ctx = {
             renderedThreads,
             u,
+            nextResumeTime,
         };
 
         return tmpl::user::comments(ctx);
