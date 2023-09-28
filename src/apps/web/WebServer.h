@@ -77,26 +77,6 @@ struct WebServer {
     std::unique_ptr<uS::Async> hubTrigger;
 
 
-    // HTTP response cache
-
-    struct CacheItem {
-        std::mutex lock;
-
-        uint64_t expiry;
-        uint64_t softExpiry;
-
-        std::string payload;
-        std::string payloadGzip;
-        std::string eTag;
-
-        bool generationInProgress = false;
-        std::vector<HTTPRequest> pendingRequests;
-    };
-
-    std::mutex cacheLock;
-    flat_hash_map<std::string, std::unique_ptr<CacheItem>> cache;
-
-
     // Thread Pools
 
     ThreadPool<MsgHttpsocket> tpHttpsocket;
@@ -110,7 +90,7 @@ struct WebServer {
 
     void runReader(ThreadPool<MsgWebReader>::Thread &thr);
     void handleReadRequest(lmdb::txn &txn, Decompressor &decomp, uint64_t lockedThreadId, HTTPRequest &req);
-    HTTPResponse generateReadResponse(lmdb::txn &txn, Decompressor &decomp, const HTTPRequest &req, uint64_t &cacheTime);
+    HTTPResponse generateReadResponse(lmdb::txn &txn, Decompressor &decomp, const HTTPRequest &req);
 
     void runWriter(ThreadPool<MsgWebWriter>::Thread &thr);
 
