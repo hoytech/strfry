@@ -19,7 +19,6 @@
 
 body {
     font-family: sans-serif;
-    line-height: 1.2;
 }
 
 a:link, a:visited {
@@ -331,6 +330,8 @@ table.vert {
 
 
 .info-page {
+    line-height: 1.2;
+
     padding-left: 10px;
     padding-right: 10px;
 
