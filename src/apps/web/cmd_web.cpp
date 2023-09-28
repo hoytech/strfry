@@ -15,7 +15,7 @@ void WebServer::run() {
 
     // FIXME: cfg().web__numThreads__*
 
-    tpReader.init("Reader", 3, [this](auto &thr){
+    tpReader.init("Reader", 10, [this](auto &thr){
         runReader(thr);
     });
 

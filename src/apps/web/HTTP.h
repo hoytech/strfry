@@ -34,18 +34,21 @@ struct HTTPResponse : NonCopyable {
     std::string_view contentType = "text/html; charset=utf-8";
     std::string extraHeaders;
     std::string body;
+    bool noCompress = false;
 
-    std::string eTag() {
+    std::string getETag() {
         unsigned char hash[SHA256_DIGEST_LENGTH];
         SHA256(reinterpret_cast<unsigned char*>(body.data()), body.size(), hash);
         return to_hex(std::string_view(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH/2));
     }
 
     std::string encode(bool doCompress) {
+        std::string eTag = getETag();
+
         std::string compressed;
         bool didCompress = false;
 
-        if (doCompress) {
+        if (!noCompress && doCompress) {
             compressed.resize(body.size());
 
             z_stream zs;
@@ -78,7 +81,9 @@ struct HTTPResponse : NonCopyable {
         output += std::to_string(bodySize);
         output += "\r\nContent-Type: ";
         output += contentType;
-        output += "\r\n";
+        output += "\r\nETag: \"";
+        output += eTag;
+        output += "\"\r\n";
         if (didCompress) output += "Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n";
         output += extraHeaders;
         output += "Connection: Keep-Alive\r\n\r\n";

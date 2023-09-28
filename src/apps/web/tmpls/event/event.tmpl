@@ -12,7 +12,7 @@
                   (<a href="/e/$(ctx.ev->getNoteId())/raw.json">raw</a>)
                 <> | <a href="/e/$(ctx.ev->getRootNoteId())">root</a> </> ?(ctx.ev->root.size())
 
-                <> | <a href="/e/$(ctx.ev->getNoteId())">show full thread</a> </> ?(ctx.ev->root.empty() && !ctx.isFullThreadLoaded)
+                <> | <a href="/e/$(ctx.ev->getNoteId())">full thread</a> </> ?(ctx.ev->root.empty() && !ctx.isFullThreadLoaded)
                 <> | <a href="/e/$(ctx.ev->getNoteId())/export.jsonl">export</a> </> ?(ctx.ev->root.empty() && ctx.isFullThreadLoaded)
 
                 <> | <a href="/e/$(ctx.ev->getParentNoteId())">parent</a> </> ?(ctx.ev->parent.size())
