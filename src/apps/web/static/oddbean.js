@@ -67,7 +67,7 @@ document.addEventListener('alpine:init', () => {
             let ev = {
                 created_at: Math.floor(((new Date()) - 0) / 1000),
                 kind: 1,
-                tags: [['t', 'oddbean']],
+                tags: [['t', 'oddbean'],['client', 'oddbean']],
                 content: this.$refs.post.value,
             };
 
@@ -105,7 +105,7 @@ document.addEventListener('alpine:init', () => {
             let ev = {
                 created_at: Math.floor(((new Date()) - 0) / 1000),
                 kind: 1,
-                tags: [],
+                tags: [['client', 'oddbean']],
                 content: this.$refs.post.value,
             };
 
@@ -195,17 +195,13 @@ document.addEventListener("click", async (e) => {
         let ev = {
             created_at: Math.floor(((new Date()) - 0) / 1000),
             kind: 7,
-            tags: [],
+            tags: [['client', 'oddbean']],
             content: which === 'u' ? '+' : '-',
         };
 
         {
             let response = await fetch(`/e/${note}/raw.json`);
             let liked = await response.json();
-
-            //for (let tag of liked.tags) {
-            //    if (tag.length >= 2 && (tag[0] === 'e' || tag[0] === 'p')) ev.tags.push(tag);
-            //}
 
             ev.tags.push(['e', liked.id]);
             ev.tags.push(['p', liked.pubkey]);
