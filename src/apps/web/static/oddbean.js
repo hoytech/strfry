@@ -208,7 +208,7 @@ document.addEventListener("click", async (e) => {
             //}
 
             ev.tags.push(['e', liked.id]);
-            //ev.tags.push(['p', liked.pubkey]);
+            ev.tags.push(['p', liked.pubkey]);
         }
 
         ev = await window.nostr.signEvent(ev);
