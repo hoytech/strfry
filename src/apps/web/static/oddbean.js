@@ -203,12 +203,12 @@ document.addEventListener("click", async (e) => {
             let response = await fetch(`/e/${note}/raw.json`);
             let liked = await response.json();
 
-            for (let tag of liked.tags) {
-                if (tag.length >= 2 && (tag[0] === 'e' || tag[0] === 'p')) ev.tags.push(tag);
-            }
+            //for (let tag of liked.tags) {
+            //    if (tag.length >= 2 && (tag[0] === 'e' || tag[0] === 'p')) ev.tags.push(tag);
+            //}
 
             ev.tags.push(['e', liked.id]);
-            ev.tags.push(['p', liked.pubkey]);
+            //ev.tags.push(['p', liked.pubkey]);
         }
 
         ev = await window.nostr.signEvent(ev);
