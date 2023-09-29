@@ -1,5 +1,6 @@
 read
-  ! pagination on user comments screen, communities?
+  ? pagination on communities?
+  - nostr: links not replaced in community titles
   * caching
   * non-500 error pages when bech32 fails to parse, for example
   * search field: enter anything, pubkey (hex or npub), eventId, etc. maybe even full-text search?
@@ -9,6 +10,8 @@ read
 styling
   ! test a bit on mobile
   ! make login/upvote/etc buttons do something when not logged in/no nostr plugin installed
+  - slightly grey out visited links
+  - reduce green colour, test dark mode
   ? limit name length: http://localhost:8080/u/npub1e44hczvjqvnp5shx9tmapmw5w6q9x98wdrd2lxhmwfsdmuf5gp9qwvpk6g
   ? smarter truncation/abbrev (try to cut at a sentence, or word boundary, don't cut URLs)
   ? abbrev comments should be smaller? non-pre tag?
@@ -20,3 +23,4 @@ misc
 
 write
   ? edit profile (or maybe just send them to https://metadata.nostr.com/)
+  - if nostr:npub1... appears in note content when users is posting, add it as p-tag "mention"
