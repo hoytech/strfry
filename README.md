@@ -30,6 +30,7 @@ Either the full set of messages in the DB can be synced, or the results of one o
 A C++20 compiler is required, along with a few other common dependencies. On Debian/Ubuntu use these commands:
 
     sudo apt install -y git build-essential libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+    git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     make setup-golpe
     make -j4
