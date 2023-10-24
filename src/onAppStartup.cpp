@@ -69,5 +69,10 @@ static void setRLimits() {
 void onAppStartup(lmdb::txn &txn, const std::string &cmd) {
     dbCheck(txn, cmd);
 
+#ifndef __FreeBSD__
+    // XXX - strfry error: Unable to set NOFILES limit to 1000000, exceeds max of 116991
+    // XXX - warning: comparison of integer expressions of different signedness: 
+    // XXX   'const uint64_t' {aka 'const long unsigned int'} and 'rlim_t' {aka 'long int'} [-Wsign-compare]
     setRLimits();
+#endif
 }
