@@ -1,34 +1,35 @@
 # arch based Dockerfile built by mleku
 # npub1mlekuhhxqq6p8w9x5fs469cjk3fu9zw7uptujr55zmpuhhj48u3qnwx3q5
+# this is a basic dockerfile showing the build on arch linux
 
-FROM archlinux:latest AS build
+FROM archlinux:latest
 
-WORKDIR /build
+WORKDIR /app
 
 COPY . .
 
+# update pacman keys and sync repos
 RUN pacman -Syu --noconfirm
-RUN pacman -S --noconfirm base-devel git
 
-# perl things
-RUN pacman -S --noconfirm cpanminus
-RUN pacman -S --noconfirm perl-template-toolkit
-RUN pacman -S --noconfirm perl-yaml
+RUN pacman -S --noconfirm \
+# build essentials
+  base-devel git \
+# perl stuff
+  cpanminus perl-template-toolkit perl-yaml \
+# flatbuffers, lmdb, libsecp256k1
+  flatbuffers lmdb libsecp256k1
+
+# necessary perl pod
 RUN /usr/bin/vendor_perl/cpanm Regexp::Grammars
 
-# flatbuffers
-RUN pacman -S --noconfirm flatbuffers
+# update submodules
+RUN git submodule update --init 
 
-# lmdb
-RUN pacman -S --noconfirm lmdb
-
-# secp256k1
-RUN pacman -S --noconfirm libsecp256k1
+# build golpe
+RUN make setup-golpe 
 
 # build strfry
-RUN git submodule update --init 
-RUN make setup-golpe 
-RUN make -j4
+RUN make
 
 EXPOSE 7777
 
