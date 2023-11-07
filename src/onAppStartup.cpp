@@ -71,6 +71,7 @@ static void setRLimits() {
     LI << "setrlimit NOFILES limit to " <<  curr.rlim_cur;
 #else
     if (cfg().relay__nofiles > curr.rlim_max) throw herr("Unable to set NOFILES limit to ", cfg().relay__nofiles, ", exceeds max of ", curr.rlim_max);
+
     curr.rlim_cur = cfg().relay__nofiles;
 #endif
 
