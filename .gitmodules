@@ -1,6 +1,6 @@
 [submodule "golpe"]
 	path = golpe
-	url = https://github.com/hoytech/golpe.git
+	url = https://github.com/cosmicpsyop/golpe.git
 [submodule "external/negentropy"]
 	path = external/negentropy
 	url = https://github.com/hoytech/negentropy.git
