@@ -16,7 +16,7 @@ We're going to call the two sides engaged in the sync the client and the relay (
 * (4) Relay calls `reconcile()` on its `Negentropy` object, and returns the results as a `NEG-MSG` answer to the client.
 * (5) Client calls `reconcile()` on its `Negentropy` object using the value sent by the relay.
   * If the empty string is returned, the sync is complete.
-  * This call will return `have` and `need` arrays, which correspond to nostr IDs (or ID prefixes, if `idSize < 32`) that should be uploaded and downloaded, respectively.
+  * This call will return `have` and `need` arrays, which correspond to nostr IDs that should be uploaded and downloaded, respectively.
   * Otherwise, the result is sent back to the relay in another `NEG-MSG`. Goto step 4.
 
 ## Nostr Messages
@@ -28,14 +28,12 @@ We're going to call the two sides engaged in the sync the client and the relay (
     "NEG-OPEN",
     <subscription ID string>,
     <nostr filter or event ID>,
-    <idSize>,
     <initialMessage, lowercase hex-encoded>
 ]
 ```
 
 * The subscription ID is used by each side to identify which query a message refers to. It only needs to be long enough to distinguish it from any other concurrent NEG requests on this websocket connection (an integer that increments once per `NEG-OPEN` is fine). If a `NEG-OPEN` is issued for a currently open subscription ID, the existing subscription is first closed.
 * The nostr filter is as described in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), or is an event ID whose `content` contains the JSON-encoded filter/array of filters.
-* `idSize` indicates the truncation byte size for IDs. It should be an integer between 8 and 32, inclusive. Smaller values will reduce the amount of bandwidth used, but increase the chance of a collision. 16 is a good default.
 * `initialMessage` is the string returned by `initiate()`, hex-encoded.
 
 ### Error message (relay to client):
