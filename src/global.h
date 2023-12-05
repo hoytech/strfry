@@ -17,3 +17,5 @@ std::string parseIP(const std::string &ip);
 uint64_t getDBVersion(lmdb::txn &txn);
 std::string padBytes(std::string_view str, size_t n, char padChar);
 void exitOnSigPipe();
+
+extern lmdb::dbi negentropyDbi;
