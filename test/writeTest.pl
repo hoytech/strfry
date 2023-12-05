@@ -250,7 +250,7 @@ sub doTest {
     my $finalEventIds = [];
 
     {
-        open(my $fh, '-|', './strfry --config test/strfry.conf export 2>/dev/null') || die "$!";
+        open(my $fh, '-|', './strfry --config test/cfgs/writeTest.conf export 2>/dev/null') || die "$!";
         while(<$fh>) {
             push @$finalEventIds, decode_json($_)->{id};
         }
@@ -276,7 +276,7 @@ sub addEvent {
 
     my $eventJson = `cat test-eventXYZ.json`;
 
-    system(qq{ <test-eventXYZ.json ./strfry --config test/strfry.conf import 2>/dev/null });
+    system(qq{ <test-eventXYZ.json ./strfry --config test/cfgs/writeTest.conf import 2>/dev/null });
 
     system(qq{ rm test-eventXYZ.json });
 

@@ -68,11 +68,13 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
 
     {
         auto txn = env.txn_rw();
+        negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
 
         for (auto levId : levIds) {
-            deleteEvent(txn, levId);
+            deleteEvent(txn, levId, negentropyStorage);
         }
 
+        negentropyStorage.flush();
         txn.commit();
     }
 }

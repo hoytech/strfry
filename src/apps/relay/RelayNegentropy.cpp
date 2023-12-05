@@ -42,6 +42,20 @@ struct NegentropyViews {
     }
 
     bool addStatelessView(uint64_t connId, const SubId &subId, Subscription &&sub) {
+        {
+            auto *existing = findView(connId, subId);
+            if (existing) removeView(connId, subId);
+        }
+
+        auto res = conns.try_emplace(connId);
+        auto &connViews = res.first->second;
+
+        if (connViews.size() >= cfg().relay__maxSubsPerConnection) {
+            return false;
+        }
+
+        connViews.try_emplace(subId, UserView{ StatelessView{ std::move(sub), } });
+
         return true;
     }
 
@@ -205,15 +219,16 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     continue;
                 }
 
-                auto *view = std::get_if<NegentropyViews::MemoryView>(userView);
-                if (!view) throw herr("bad variant, expected memory view");
-
-                if (!view->storageVector.sealed) {
-                    sendNoticeError(msg->connId, "negentropy error: got NEG-MSG before NEG-OPEN complete");
-                    continue;
+                if (auto *view = std::get_if<NegentropyViews::MemoryView>(userView)) {
+                    if (!view->storageVector.sealed) {
+                        sendNoticeError(msg->connId, "negentropy error: got NEG-MSG before NEG-OPEN complete");
+                        continue;
+                    }
+                    handleReconcile(msg->connId, msg->subId, view->storageVector, msg->negPayload);
+                } else if (std::get_if<NegentropyViews::StatelessView>(userView)) {
+                    negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, 0);
+                    handleReconcile(msg->connId, msg->subId, storage, msg->negPayload);
                 }
-
-                handleReconcile(msg->connId, msg->subId, view->storageVector, msg->negPayload);
             } else if (auto msg = std::get_if<MsgNegentropy::NegClose>(&newMsg.msg)) {
                 queries.removeSub(msg->connId, msg->subId);
                 views.removeView(msg->connId, msg->subId);
