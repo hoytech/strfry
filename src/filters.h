@@ -200,7 +200,7 @@ struct NostrFilter {
     }
 
     bool isFullDbQuery() {
-        return !ids && !authors && !kinds && tags.size() == 0 && limit == MAX_U64;
+        return !ids && !authors && !kinds && tags.size() == 0;
     }
 };
 

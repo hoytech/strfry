@@ -107,13 +107,15 @@ void RelayServer::runCron() {
 
         if (expiredLevIds.size() > 0) {
             auto txn = env.txn_rw();
+            negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
 
             uint64_t numDeleted = 0;
 
             for (auto levId : expiredLevIds) {
-                if (deleteEvent(txn, levId)) numDeleted++;
+                if (deleteEvent(txn, levId, negentropyStorage)) numDeleted++;
             }
 
+            negentropyStorage.flush();
             txn.commit();
 
             if (numDeleted) LI << "Deleted " << numDeleted << " events (ephemeral=" << numEphemeral << " expired=" << numExpired << ")";

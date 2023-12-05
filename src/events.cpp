@@ -1,6 +1,5 @@
 #include <openssl/sha.h>
 #include <negentropy.h>
-#include <negentropy/storage/BTreeLMDB.h>
 
 #include "events.h"
 
@@ -229,14 +228,12 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 
 
 
-bool deleteEvent(lmdb::txn &txn, uint64_t levId) {
+bool deleteEvent(lmdb::txn &txn, uint64_t levId, negentropy::storage::BTreeLMDB &negentropyStorage) {
     auto view = env.lookup_Event(txn, levId);
     if (!view) return false;
     auto *flat = view->flat_nested();
 
-    negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
     negentropyStorage.erase(flat->created_at(), sv(flat->id()));
-    negentropyStorage.flush();
 
     bool deleted = env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
     env.delete_Event(txn, levId);
@@ -340,7 +337,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
 
             // Deletions happen after event was written to ensure levIds are not reused
 
-            for (auto levId : levIdsToDelete) deleteEvent(txn, levId);
+            for (auto levId : levIdsToDelete) deleteEvent(txn, levId, negentropyStorage);
             levIdsToDelete.clear();
         }
 
