@@ -1,4 +1,6 @@
 #include <openssl/sha.h>
+#include <negentropy.h>
+#include <negentropy/storage/BTreeLMDB.h>
 
 #include "events.h"
 
@@ -228,8 +230,17 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 
 
 bool deleteEvent(lmdb::txn &txn, uint64_t levId) {
+    auto view = env.lookup_Event(txn, levId);
+    if (!view) return false;
+    auto *flat = view->flat_nested();
+
+    negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
+    negentropyStorage.erase(flat->created_at(), sv(flat->id()));
+    negentropyStorage.flush();
+
     bool deleted = env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
     env.delete_Event(txn, levId);
+
     return deleted;
 }
 
@@ -245,6 +256,8 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
 
     std::vector<uint64_t> levIdsToDelete;
     std::string tmpBuf;
+
+    negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
 
     for (size_t i = 0; i < evs.size(); i++) {
         auto &ev = evs[i];
@@ -321,6 +334,8 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
             tmpBuf += ev.jsonStr;
             env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
 
+            negentropyStorage.insert(ev.createdAt(), ev.id());
+
             ev.status = EventWriteStatus::Written;
 
             // Deletions happen after event was written to ensure levIds are not reused
@@ -331,4 +346,6 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
 
         if (levIdsToDelete.size()) throw herr("unprocessed deletion");
     }
+
+    negentropyStorage.flush();
 }
