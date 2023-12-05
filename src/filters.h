@@ -198,6 +198,10 @@ struct NostrFilter {
 
         return true;
     }
+
+    bool isFullDbQuery() {
+        return !ids && !authors && !kinds && tags.size() == 0 && limit == MAX_U64;
+    }
 };
 
 struct NostrFilterGroup {
@@ -241,5 +245,9 @@ struct NostrFilterGroup {
 
     size_t size() const {
         return filters.size();
+    }
+
+    bool isFullDbQuery() {
+        return size() == 1 && filters[0].isFullDbQuery();
     }
 };

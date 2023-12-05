@@ -122,7 +122,6 @@ struct MsgReqMonitor : NonCopyable {
 struct MsgNegentropy : NonCopyable {
     struct NegOpen {
         Subscription sub;
-        uint64_t idSize;
         std::string negPayload;
     };
 

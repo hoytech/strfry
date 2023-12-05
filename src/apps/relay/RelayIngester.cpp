@@ -168,12 +168,9 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
 
         Subscription sub(connId, arr[1].get_string(), std::move(filter));
 
-        uint64_t idSize = arr.at(3).get_unsigned();
-        if (idSize < 8 || idSize > 32) throw herr("idSize out of range");
+        std::string negPayload = from_hex(arr.at(3).get_string());
 
-        std::string negPayload = from_hex(arr.at(4).get_string());
-
-        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), idSize, std::move(negPayload)}});
+        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), std::move(negPayload)}});
     } else if (arr.at(0) == "NEG-MSG") {
         std::string negPayload = from_hex(arr.at(2).get_string());
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegMsg{connId, SubId(arr[1].get_string()), std::move(negPayload)}});
