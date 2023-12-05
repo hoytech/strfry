@@ -132,7 +132,7 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
 
 void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp, uint64_t connId, const tao::json::value &arr) {
     if (arr.at(0) == "NEG-OPEN") {
-        if (arr.get_array().size() < 5) throw herr("negentropy query missing elements");
+        if (arr.get_array().size() < 4) throw herr("negentropy query missing elements");
 
         NostrFilterGroup filter;
         auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;

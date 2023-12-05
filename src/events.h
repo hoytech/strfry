@@ -1,6 +1,7 @@
 #pragma once
 
 #include <secp256k1_schnorrsig.h>
+#include <negentropy/storage/BTreeLMDB.h>
 
 #include "golpe.h"
 
@@ -109,4 +110,4 @@ struct EventToWrite {
 
 
 void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLevel = 1);
-bool deleteEvent(lmdb::txn &txn, uint64_t levId);
+bool deleteEvent(lmdb::txn &txn, uint64_t levId, negentropy::storage::BTreeLMDB &negentropyStorage);
