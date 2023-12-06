@@ -3,6 +3,7 @@
 #include <negentropy.h>
 #include <negentropy/storage/Vector.h>
 #include <negentropy/storage/BTreeLMDB.h>
+#include <negentropy/storage/SubRange.h>
 
 #include "golpe.h"
 
@@ -98,7 +99,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
         if (isFullDbQuery) {
             negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, 0);
-            Negentropy ne(storageBtree, frameSizeLimit);
+
+            const auto &f = filterCompiled.filters.at(0);
+            negentropy::storage::SubRange subStorage(storageBtree, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
+
+            Negentropy ne(subStorage, frameSizeLimit);
             neMsg = ne.initiate();
         } else {
             Negentropy ne(storageVector, frameSizeLimit);
@@ -147,7 +152,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
                     if (isFullDbQuery) {
                         negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, 0);
-                        Negentropy ne(storageBtree, frameSizeLimit);
+
+                        const auto &f = filterCompiled.filters.at(0);
+                        negentropy::storage::SubRange subStorage(storageBtree, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
+
+                        Negentropy ne(subStorage, frameSizeLimit);
                         ne.setInitiator();
                         neMsg = ne.reconcile(inputMsg, have, need);
                     } else {
