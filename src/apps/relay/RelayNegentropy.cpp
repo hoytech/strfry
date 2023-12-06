@@ -1,6 +1,7 @@
 #include <negentropy.h>
 #include <negentropy/storage/Vector.h>
 #include <negentropy/storage/BTreeLMDB.h>
+#include <negentropy/storage/SubRange.h>
 
 #include "RelayServer.h"
 #include "QueryScheduler.h"
@@ -97,7 +98,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             Negentropy ne(storage, 500'000);
             resp = ne.reconcile(msg);
         } catch (std::exception &e) {
-            LI << "[" << connId << "] Error parsing negentropy initial message: " << e.what();
+            LI << "[" << connId << "] Error parsing negentropy message: " << e.what();
 
             sendToConn(connId, tao::json::to_string(tao::json::value::array({
                 "NEG-ERR",
@@ -189,7 +190,10 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
 
                 if (msg->sub.filterGroup.isFullDbQuery()) {
                     negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, 0);
-                    handleReconcile(connId, subId, storage, msg->negPayload);
+
+                    const auto &f = msg->sub.filterGroup.filters.at(0);
+                    negentropy::storage::SubRange subStorage(storage, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
+                    handleReconcile(connId, subId, subStorage, msg->negPayload);
 
                     if (!views.addStatelessView(connId, subId, std::move(msg->sub))) {
                         queries.removeSub(connId, subId);
@@ -225,9 +229,13 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                         continue;
                     }
                     handleReconcile(msg->connId, msg->subId, view->storageVector, msg->negPayload);
-                } else if (std::get_if<NegentropyViews::StatelessView>(userView)) {
+                } else if (auto *view = std::get_if<NegentropyViews::StatelessView>(userView)) {
                     negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, 0);
-                    handleReconcile(msg->connId, msg->subId, storage, msg->negPayload);
+
+                    const auto &f = view->sub.filterGroup.filters.at(0);
+                    negentropy::storage::SubRange subStorage(storage, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
+
+                    handleReconcile(msg->connId, msg->subId, subStorage, msg->negPayload);
                 }
             } else if (auto msg = std::get_if<MsgNegentropy::NegClose>(&newMsg.msg)) {
                 queries.removeSub(msg->connId, msg->subId);
