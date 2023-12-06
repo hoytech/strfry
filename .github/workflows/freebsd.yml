@@ -1,37 +1,69 @@
-# Execute tests on *BSD platforms. Does not produce wheels.
-# Useful URLs:
-# https://github.com/vmactions/freebsd-vm
-# https://github.com/vmactions/openbsd-vm
-# https://github.com/vmactions/netbsd-vm
+# * manually applying safe.directory
 #
-name: freebsd-strfry
-on: [ push, pull_request ]
-concurrency:
-  group: ${{ github.ref }}-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.sha || '' }}
-  cancel-in-progress: true
+# git config --global --add safe.directory /home/runner/work/strfry/strfry
+# to avoid similar errors that may not be applicable if branches or submodules are not used
+# https://stackoverflow.com/questions/72978485/git-submodule-update-failed-with-fatal-detected-dubious-ownership-in-repositor
+#
+# * release value is set to 13.2, remove to set to latest.
+#
+# * docs
+# https://github.com/vmactions/freebsd-vm/blob/main/README.md
+#
+name: freebsd
+
+on: [push, pull_request]
+
 jobs:
-￼  ###
-￼  #
-￼  # FreeBSD build job
-￼  #
-￼  freebsd:
-￼    runs-on: macos-latest
-￼    steps:
-￼    - uses: actions/checkout@v4
-￼    - name: strfry test
-￼      uses: vmactions/freebsd-vm@v0.0.7
-￼      with:
-￼        prepare: |
-           pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng p5-Regexp-Grammars p5-Module-Install-Template p5-YAML
-￼        run: |
-            # git submodule update --init
-            # gmake setup-golpe
-            git checkout feature/freebsd-support-three
-            git submodule update --init
-            cd golpe
-            git checkout feature/freebsd-support-three
-            git submodule update --init
-            cd external/uWebSockets
-            git checkout feature/freebsd-support-three
-            cd ../../../
-            gmake
+  freebsd:
+    runs-on: ubuntu-latest
+    name: A job to run strfry in FreeBSD
+    env:
+      MYTOKEN : ${{ secrets.MYTOKEN }}
+      MYTOKEN2: "value2"
+    steps:
+    - name: Checkout strfry
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build strfry
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: 13.2
+        envs: 'MYTOKEN MYTOKEN2'
+        usesh: true
+        prepare: |
+          pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng p5-Regexp-Grammars p5-Module-Install-Template p5-YAML wget
+
+        run: |
+          # exit on error not working
+          # set -e
+          git config --global --add safe.directory /home/runner/work/strfry/strfry
+          git config --local --name-only --get-regexp core\.sshCommand
+          git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"          
+          git checkout feature/freebsd-support-three
+          git submodule update --init
+          git config --global --add safe.directory /home/runner/work/strfry/strfry/golpe
+          cd golpe
+          git checkout feature/freebsd-support-three
+          git submodule update --init
+          git config --global --add safe.directory /home/runner/work/strfry/strfry/golpe/external/uWebsockets
+          cd external/uWebSockets
+          git checkout feature/freebsd-support-three
+          cd ../../../
+          gmake
+          if ! [ -f ./strfry ]; then
+             echo "Strfry build failed."
+             exit 1
+          fi
+          # ensure A copy of the binary is sync'ed back to host
+          cp ./strfry strfry.bin
+          wget -q https://assets.wellorder.net/nostr/nostr-wellorder-early-500k-v1.jsonl.bz2
+          bunzip2 nostr-wellorder-early-500k-v1.jsonl.bz2
+          # this never returns by design
+          # cat ../nostr-dumps/nostr-wellorder-early-500k-v1.jsonl | ./strfry import         
+          # this never returns and seems an error of sorts
+          # ./strfry relay & 
+          ./strfry info 
+          freebsd-version
+
