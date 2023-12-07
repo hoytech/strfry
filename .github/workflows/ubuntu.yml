@@ -1,0 +1,33 @@
+name: ubuntu
+run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
+on: [push]
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Checkout strfry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - name: Build strfry
+        prepare: |
+          apt update && apt install -y git g++ make pkg-config libtool ca-certificates \
+          libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
+          liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+
+        run: |
+          git submodule update --init
+          make setup-golpe
+          make
+
+      - name: Run strfry
+        run: |
+          ./strfry info
+
+      - run: echo "🍏 This job's status is ${{ job.status }}."
