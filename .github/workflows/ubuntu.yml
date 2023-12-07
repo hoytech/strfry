@@ -1,5 +1,5 @@
 name: ubuntu
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
+run-name: ${{ github.actor }} is testing strfry 🚀
 on: [push]
 jobs:
   ubuntu:
@@ -17,7 +17,7 @@ jobs:
       - run: echo "🖥️ The workflow is now ready to test your code on the runner."
       - name: Build strfry
         run: |
-          apt update && apt install -y git g++ make pkg-config libtool ca-certificates \
+          sudo apt update && apt install -y git g++ make pkg-config libtool ca-certificates \
           libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
           liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
           git submodule update --init
@@ -26,6 +26,6 @@ jobs:
 
       - name: Run strfry
         run: |
-          ./strfry info
+          sudo ./strfry info
 
       - run: echo "🍏 This job's status is ${{ job.status }}."
