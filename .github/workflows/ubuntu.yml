@@ -14,7 +14,8 @@ jobs:
 
       - name: Build strfry
         run: |
-          sudo apt update && sudo apt install -y git g++ make pkg-config libtool ca-certificates \
+          sudo apt update && sudo apt install -y --no-install-recommends \
+          git g++ make pkg-config libtool ca-certificates \
           libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
           liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
           git submodule update --init
@@ -27,6 +28,6 @@ jobs:
 
       - name: Run strfry
         run: |
-          sudo ./strfry info
           cat /etc/os-release
+          sudo ./strfry relay &
 
