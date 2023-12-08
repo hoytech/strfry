@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as build
+FROM ubuntu:lunar as build
 ENV TZ=Europe/London
 WORKDIR /build
 RUN apt update && apt install -y --no-install-recommends \
@@ -12,11 +12,11 @@ RUN git submodule update --init
 RUN make setup-golpe
 RUN make -j4
 
-FROM ubuntu:jammy as runner
+FROM ubuntu:lunar as runner
 WORKDIR /app
 
 RUN apt update && apt install -y --no-install-recommends \
-    liblmdb0 libflatbuffers1 libsecp256k1-0 libb2-1 libzstd1 \
+    liblmdb0 libflatbuffers2 libsecp256k1-1 libb2-1 libzstd1 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /build/strfry strfry

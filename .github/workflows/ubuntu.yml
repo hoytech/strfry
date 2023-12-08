@@ -1,0 +1,32 @@
+name: ubuntu
+
+on: [push, pull_request]
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    name: A job to build and run strfry on Ubuntu
+    steps:
+      - name: Checkout strfry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build strfry
+        run: |
+          sudo apt update && sudo apt install -y git g++ make pkg-config libtool ca-certificates \
+          libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
+          liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+          git submodule update --init
+          make setup-golpe
+          make -j4
+          if ! [ -f ./strfry ]; then
+             echo "Strfry build failed."
+             exit 1
+          fi
+
+      - name: Run strfry
+        run: |
+          sudo ./strfry info
+          cat /etc/os-release
+
