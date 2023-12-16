@@ -17,6 +17,11 @@
 
 #include "events.h"
 
+#ifdef __FreeBSD__
+extern char **environ;
+#endif
+
+
 
 enum class PluginEventSifterResult {
     Accept,

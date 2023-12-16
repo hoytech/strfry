@@ -143,7 +143,7 @@ class WSConnection : NonCopyable {
         hubTrigger->setData(&asyncCb);
 
         hubTrigger->start([](uS::Async *a){
-            auto *r = static_cast<std::function<void()> *>(a->data);
+            auto *r = static_cast<std::function<void()> *>(a->getData());
             (*r)();
         });
 

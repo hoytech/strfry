@@ -58,9 +58,22 @@ static void setRLimits() {
 
     if (getrlimit(RLIMIT_NOFILE, &curr)) throw herr("couldn't call getrlimit: ", strerror(errno));
 
+#ifdef __FreeBSD__
+    LI << "getrlimit NOFILES limit current " <<  curr.rlim_cur << " with max of " <<  curr.rlim_max;
+    if (cfg().relay__nofiles > curr.rlim_max) {
+        LI << "Unable to set NOFILES limit to " << cfg().relay__nofiles << ", exceeds max of " << curr.rlim_max;
+        if (curr.rlim_cur < curr.rlim_max) {
+            LI << "Setting NOFILES limit to max of " << curr.rlim_max;
+            curr.rlim_cur = curr.rlim_max;
+        }
+    }
+    else curr.rlim_cur = cfg().relay__nofiles;
+    LI << "setrlimit NOFILES limit to " <<  curr.rlim_cur;
+#else
     if (cfg().relay__nofiles > curr.rlim_max) throw herr("Unable to set NOFILES limit to ", cfg().relay__nofiles, ", exceeds max of ", curr.rlim_max);
 
     curr.rlim_cur = cfg().relay__nofiles;
+#endif
 
     if (setrlimit(RLIMIT_NOFILE, &curr)) throw herr("Failed setting NOFILES limit to ", cfg().relay__nofiles, ": ", strerror(errno));
 }
