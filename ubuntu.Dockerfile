@@ -10,6 +10,7 @@ RUN apt update && apt install -y --no-install-recommends \
 COPY . .
 RUN git submodule update --init
 RUN make setup-golpe
+RUN make clean
 RUN make -j4
 
 FROM ubuntu:jammy as runner
