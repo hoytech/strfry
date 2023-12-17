@@ -48,10 +48,10 @@ resource "vultr_instance" "instance" {
   activation_email      = false
 
 # provision script for freebsd
-#  script_id             = vultr_startup_script.startup.id
+  script_id             = vultr_startup_script.startup.id
 
 # provision script for ubuntu
-  user_data             = "${file("${var.script_filename}")}"
+#  user_data             = "${file("${var.script_filename}")}"
 
 #  user_data             = <<-EOF
 #cloud-config
