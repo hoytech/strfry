@@ -4,7 +4,7 @@
 
  1. Add the Terraform GPG key to your server
 
-     '$ curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -'
+    ' $ curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -'
 
  2. Add the official Terraform repository to your APT sources
 
@@ -16,7 +16,7 @@
 
  4. Install Terraform on the server
 
-   '  $ sudo apt install terraform'
+    ' $ sudo apt install terraform'
 
 
 ## Activate Your Vultr API Key
@@ -40,6 +40,7 @@ Activate and Copy your Vultr API Key from the Vultr [Customer Portal Settings Pa
     
 2. Edit Provisioning Scripts
    Find the variables that affect the provisioning at the top of startup.freebsd.sh
+
     ```
     # change
     domain="relay.example.com"
@@ -69,7 +70,6 @@ Activate and Copy your Vultr API Key from the Vultr [Customer Portal Settings Pa
     * Linux servers use cloud-init.
     * BSD-based servers use boot scripts.
 
-
     ```
     # provision script for freebsd
     #  script_id             = vultr_startup_script.startup.id
@@ -80,18 +80,16 @@ Activate and Copy your Vultr API Key from the Vultr [Customer Portal Settings Pa
     ```
 ## Initialize Plan 
 
-
   ' terraform init '
 
 ## Test Plan 
-
 
   ' terraform plan '
   
 ## Execute Plan
 
-   ' terraform destroy  -auto-approve  '
+  ' terraform apply  -auto-approve  '
 
-## Destory Plan
+## Destroy Plan
 
-   ' terraform destroy  -auto-approve  '
+  ' terraform destroy  -auto-approve  '
