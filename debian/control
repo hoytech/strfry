@@ -1,0 +1,13 @@
+Source: strfry
+Section: admin
+Priority: optional
+Maintainer: Doug Hoytech <doug@hoytech.com>
+Build-Depends: debhelper (>= 8.0.0)
+
+Package: strfry
+Architecture: amd64
+Depends: ${shlibs:Depends}
+Conflicts:
+Replaces:
+Provides: strfry
+Description: strfry is a relay for the nostr protocol

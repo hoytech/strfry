@@ -1,0 +1,47 @@
+name: ubuntu
+
+on: [push, pull_request]
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    name: A job to build and run strfry on Ubuntu
+    steps:
+      - name: Checkout strfry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build strfry
+        run: |
+          sudo apt update && sudo apt install -y --no-install-recommends \
+          git g++ make pkg-config libtool ca-certificates \
+          libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev \
+          liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+          git submodule update --init
+          make setup-golpe
+          make -j4
+          if ! [ -f ./strfry ]; then
+             echo "Strfry build failed."
+             exit 1
+          fi
+
+      - name: Package strfry
+        run: |
+          sudo apt-get install debhelper devscripts -y
+          dpkg-buildpackage --build=binary -us -uc
+          mv ../*.deb .
+          filename=`ls *.deb | grep -v -- -dbgsym`
+          echo "filename=$filename" >> $GITHUB_ENV
+
+      - name: Upload strfry deb
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.filename }}
+          path: ${{ env.filename }}
+
+      - name: Run strfry
+        run: |
+          cat /etc/os-release
+          sudo ./strfry relay &
+

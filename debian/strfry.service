@@ -1,0 +1,16 @@
+[Unit]
+Description=strfry relay service
+After=syslog.target network.target 
+
+[Service]
+User=strfry
+ExecStart=/usr/bin/strfry relay
+Restart=on-failure
+RestartSec=5
+ProtectHome=yes
+NoNewPrivileges=yes
+ProtectSystem=full
+LimitCORE=1000000000
+
+[Install]
+WantedBy=multi-user.target

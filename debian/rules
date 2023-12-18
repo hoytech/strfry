@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+%:
+	dh $@ --parallel 
+
+override_dh_auto_clean:
+override_dh_auto_install:
+	mkdir -p debian/strfry/usr/bin/
+	mkdir -p debian/strfry/etc/
+	mkdir -p debian/strfry/var/lib/strfry/
+	cp -a strfry debian/strfry/usr/bin/.
+	cp -a strfry.conf debian/strfry/etc/.
+	sed -i 's|./strfry-db/|/var/lib/strfry/|g' debian/strfry/etc/strfry.conf
