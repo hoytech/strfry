@@ -28,7 +28,7 @@ Activate and Copy your Vultr API Key from the Vultr [Customer Portal Settings Pa
 1. Edit terraform.tfvars (see terraform.tfvars.example)
    
     ```
-    VULTR_API_KEY   = "EGJGEJIGJKSDGJKSDKSDGJKLDG444JLKG"
+    VULTR_API_KEY   = "<insert API token here>"
     region          = "ewr"
     plan            = "vhp-1c-2gb-amd"
     os              = 447
