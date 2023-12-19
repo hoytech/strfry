@@ -84,6 +84,59 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
+    auto getNodeInfoHttpResponse = [ver = uint64_t(0), rendered = std::string("")](std::string host) mutable {
+        if (ver != cfg().version()) {
+            tao::json::value nodeinfo = tao::json::value({
+                { "links", tao::json::value::array({
+                    tao::json::value({
+                        { "rel", "http://nodeinfo.diaspora.software/ns/schema/2.1" },
+                        { "href", "https://" + host + "/nodeinfo/2.1" },
+                    }),
+                }) },
+            });
+
+            rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nodeinfo));
+            ver = cfg().version();
+        }
+
+        return std::string_view(rendered); // memory only valid until next call
+    };
+
+    auto getNodeInfo21HttpResponse = [ver = uint64_t(0), rendered = std::string("")]() mutable {
+        if (ver != cfg().version()) {
+            // https://github.com/jhass/nodeinfo/blob/main/schemas/2.1/schema.json
+            tao::json::value nodeinfo = tao::json::value({
+                { "version", "2.1" },
+                { "software", tao::json::value({
+                    { "name", "strfry" },
+                    { "version", APP_GIT_VERSION },
+                    { "repository", "https://github.com/hoytech/strfry"},
+                    { "homepage", "https://github.com/hoytech/strfry"},
+                }) },
+                { "protocols", tao::json::value::array({
+                    "nostr",
+                }) },
+                { "services", tao::json::value({
+                    { "inbound", tao::json::value::array({}) },
+                    { "outbound", tao::json::value::array({}) },
+                }) },
+                { "openRegistrations", false },
+                { "usage", tao::json::value({
+                    { "users", tao::json::value({}) },
+                }) },
+                { "metadata", tao::json::value({
+                    { "features", tao::json::value::array({
+                        "nostr_relay",
+                    }) },
+                }) },
+            });
+
+            rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nodeinfo));
+            ver = cfg().version();
+        }
+
+        return std::string_view(rendered); // memory only valid until next call
+    };
 
 
     {
@@ -100,7 +153,16 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     hubGroup->onHttpRequest([&](uWS::HttpResponse *res, uWS::HttpRequest req, char *data, size_t length, size_t remainingBytes){
         LI << "HTTP request for [" << req.getUrl().toString() << "]";
 
-        if (req.getHeader("accept").toStringView() == "application/nostr+json") {
+        std::string host = req.getHeader("host").toString();
+        std::string url = req.getUrl().toString();
+
+        if (url == "/.well-known/nodeinfo") {
+            auto nodeInfo = getNodeInfoHttpResponse(host);
+            res->write(nodeInfo.data(), nodeInfo.size());
+        } else if (url == "/nodeinfo/2.1") {
+            auto nodeInfo = getNodeInfo21HttpResponse();
+            res->write(nodeInfo.data(), nodeInfo.size());
+        } else if (req.getHeader("accept").toStringView() == "application/nostr+json") {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
         } else {
