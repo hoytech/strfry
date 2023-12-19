@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ]; then
+   systemctl stop strfry
+   systemctl disable strfry
+fi
+
+if [ "$1" = "upgrade" ]; then
+   systemctl stop strfry
+fi
