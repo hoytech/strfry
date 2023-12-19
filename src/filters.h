@@ -154,8 +154,8 @@ struct NostrFilter {
                 until = v.get_unsigned();
             } else if (k == "limit") {
                 limit = v.get_unsigned();
-            } else {
-                throw herr("unrecognised filter item");
+            } else if (k == "search") {
+                throw herr("search is not supported");
             }
         }
 
