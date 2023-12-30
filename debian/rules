@@ -13,3 +13,5 @@ override_dh_auto_install:
 	cp -a strfry debian/strfry/usr/bin/.
 	cp -a strfry.conf debian/strfry/etc/.
 	sed -i 's|./strfry-db/|/var/lib/strfry/|g' debian/strfry/etc/strfry.conf
+	sed -i 's|nofiles = 1000000|nofiles = 0|g' debian/strfry/etc/strfry.conf
+

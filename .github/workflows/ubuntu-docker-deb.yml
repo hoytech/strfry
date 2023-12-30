@@ -1,0 +1,42 @@
+name: ubuntu-docker-deb
+
+on: [push, pull_request]
+
+jobs:
+  ubuntu-docker:
+    runs-on: ubuntu-latest
+    name: A job to build and run strfry Ubuntu using Docker
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build the Ubuntu lunar Docker image for strfry
+      run: |
+        docker build . --file ubuntu-lunar.Dockerfile --tag lunar/strfry
+        
+    - name: Run the Ubuntu lunar Docker image for strfry
+      run: |
+        docker images
+        docker run -v /home/runner/work/strfry/strfry/strfry-db:/app/strfry-db \
+                   -v /home/runner/work/strfry/strfry/strfry.conf:/app/strfry.conf \
+                   -d lunar/strfry
+
+    - name: Extract DEB artifact from the Docker container
+      run: |
+        CONTAINER_ID=$(docker ps -q --filter ancestor=lunar/strfry)
+        echo $CONTAINER_ID
+        docker ps
+        pkgfilename=$(docker exec $CONTAINER_ID /bin/sh -c "ls *.deb")
+        docker cp $CONTAINER_ID:/app/$pkgfilename .
+        echo $pkgfilename
+        #pkgfilename=`ls *.deb`
+        #echo -$pkgfilename-
+        echo "pkgfilename=$pkgfilename" >> $GITHUB_ENV
+
+    - name: Upload Debian artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.pkgfilename }}
+        path: ${{ env.pkgfilename }}
