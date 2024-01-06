@@ -1,4 +1,8 @@
 #include <arpa/inet.h>
+#ifdef __FreeBSD__
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
 #include <stdio.h>
 #include <signal.h>
 

@@ -16,8 +16,22 @@ struct WriterPipelineInput {
 
 struct WriterPipeline {
   public:
+    // Params:
+
     uint64_t debounceDelayMilliseconds = 1'000;
     uint64_t writeBatchSize = 1'000;
+    bool verifyMsg = true;
+    bool verifyTime = true;
+    bool verboseReject = true;
+    bool verboseCommit = true;
+    std::function<void(uint64_t)> onCommit;
+
+    // For logging:
+
+    std::atomic<uint64_t> totalProcessed = 0;
+    std::atomic<uint64_t> totalWritten = 0;
+    std::atomic<uint64_t> totalRejected = 0;
+    std::atomic<uint64_t> totalDups = 0;
 
   private:
     hoytech::protected_queue<WriterPipelineInput> validatorInbox;
@@ -57,10 +71,11 @@ struct WriterPipeline {
                     std::string jsonStr;
 
                     try {
-                        parseAndVerifyEvent(m.eventJson, secpCtx, true, true, flatStr, jsonStr);
+                        parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, flatStr, jsonStr);
                     } catch (std::exception &e) {
-                        LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
+                        if (verboseReject) LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
                         numLive--;
+                        totalRejected++;
                         continue;
                     }
 
@@ -117,6 +132,7 @@ struct WriterPipeline {
                         auto *flat = flatStrToFlatEvent(event.flatStr);
                         if (lookupEventById(txn, sv(flat->id()))) {
                             dups++;
+                            totalDups++;
                             continue;
                         }
 
@@ -132,13 +148,19 @@ struct WriterPipeline {
                     }
 
                     for (auto &ev : newEventsToProc) {
-                        if (ev.status == EventWriteStatus::Written) written++;
-                        else dups++;
-                        // FIXME: log rejected stats too
+                        if (ev.status == EventWriteStatus::Written) {
+                            written++;
+                            totalWritten++;
+                        } else {
+                            dups++;
+                            totalDups++;
+                        }
                     }
+
+                    if (onCommit) onCommit(written);
                 }
 
-                if (written || dups) LI << "Writer: added: " << written << " dups: " << dups;
+                if (verboseCommit && (written || dups)) LI << "Writer: added: " << written << " dups: " << dups;
 
                 if (shutdownComplete) {
                     flushInbox.push_move(true);
@@ -158,6 +180,8 @@ struct WriterPipeline {
     }
 
     void write(WriterPipelineInput &&inp) {
+        if (inp.eventJson.is_null()) return;
+        totalProcessed++;
         numLive++;
         validatorInbox.push_move(std::move(inp));
     }

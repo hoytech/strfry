@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+
+if ! getent group strfry >/dev/null 2>&1; then
+    addgroup --system --quiet strfry
+fi
+if ! getent passwd strfry >/dev/null 2>&1; then
+    adduser --system --quiet --ingroup strfry		\
+	    --no-create-home --home /nonexistent	\
+	    strfry
+fi
+
+if [ "$1" = "configure" ] ; then
+    chown strfry:strfry /etc/strfry.conf
+    chown strfry:strfry /var/lib/strfry
+
+    systemctl daemon-reload
+    systemctl enable strfry.service
+    systemctl start strfry
+fi
