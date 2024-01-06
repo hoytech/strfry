@@ -1,14 +1,3 @@
-# * manually applying safe.directory
-#
-# git config --global --add safe.directory /home/runner/work/strfry/strfry
-# to avoid similar errors that may not be applicable if branches or submodules are not used
-# https://stackoverflow.com/questions/72978485/git-submodule-update-failed-with-fatal-detected-dubious-ownership-in-repositor
-#
-# * release value is set to 13.2, remove to set to latest.
-#
-# * docs
-# https://github.com/vmactions/freebsd-vm/blob/main/README.md
-#
 name: freebsd
 
 on: [push, pull_request]
@@ -34,12 +23,14 @@ jobs:
         run: |
           # ownership workaround
           git config --global --add safe.directory /home/runner/work/strfry/strfry
-          git config --local --name-only --get-regexp core\.sshCommand
-          git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"          
+          git config --local --name-only --get-regexp core.sshCommand
+          git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
           git submodule update --init
           git config --global --add safe.directory /home/runner/work/strfry/strfry/golpe
-          make setup-golpe
+          gmake setup-golpe
+
           gmake
+
           if ! [ -f ./strfry ]; then
              echo "Strfry build failed."
              exit 1
@@ -47,7 +38,7 @@ jobs:
 
           freebsd/build-pkg.sh
 
-          # backgrounding down not return
+          # backgrounding does not return
           ./strfry info 
           freebsd-version
 
