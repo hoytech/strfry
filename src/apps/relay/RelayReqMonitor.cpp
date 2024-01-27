@@ -32,7 +32,12 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
                 env.foreach_Event(txn, [&](auto &ev){
                     if (msg->sub.filterGroup.doesMatch(ev.flat_nested())) {
-                        sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
+                        if (msg->sub.filterGroup.ids_only()) {
+                            auto id = to_hex(sv(ev.flat_nested()->id()));
+                            sendHave(connId, msg->sub.subId, id);
+                        } else {
+                            sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
+                        }
                     }
 
                     return true;

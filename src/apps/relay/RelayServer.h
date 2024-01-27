@@ -211,6 +211,21 @@ struct RelayServer {
         sendToConn(connId, std::move(reply));
     }
 
+    void sendHave(uint64_t connId, const SubId &subId, const std::string_view eventId) {
+        auto subIdSv = subId.sv();
+
+        std::string reply;
+        reply.reserve(14 + subIdSv.size() + eventId.size());
+
+        reply += "[\"HAVE\",\"";
+        reply += subIdSv;
+        reply += "\",\"";
+        reply += eventId;
+        reply += "\"]";
+
+        sendToConn(connId, std::move(reply));
+    }
+
     void sendEventToBatch(RecipientList &&list, std::string &&evJson) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendEventToBatch{std::move(list), std::move(evJson)}});
         hubTrigger->send();
