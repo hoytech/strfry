@@ -116,6 +116,7 @@ struct NostrFilter {
     uint64_t limit = MAX_U64;
     bool neverMatch = false;
     bool indexOnlyScans = false;
+    bool idsOnly = false;
 
     explicit NostrFilter(const tao::json::value &filterObj, uint64_t maxFilterLimit) {
         uint64_t numMajorFields = 0;
@@ -154,6 +155,8 @@ struct NostrFilter {
                 until = v.get_unsigned();
             } else if (k == "limit") {
                 limit = v.get_unsigned();
+            } else if (k == "ids_only") {
+                idsOnly = v.get_boolean();
             } else {
                 throw herr("unrecognised filter item");
             }
@@ -243,6 +246,14 @@ struct NostrFilterGroup {
     bool doesMatch(const NostrIndex::Event *ev) const {
         for (const auto &f : filters) {
             if (f.doesMatch(ev)) return true;
+        }
+
+        return false;
+    }
+
+    bool ids_only() const {
+        for (const auto &f : filters) {
+            if (f.idsOnly) return true;
         }
 
         return false;
