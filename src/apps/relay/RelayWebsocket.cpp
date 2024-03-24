@@ -62,6 +62,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (cfg().relay__info__description.size()) nip11["description"] = cfg().relay__info__description;
             if (cfg().relay__info__contact.size()) nip11["contact"] = cfg().relay__info__contact;
             if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = cfg().relay__info__pubkey;
+            if (cfg().relay__info__icon.size()) nip11["icon"] = cfg().relay__info__icon;
 
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nip11));
             ver = cfg().version();
