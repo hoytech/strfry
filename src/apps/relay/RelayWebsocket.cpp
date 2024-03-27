@@ -3,8 +3,6 @@
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
 
-
-
 static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content) {
     std::string output = "HTTP/1.1 200 OK\r\n";
     output += std::string("Content-Type: ") + contentType + "\r\n";
@@ -289,11 +287,15 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         (*r)();
     });
 
-
-
     int port = cfg().relay__port;
 
-    std::string bindHost = cfg().relay__bind;
+    std::string bindHost;
+    
+    if (std::filesystem::exists("/.dockerenv") || cfg().relay__bind == "127.0.0.1") {
+        bindHost = "0.0.0.0";
+    } else {
+        bindHost = cfg().relay__bind;
+    }
 
     if (!hub.listen(bindHost.c_str(), port, nullptr, uS::REUSE_PORT, hubGroup)) throw herr("unable to listen on port ", port);
 
