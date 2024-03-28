@@ -291,7 +291,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     std::string bindHost;
     
-    if (std::filesystem::exists("/.dockerenv") || cfg().relay__bind == "127.0.0.1") {
+    if (std::filesystem::exists("/.dockerenv") && cfg().relay__bind == "127.0.0.1") {
         bindHost = "0.0.0.0";
     } else {
         bindHost = cfg().relay__bind;
