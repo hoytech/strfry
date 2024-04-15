@@ -56,6 +56,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 { "supported_nips", supportedNips },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
                 { "version", APP_GIT_VERSION },
+                { "negentropy", "v1" }
             });
 
             if (cfg().relay__info__name.size()) nip11["name"] = cfg().relay__info__name;
