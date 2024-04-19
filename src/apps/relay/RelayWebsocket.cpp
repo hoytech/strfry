@@ -3,18 +3,36 @@
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
 
+#include <filesystem>
+#include <optional>
+#include <fstream>
 
+#define HTTP_SERVER_NAME "strfry"
+
+static std::string getHttpResponseHeaders(int statusCode, std::optional<std::string> contentType, std::optional<ulong> contentLength) {
+    std::stringstream ss;
+    ss << "HTTP/1.1 " << statusCode << "\r\n";
+    ss << "Server: " HTTP_SERVER_NAME "\r\n";
+    ss << "Connection: keep-alive\r\n";
+    if(contentType.has_value()) {
+        ss << "Content-Type: " << *contentType << "\r\n";
+    }
+    if(contentLength.has_value()) {
+        ss << "Content-Length: " << *contentLength << "\r\n";
+    }
+    ss << "\r\n";
+    return ss.str();
+}
+
+static void writeStatusCode(uWS::HttpResponse *res, int code) {
+    auto rsp = getHttpResponseHeaders(code, std::nullopt, std::nullopt);
+    res->write(rsp.data(), rsp.size());
+};
 
 static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content) {
-    std::string output = "HTTP/1.1 200 OK\r\n";
-    output += std::string("Content-Type: ") + contentType + "\r\n";
-    output += "Access-Control-Allow-Origin: *\r\n";
-    output += "Connection: keep-alive\r\n";
-    output += "Server: strfry\r\n";
-    output += std::string("Content-Length: ") + std::to_string(content.size()) + "\r\n";
-    output += "\r\n";
-    output += content;
-    return output;
+    auto rsp = getHttpResponseHeaders(200, contentType, content.size());
+    rsp += content;
+    return rsp;
 };
 
 
@@ -85,6 +103,49 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
+    auto getWebrootResponse = [rendered = std::string("")](uWS::HttpResponse *res, uWS::HttpRequest *req) mutable {
+        auto reqPath = req->getUrl().toString();
+        if(reqPath.find('?')) {
+            reqPath = reqPath.substr(0, reqPath.find('?'));
+        }
+        std::filesystem::path basePath = cfg().relay__webroot;
+        std::filesystem::path filePath = basePath / (reqPath == "/" ? "index.html" : reqPath.substr(1));
+        
+        // prevent recursion
+        if(std::filesystem::relative(filePath, basePath).empty()) {
+            writeStatusCode(res, 404);
+            return;
+        }
+        if(std::filesystem::exists(filePath)) {
+            std::ifstream file(filePath, std::ios::binary);
+            if(file.is_open()) {
+                file.seekg(0, std::ios_base::end);
+                auto fileLen = file.tellg();
+                file.seekg(0);
+
+                auto contentType = "application/octet-stream";
+                auto ext = filePath.extension().string();
+                if(ext == ".html") {
+                    contentType = "text/html";
+                } else if(ext == ".js") {
+                    contentType = "text/javascript";
+                } else if(ext == ".css") {
+                    contentType = "text/css";
+                }
+                auto headers = getHttpResponseHeaders(200, contentType, fileLen);
+                res->write(headers.data(), headers.size());
+
+                constexpr auto bufferSize = 4 * 1024;
+                char buffer[bufferSize];
+                while(!file.eof()) {
+                    file.read(buffer, bufferSize);
+                    res->write(buffer, file.gcount());
+                }
+            }
+        } else {
+            writeStatusCode(res, 404);
+        }
+    };
 
 
     {
@@ -104,6 +165,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (req.getHeader("accept").toStringView() == "application/nostr+json") {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
+        } else if(!cfg().relay__webroot.empty()) {
+            getWebrootResponse(res, &req);
         } else {
             auto landing = getLandingPageHttpResponse();
             res->write(landing.data(), landing.size());

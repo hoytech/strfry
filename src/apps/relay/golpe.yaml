@@ -27,6 +27,9 @@ config:
   - name: relay__info__contact
     desc: "NIP-11: Alternative administrative contact (email, website, etc)"
     default: ""
+  - name: relay__webroot
+    desc: "Instead of the default landing page, serve files from a specific dir"
+    default: ""
 
   - name: relay__maxWebsocketPayloadSize
     desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
