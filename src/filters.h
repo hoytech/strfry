@@ -167,8 +167,8 @@ struct NostrFilter {
     }
 
     bool doesMatchTimes(uint64_t created) const {
-        if (created < since) return false;
-        if (created > until) return false;
+        if (created <= since) return false;
+        if (created >= until) return false;
         return true;
     }
 
