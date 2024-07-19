@@ -22,20 +22,6 @@ static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     auto s = env.lookup_Meta(txn, 1);
 
     if (!s) {
-        {
-            // The first version of the DB didn't use a Meta entry -- we consider this version 0
-
-            bool eventFound = false;
-
-            env.foreach_Event(txn, [&](auto &ev){
-                eventFound = true;
-                return false;
-            });
-
-            if (cmd == "export" || cmd == "info") return;
-            if (eventFound) dbTooOld(0);
-        }
-
         env.insert_Meta(txn, CURR_DB_VERSION, 1);
         return;
     }
