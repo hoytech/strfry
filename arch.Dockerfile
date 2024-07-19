@@ -14,13 +14,8 @@ RUN pacman -Syu --noconfirm
 RUN pacman -S --noconfirm \
 # build essentials
   base-devel git \
-# perl stuff
-  cpanminus perl-template-toolkit perl-yaml \
 # flatbuffers, lmdb, libsecp256k1
   flatbuffers lmdb libsecp256k1
-
-# necessary perl pod
-RUN /usr/bin/vendor_perl/cpanm Regexp::Grammars
 
 # update submodules
 RUN git submodule update --init 

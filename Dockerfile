@@ -18,9 +18,6 @@ RUN \
     pkgconfig \
     libtool \
     ca-certificates \
-    perl-yaml \
-    perl-template-toolkit \
-    perl-app-cpanminus \
     libressl-dev \
     zlib-dev \
     lmdb-dev \
@@ -28,7 +25,6 @@ RUN \
     libsecp256k1-dev \
     zstd-dev \
   && rm -rf /var/cache/apk/* \
-  && cpanm Regexp::Grammars \
   && git submodule update --init \
   && make setup-golpe \
   && make -j4
