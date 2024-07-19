@@ -27,6 +27,9 @@ config:
   - name: relay__info__contact
     desc: "NIP-11: Alternative administrative contact (email, website, etc)"
     default: ""
+  - name: relay__info__icon
+    desc: "NIP-11: URL pointing to an image to be used as an icon for the relay"
+    default: ""
 
   - name: relay__maxWebsocketPayloadSize
     desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
