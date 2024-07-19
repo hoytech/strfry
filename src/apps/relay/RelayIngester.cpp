@@ -93,6 +93,17 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
 
     {
+        for (const auto &tagArr : origJson.at("tags").get_array()) {
+            auto tag = tagArr.get_array();
+            if (tag.size() == 1 && tag.at(0).get_string() == "-") {
+                LI << "Protected event, skipping";
+                sendOKResponse(connId, to_hex(sv(flat->id())), false, "blocked: event marked as protected");
+                return;
+            }
+        }
+    }
+
+    {
         auto existing = lookupEventById(txn, sv(flat->id()));
         if (existing) {
             LI << "Duplicate event, skipping";
