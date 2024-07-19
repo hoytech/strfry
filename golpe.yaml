@@ -7,6 +7,7 @@ features:
     customLMDBSetup: true
     flatbuffers: true
     websockets: true
+    templar: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
