@@ -15,6 +15,7 @@ RUN \
     git \
     g++ \
     make \
+    perl \
     pkgconfig \
     libtool \
     ca-certificates \
