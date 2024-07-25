@@ -28,6 +28,7 @@ RUN \
   && rm -rf /var/cache/apk/* \
   && git submodule update --init \
   && make setup-golpe \
+  && make clean \
   && make -j4
 
 FROM alpine:3.18.3
