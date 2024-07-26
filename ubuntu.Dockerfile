@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as build
+FROM ubuntu:jammy AS build
 ENV TZ=Europe/London
 WORKDIR /build
 RUN apt update && apt install -y --no-install-recommends \
@@ -12,7 +12,7 @@ RUN make setup-golpe
 RUN make clean
 RUN make -j4
 
-FROM ubuntu:jammy as runner
+FROM ubuntu:jammy AS runner
 WORKDIR /app
 
 RUN apt update && apt install -y --no-install-recommends \

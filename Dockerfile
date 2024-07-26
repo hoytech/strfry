@@ -1,16 +1,16 @@
-# Built by Akito
-# npub1wprtv89px7z2ut04vvquscpmyfuzvcxttwy2csvla5lvwyj807qqz5aqle
+# Runtime dependencies
+FROM alpine:3.18.3 AS runtime-deps
+RUN apk --no-cache update && apk --no-cache add \
+    lmdb \
+    flatbuffers \
+    libsecp256k1 \
+    libb2 \
+    zstd \
+    libressl
 
-FROM alpine:3.18.3 AS build
-
-ENV TZ=Europe/London
-
-WORKDIR /build
-
-COPY . .
-
-RUN \
-  apk --no-cache add \
+# Build dependencies
+FROM runtime-deps AS build-deps
+RUN apk update && apk add \
     linux-headers \
     git \
     g++ \
@@ -24,25 +24,24 @@ RUN \
     lmdb-dev \
     flatbuffers-dev \
     libsecp256k1-dev \
-    zstd-dev \
-  && rm -rf /var/cache/apk/* \
-  && git submodule update --init \
-  && make setup-golpe \
-  && make -j4
+    zstd-dev
 
-FROM alpine:3.18.3
+# Stage 1: Build the application using the build-deps base image
+FROM build-deps AS build
+
+WORKDIR /build
+
+COPY . .
+
+RUN make clean \
+ && git submodule update --init \
+ && make setup-golpe \
+ && make -j4
+
+# Stage 2: Create the final runtime image using the runtime-deps base image
+FROM runtime-deps AS runtime
 
 WORKDIR /app
-
-RUN \
-  apk --no-cache add \
-    lmdb \
-    flatbuffers \
-    libsecp256k1 \
-    libb2 \
-    zstd \
-    libressl \
-  && rm -rf /var/cache/apk/*
 
 COPY --from=build /build/strfry strfry
 

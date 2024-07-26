@@ -35,7 +35,7 @@ A C++20 compiler is required, along with a few other common dependencies. On Deb
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     make setup-golpe
-    make -j4
+    make -j$(nproc)
 
 #### FreeBSD
 
@@ -43,7 +43,7 @@ A C++20 compiler is required, along with a few other common dependencies. On Deb
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     gmake setup-golpe
-    gmake -j4
+    gmake -j$(sysctl -n hw.ncpu)
 
 
 ### Running a relay
