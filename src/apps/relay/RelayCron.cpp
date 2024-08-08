@@ -96,7 +96,7 @@ void RelayServer::runCron() {
                         numEphemeral++;
                         expiredLevIds.emplace_back(levId);
                     }
-                } else {
+                } else if (expiration <= now) {
                     numExpired++;
                     expiredLevIds.emplace_back(levId);
                 }
