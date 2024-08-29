@@ -11,11 +11,9 @@ void WebServer::runHttpsocket(ThreadPool<MsgHttpsocket>::Thread &thr) {
     uWS::Group<uWS::SERVER> *hubGroup;
     flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
+    uint64_t requestCounter = 0;
 
     flat_hash_map<uWS::HttpResponse *, HTTPRequest> receivingRequests;
-
-    std::vector<bool> tpReaderLock(tpReader.numThreads, false);
-    std::queue<MsgWebReader> pendingReaderMessages;
 
 
     {
@@ -49,20 +47,8 @@ void WebServer::runHttpsocket(ThreadPool<MsgHttpsocket>::Thread &thr) {
         c->pendingRequests.insert(res);
 
         if (req.method == uWS::HttpMethod::METHOD_GET) {
-            auto m = MsgWebReader{MsgWebReader::Request{std::move(req), MAX_U64}};
-            bool didDispatch = false;
-
-            for (uint64_t i = 0; i < tpReader.numThreads; i++) {
-                if (tpReaderLock[i] == false) {
-                    tpReaderLock[i] = true;
-                    std::get<MsgWebReader::Request>(m.msg).lockedThreadId = i;
-                    tpReader.dispatch(i, std::move(m));
-                    didDispatch = true;
-                    break;
-                }
-            }
-
-            if (!didDispatch) pendingReaderMessages.emplace(std::move(m));
+            auto m = MsgWebReader{MsgWebReader::Request{std::move(req)}};
+            tpReader.dispatch(requestCounter++, std::move(m));
         } else if (req.method == uWS::HttpMethod::METHOD_POST) {
             if (remainingBytes) {
                 receivingRequests.emplace(res, std::move(req));
@@ -87,20 +73,6 @@ void WebServer::runHttpsocket(ThreadPool<MsgHttpsocket>::Thread &thr) {
     });
 
 
-    auto unlockThread = [&](uint64_t lockedThreadId){
-        if (lockedThreadId == MAX_U64) return;
-
-        if (tpReaderLock.at(lockedThreadId) == false) throw herr("tried to unlock already unlocked reader lock!");
-
-        if (pendingReaderMessages.empty()) {
-            tpReaderLock[lockedThreadId] = false;
-        } else {
-            std::get<MsgWebReader::Request>(pendingReaderMessages.front().msg).lockedThreadId = lockedThreadId;
-            tpReader.dispatch(lockedThreadId, std::move(pendingReaderMessages.front()));
-            pendingReaderMessages.pop();
-        }
-    };
-
     std::function<void()> asyncCb = [&]{
         auto newMsgs = thr.inbox.pop_all_no_wait();
 
@@ -118,10 +90,6 @@ void WebServer::runHttpsocket(ThreadPool<MsgHttpsocket>::Thread &thr) {
                 c.pendingRequests.erase(msg->res);
 
                 msg->res->end(msg->payload.data(), msg->payload.size());
-
-                unlockThread(msg->lockedThreadId);
-            } else if (auto msg = std::get_if<MsgHttpsocket::Unlock>(&newMsg.msg)) {
-                unlockThread(msg->lockedThreadId);
             }
         }
     };
