@@ -1,5 +1,5 @@
 build/WebTemplates.h: $(shell find src/apps/web/tmpls/ -type f -name '*.tmpl')
-	perl golpe/external/templar/templar.pl src/apps/web/tmpls/ tmpl $@
+	PERL5LIB=golpe/vendor/ perl golpe/external/templar/templar.pl src/apps/web/tmpls/ tmpl $@
 
 src/apps/web/WebReader.o: build/WebTemplates.h build/WebStaticFiles.h
 
@@ -23,4 +23,4 @@ build/web-static/favicon.ico: src/apps/web/static/favicon.ico
 	cp $^ $@
 
 build/WebStaticFiles.h: build/web-static/oddbean.css build/web-static/oddbean.js build/web-static/oddbean.svg build/web-static/favicon.ico
-	perl golpe/external/hoytech-cpp/dirToCppHeader.pl build/web-static/ oddbeanStatic > $@
+	PERL5LIB=golpe/vendor/ perl golpe/external/hoytech-cpp/dirToCppHeader.pl build/web-static/ oddbeanStatic > $@
