@@ -39,14 +39,9 @@ struct MsgHttpsocket : NonCopyable {
         uint64_t connId;
         uWS::HttpResponse *res;
         std::string payload;
-        uint64_t lockedThreadId;
     };
 
-    struct Unlock {
-        uint64_t lockedThreadId;
-    };
-
-    using Var = std::variant<Send, Unlock>;
+    using Var = std::variant<Send>;
     Var msg;
     MsgHttpsocket(Var &&msg_) : msg(std::move(msg_)) {}
 };
@@ -54,7 +49,6 @@ struct MsgHttpsocket : NonCopyable {
 struct MsgWebReader : NonCopyable {
     struct Request {
         HTTPRequest req;
-        uint64_t lockedThreadId;
     };
 
     using Var = std::variant<Request>;
@@ -96,14 +90,9 @@ struct WebServer {
 
     // Utils
 
-    void unlockThread(uint64_t lockedThreadId) {
-        tpHttpsocket.dispatch(0, MsgHttpsocket{MsgHttpsocket::Unlock{lockedThreadId}});
-        hubTrigger->send();
-    }
-
     // Moves from payload!
-    void sendHttpResponseAndUnlock(uint64_t lockedThreadId, const HTTPRequest &req, std::string &payload) {
-        tpHttpsocket.dispatch(0, MsgHttpsocket{MsgHttpsocket::Send{req.connId, req.res, std::move(payload), lockedThreadId}});
+    void sendHttpResponseRaw(const HTTPRequest &req, std::string &payload) {
+        tpHttpsocket.dispatch(0, MsgHttpsocket{MsgHttpsocket::Send{req.connId, req.res, std::move(payload)}});
         hubTrigger->send();
     }
 
@@ -111,10 +100,10 @@ struct WebServer {
         HTTPResponse res;
         res.code = code;
         res.contentType = contentType;
-        res.body = std::string(body); // FIXME: copy
+        res.body = std::string(body); // FIXME: don't copy
 
         std::string payload = res.encode(false);
 
-        sendHttpResponseAndUnlock(MAX_U64, req, payload);
+        sendHttpResponseRaw(req, payload);
     }
 };
