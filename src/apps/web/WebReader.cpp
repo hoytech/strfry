@@ -367,7 +367,7 @@ void WebServer::runReader(ThreadPool<MsgWebReader>::Thread &thr) {
                 try {
                     HTTPResponse resp = generateReadResponse(txn, decomp, msg->req);
                     std::string payload = resp.encode(msg->req.acceptGzip);
-                    sendHttpResponseAndUnlock(msg->lockedThreadId, msg->req, payload);
+                    sendHttpResponseRaw(msg->req, payload);
                 } catch (std::exception &e) {
                     HTTPResponse res;
                     res.code = "500 Server Error";
@@ -375,7 +375,7 @@ void WebServer::runReader(ThreadPool<MsgWebReader>::Thread &thr) {
 
                     std::string payload = res.encode(false);
 
-                    sendHttpResponseAndUnlock(msg->lockedThreadId, msg->req, payload);
+                    sendHttpResponseRaw(msg->req, payload);
                     LE << "500 server error: " << e.what();
                 }
             }
