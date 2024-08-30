@@ -31,7 +31,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                 auto connId = msg->sub.connId;
 
                 env.foreach_Event(txn, [&](auto &ev){
-                    if (msg->sub.filterGroup.doesMatch(PackedEventView(ev.packed()))) {
+                    if (msg->sub.filterGroup.doesMatch(PackedEventView(ev.buf))) {
                         sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
                     }
 

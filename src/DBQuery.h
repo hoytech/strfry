@@ -258,7 +258,7 @@ struct DBScan : NonCopyable {
             } else {
                 approxWork += 10;
                 auto view = env.lookup_Event(txn, levId);
-                if (view && f.doesMatch(PackedEventView(view->packed()))) doSend = true;
+                if (view && f.doesMatch(PackedEventView(view->buf))) doSend = true;
             }
 
             if (doSend) {

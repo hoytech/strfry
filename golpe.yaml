@@ -21,9 +21,7 @@ tables:
   ## Meta-info of nostr events, suitable for indexing
   ## Primary key is auto-incremented, called "levId" for Local EVent ID
   Event:
-    fields:
-      - name: packed
-        type: ubytes
+    opaque: true
 
     indices:
       created_at:
@@ -48,7 +46,7 @@ tables:
         multi: true
 
     indexPrelude: |
-        PackedEventView packed(v.packed());
+        PackedEventView packed(v.buf);
         created_at = packed.created_at();
         uint64_t indexTime = *created_at;
 
