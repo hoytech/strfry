@@ -193,7 +193,7 @@ struct Router {
 
         void outgoingEvent(lmdb::txn &txn, defaultDb::environment::View_Event &ev, std::string &responseStr, tao::json::value &evJson) {
             if (dir == "down") return;
-            if (!filterCompiled.doesMatch(ev.flat_nested())) return;
+            if (!filterCompiled.doesMatch(PackedEventView(ev.packed()))) return;
 
             if (responseStr.size() == 0) {
                 auto evStr = getEventJson(txn, router->decomp, ev.primaryKeyId);

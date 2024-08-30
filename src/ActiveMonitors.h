@@ -92,7 +92,7 @@ struct ActiveMonitors : NonCopyable {
                 if (item.latestEventId >= ev.primaryKeyId || item.mon->sub.latestEventId >= ev.primaryKeyId) continue;
                 item.latestEventId = ev.primaryKeyId;
 
-                if (f->doesMatch(ev.flat_nested())) {
+                if (f->doesMatch(PackedEventView(ev.packed()))) {
                     recipients.emplace_back(item.mon->sub.connId, item.mon->sub.subId);
                     item.mon->sub.latestEventId = ev.primaryKeyId;
                     continue;
@@ -124,38 +124,32 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto *flat = ev.flat_nested();
+        auto packed = PackedEventView(ev.packed());
 
         {
-            auto id = std::string(sv(flat->id()));
+            auto id = std::string(packed.id());
             processMonitorsPrefix(allIds, id, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
                 return id.starts_with(val);
             }));
         }
 
         {
-            auto pubkey = std::string(sv(flat->pubkey()));
+            auto pubkey = std::string(packed.pubkey());
             processMonitorsPrefix(allAuthors, pubkey, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
                 return pubkey.starts_with(val);
             }));
         }
 
-        for (const auto &tag : *flat->tagsFixed32()) {
-            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
+            auto &tagSpec = getTagSpec(tagName, tagVal);
             processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
                 return tagSpec == val;
             }));
-        }
-
-        for (const auto &tag : *flat->tagsGeneral()) {
-            auto &tagSpec = getTagSpec(tag->key(), sv(tag->val()));
-            processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
-                return tagSpec == val;
-            }));
-        }
+            return true;
+        });
 
         {
-            auto kind = flat->kind();
+            auto kind = packed.kind();
             processMonitorsExact(allKinds, kind, static_cast<std::function<bool(const uint64_t&)>>([&](const uint64_t &val){
                 return kind == val;
             }));

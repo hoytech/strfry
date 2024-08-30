@@ -43,10 +43,10 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, msg->receivedAt, sourceType, msg->ipAddr, okMsg);
 
                 if (res == PluginEventSifterResult::Accept) {
-                    newEvents.emplace_back(std::move(msg->flatStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
+                    newEvents.emplace_back(std::move(msg->packedStr), std::move(msg->jsonStr), msg->receivedAt, sourceType, std::move(msg->ipAddr), msg);
                 } else {
-                    auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(msg->flatStr.data());
-                    auto eventIdHex = to_hex(sv(flat->id()));
+                    PackedEventView packed(msg->packedStr);
+                    auto eventIdHex = to_hex(packed.id());
 
                     if (okMsg.size()) LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
 
@@ -67,8 +67,8 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             LE << "Error writing " << newEvents.size() << " events: " << e.what();
 
             for (auto &newEvent : newEvents) {
-                auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(newEvent.flatStr.data());
-                auto eventIdHex = to_hex(sv(flat->id()));
+                PackedEventView packed(newEvent.packedStr);
+                auto eventIdHex = to_hex(packed.id());
                 MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
 
                 std::string message = "Write error: ";
@@ -83,8 +83,8 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         // Log
 
         for (auto &newEvent : newEvents) {
-            auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(newEvent.flatStr.data());
-            auto eventIdHex = to_hex(sv(flat->id()));
+            PackedEventView packed(newEvent.packedStr);
+            auto eventIdHex = to_hex(packed.id());
             std::string message;
             bool written = false;
 
