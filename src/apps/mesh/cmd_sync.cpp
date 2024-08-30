@@ -72,7 +72,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
         for (auto levId : levIds) {
             auto ev = lookupEventByLevId(txn, levId);
-            PackedEventView packed(ev.packed());
+            PackedEventView packed(ev.buf);
             ne.addItem(packed.created_at(), packed.id().substr(0, ne.idSize));
         }
 

@@ -92,7 +92,7 @@ struct ActiveMonitors : NonCopyable {
                 if (item.latestEventId >= ev.primaryKeyId || item.mon->sub.latestEventId >= ev.primaryKeyId) continue;
                 item.latestEventId = ev.primaryKeyId;
 
-                if (f->doesMatch(PackedEventView(ev.packed()))) {
+                if (f->doesMatch(PackedEventView(ev.buf))) {
                     recipients.emplace_back(item.mon->sub.connId, item.mon->sub.subId);
                     item.mon->sub.latestEventId = ev.primaryKeyId;
                     continue;
@@ -113,7 +113,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto packed = PackedEventView(ev.packed());
+        auto packed = PackedEventView(ev.buf);
 
         {
             auto id = std::string(packed.id());

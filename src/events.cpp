@@ -282,7 +282,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
                         auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
 
                         auto thisTimestamp = packed.created_at();
-                        auto otherPacked = PackedEventView(otherEv.packed());
+                        auto otherPacked = PackedEventView(otherEv.buf);
                         auto otherTimestamp = otherPacked.created_at();
 
                         if (otherTimestamp < thisTimestamp ||
@@ -304,7 +304,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
             packed.foreachTag([&](char tagName, std::string_view tagVal){
                 if (tagName == 'e') {
                     auto otherEv = lookupEventById(txn, tagVal);
-                    if (otherEv && PackedEventView(otherEv->packed()).pubkey() == packed.pubkey()) {
+                    if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
                         if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(tagVal);
                         levIdsToDelete.push_back(otherEv->primaryKeyId);
                     }
