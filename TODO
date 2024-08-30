@@ -1,29 +1,28 @@
 1.0 release
+  update DB version
+  rapid import/export
   latest negentropy
+    multi-filter support
+    remove this? negentropy queries stored in events
   make all std::function's const refs
-  split source meta-data off Event table 
+  improve JSON parsing error messages
+    https://github.com/hoytech/strfry/issues/83
+  docs: mention you have to run `make update-submodules` after a pull
+  go through github issues
 
 
 
 
 triage
-  get rid of "too many tags in filter" error
   split plugins for relay/stream
-  test negentropy queries stored in events
   more config params in negentropy
   ? limit for total number of events, not just per filter
 
 
 features
   in sync/stream, log bytes up/down and compression ratios
-  "router" app, where multiple stream/sync connections handled in one process/config (the "nginx of nostr")
   NIP-42 AUTH
   slow-websocket connection detection and back-pressure
-  pre-calcuated tree negentropy XOR trees to support full-db scans (optionally limited by since/until)
-    ? maybe just use daily/fixed-size bucketing
-  improve delete command
-    * delete by receivedAt, IP addrs, etc
-    * inverted filter: delete events that *don't* match the provided filter
   ? less verbose default logging
   ? kill plugin if it times out
 
@@ -39,4 +38,3 @@ rate limits (maybe not needed now that we have plugins?)
 misc
   ? periodic reaping of disconnected sockets (maybe autoping is doing this already)
   ? warn when run as root
-  docs: mention you have to run `make update-submodules` after a pull
