@@ -55,7 +55,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
             continue;
         }
 
-        writer.write({ std::move(evJson), EventSourceType::Import, "" });
+        writer.write({ std::move(evJson), });
         writer.wait();
     }
 

@@ -9,8 +9,6 @@
 
 struct WriterPipelineInput {
     tao::json::value eventJson;
-    EventSourceType sourceType;
-    std::string sourceInfo;
 };
 
 
@@ -79,7 +77,7 @@ struct WriterPipeline {
                         continue;
                     }
 
-                    writerInbox.push_move({ std::move(packedStr), std::move(jsonStr), hoytech::curr_time_us(), m.sourceType, std::move(m.sourceInfo) });
+                    writerInbox.push_move({ std::move(packedStr), std::move(jsonStr), });
                 }
             }
         });
@@ -187,7 +185,7 @@ struct WriterPipeline {
     }
 
     void flush() {
-        validatorInbox.push_move({ tao::json::null, EventSourceType::None, "" });
+        validatorInbox.push_move({ tao::json::null, });
         flushInbox.wait();
     }
 

@@ -112,7 +112,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
         }
     }
 
-    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), hoytech::curr_time_us(), std::move(packedStr), std::move(jsonStr)}});
+    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
 }
 
 void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
