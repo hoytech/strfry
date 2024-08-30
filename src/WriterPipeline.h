@@ -67,11 +67,11 @@ struct WriterPipeline {
                         return;
                     }
 
-                    std::string flatStr;
+                    std::string packedStr;
                     std::string jsonStr;
 
                     try {
-                        parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, flatStr, jsonStr);
+                        parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, packedStr, jsonStr);
                     } catch (std::exception &e) {
                         if (verboseReject) LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
                         numLive--;
@@ -79,7 +79,7 @@ struct WriterPipeline {
                         continue;
                     }
 
-                    writerInbox.push_move({ std::move(flatStr), std::move(jsonStr), hoytech::curr_time_us(), m.sourceType, std::move(m.sourceInfo) });
+                    writerInbox.push_move({ std::move(packedStr), std::move(jsonStr), hoytech::curr_time_us(), m.sourceType, std::move(m.sourceInfo) });
                 }
             }
         });
@@ -122,15 +122,15 @@ struct WriterPipeline {
                         auto event = std::move(newEvents.front());
                         newEvents.pop_front();
 
-                        if (event.flatStr.size() == 0) {
+                        if (event.packedStr.size() == 0) {
                             shutdownComplete = true;
                             break;
                         }
 
                         numLive--;
 
-                        auto *flat = flatStrToFlatEvent(event.flatStr);
-                        if (lookupEventById(txn, sv(flat->id()))) {
+                        PackedEventView packed(event.packedStr);
+                        if (lookupEventById(txn, packed.id())) {
                             dups++;
                             totalDups++;
                             continue;

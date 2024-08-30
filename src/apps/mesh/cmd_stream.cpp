@@ -101,7 +101,7 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
         env.foreach_Event(txn, [&](auto &ev){
             currEventId = ev.primaryKeyId;
 
-            auto id = std::string(sv(ev.flat_nested()->id()));
+            auto id = std::string(PackedEventView(ev.packed()).id());
             if (downloadedIds.find(id) != downloadedIds.end()) {
                 downloadedIds.erase(id);
                 return true;

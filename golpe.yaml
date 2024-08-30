@@ -5,17 +5,11 @@ features:
     onAppStartup: true
     db: true
     customLMDBSetup: true
-    flatbuffers: true
     websockets: true
     templar: true
 
-flatBuffers: |
-    include "../fbs/nostr-index.fbs";
-
 includes: |
-    inline std::string_view sv(const NostrIndex::Fixed32Bytes *f) {
-        return std::string_view((const char *)f->val()->data(), 32);
-    }
+    #include "PackedEvent.h"
 
 tables:
   ## DB meta-data. Single entry, with id = 1
@@ -29,9 +23,8 @@ tables:
   Event:
     fields:
       - name: receivedAt # microseconds
-      - name: flat
+      - name: packed
         type: ubytes
-        nestedFlat: NostrIndex.Event
       - name: sourceType
       - name: sourceInfo
         type: ubytes
@@ -61,36 +54,30 @@ tables:
         multi: true
 
     indexPrelude: |
-        auto *flat = v.flat_nested();
-        created_at = flat->created_at();
+        PackedEventView packed(v.packed());
+        created_at = packed.created_at();
         uint64_t indexTime = *created_at;
         receivedAt = v.receivedAt();
 
-        id = makeKey_StringUint64(sv(flat->id()), indexTime);
-        pubkey = makeKey_StringUint64(sv(flat->pubkey()), indexTime);
-        kind = makeKey_Uint64Uint64(flat->kind(), indexTime);
-        pubkeyKind = makeKey_StringUint64Uint64(sv(flat->pubkey()), flat->kind(), indexTime);
+        id = makeKey_StringUint64(packed.id(), indexTime);
+        pubkey = makeKey_StringUint64(packed.pubkey(), indexTime);
+        kind = makeKey_Uint64Uint64(packed.kind(), indexTime);
+        pubkeyKind = makeKey_StringUint64Uint64(packed.pubkey(), packed.kind(), indexTime);
 
-        for (const auto &tagPair : *(flat->tagsGeneral())) {
-            auto tagName = (char)tagPair->key();
-            auto tagVal = sv(tagPair->val());
-
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
             tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
 
             if (tagName == 'd' && replace.size() == 0) {
-                replace.push_back(makeKey_StringUint64(std::string(sv(flat->pubkey())) + std::string(tagVal), flat->kind()));
+                replace.push_back(makeKey_StringUint64(std::string(packed.pubkey()) + std::string(tagVal), packed.kind()));
+            } else if (tagName == 'e' && packed.kind() == 5) {
+                deletion.push_back(std::string(tagVal) + std::string(packed.pubkey()));
             }
-        }
 
-        for (const auto &tagPair : *(flat->tagsFixed32())) {
-            auto tagName = (char)tagPair->key();
-            auto tagVal = sv(tagPair->val());
-            tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
-            if (flat->kind() == 5 && tagName == 'e') deletion.push_back(std::string(tagVal) + std::string(sv(flat->pubkey())));
-        }
+            return true;
+        });
 
-        if (flat->expiration() != 0) {
-            expiration.push_back(flat->expiration());
+        if (packed.expiration() != 0) {
+            expiration.push_back(packed.expiration());
         }
 
   CompressionDictionary:

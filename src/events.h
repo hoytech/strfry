@@ -4,6 +4,7 @@
 
 #include "golpe.h"
 
+#include "PackedEvent.h"
 #include "Decompressor.h"
 
 
@@ -33,21 +34,16 @@ inline bool isEphemeralKind(uint64_t kind) {
 
 
 
-std::string nostrJsonToFlat(const tao::json::value &v);
+std::string nostrJsonToPackedEvent(const tao::json::value &v);
 std::string nostrHash(const tao::json::value &origJson);
 
 bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view hash, std::string_view pubkey);
-void verifyNostrEvent(secp256k1_context *secpCtx, const NostrIndex::Event *flat, const tao::json::value &origJson);
+void verifyNostrEvent(secp256k1_context *secpCtx, PackedEventView packed, const tao::json::value &origJson);
 void verifyNostrEventJsonSize(std::string_view jsonStr);
-void verifyEventTimestamp(const NostrIndex::Event *flat);
+void verifyEventTimestamp(PackedEventView packed);
 
-void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &flatStr, std::string &jsonStr);
+void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &packedStr, std::string &jsonStr);
 
-
-// Does not do verification!
-inline const NostrIndex::Event *flatStrToFlatEvent(std::string_view flatStr) {
-    return flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
-}
 
 
 std::optional<defaultDb::environment::View_Event> lookupEventById(lmdb::txn &txn, std::string_view id);
@@ -90,7 +86,7 @@ enum class EventWriteStatus {
 
 
 struct EventToWrite {
-    std::string flatStr;
+    std::string packedStr;
     std::string jsonStr;
     uint64_t receivedAt;
     EventSourceType sourceType;
@@ -101,17 +97,15 @@ struct EventToWrite {
 
     EventToWrite() {}
 
-    EventToWrite(std::string flatStr, std::string jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string sourceInfo, void *userData = nullptr) : flatStr(flatStr), jsonStr(jsonStr), receivedAt(receivedAt), sourceType(sourceType), sourceInfo(sourceInfo), userData(userData) {
+    EventToWrite(std::string packedStr, std::string jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string sourceInfo, void *userData = nullptr) : packedStr(packedStr), jsonStr(jsonStr), receivedAt(receivedAt), sourceType(sourceType), sourceInfo(sourceInfo), userData(userData) {
     }
 
     std::string_view id() {
-        const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
-        return sv(flat->id());
+        return PackedEventView(packedStr).id();
     }
 
     uint64_t createdAt() {
-        const NostrIndex::Event *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
-        return flat->created_at();
+        return PackedEventView(packedStr).created_at();
     }
 };
 

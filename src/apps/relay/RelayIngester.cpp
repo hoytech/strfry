@@ -86,33 +86,33 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
 }
 
 void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output) {
-    std::string flatStr, jsonStr;
+    std::string packedStr, jsonStr;
 
-    parseAndVerifyEvent(origJson, secpCtx, true, true, flatStr, jsonStr);
+    parseAndVerifyEvent(origJson, secpCtx, true, true, packedStr, jsonStr);
 
-    auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(flatStr.data());
+    PackedEventView packed(packedStr);
 
     {
         for (const auto &tagArr : origJson.at("tags").get_array()) {
             auto tag = tagArr.get_array();
             if (tag.size() == 1 && tag.at(0).get_string() == "-") {
                 LI << "Protected event, skipping";
-                sendOKResponse(connId, to_hex(sv(flat->id())), false, "blocked: event marked as protected");
+                sendOKResponse(connId, to_hex(packed.id()), false, "blocked: event marked as protected");
                 return;
             }
         }
     }
 
     {
-        auto existing = lookupEventById(txn, sv(flat->id()));
+        auto existing = lookupEventById(txn, packed.id());
         if (existing) {
             LI << "Duplicate event, skipping";
-            sendOKResponse(connId, to_hex(sv(flat->id())), true, "duplicate: have this event");
+            sendOKResponse(connId, to_hex(packed.id()), true, "duplicate: have this event");
             return;
         }
     }
 
-    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), hoytech::curr_time_us(), std::move(flatStr), std::move(jsonStr)}});
+    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), hoytech::curr_time_us(), std::move(packedStr), std::move(jsonStr)}});
 }
 
 void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {

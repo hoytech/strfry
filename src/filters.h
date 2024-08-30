@@ -172,35 +172,25 @@ struct NostrFilter {
         return true;
     }
 
-    bool doesMatch(const NostrIndex::Event *ev) const {
+    bool doesMatch(PackedEventView ev) const {
         if (neverMatch) return false;
 
-        if (!doesMatchTimes(ev->created_at())) return false;
+        if (!doesMatchTimes(ev.created_at())) return false;
 
-        if (ids && !ids->doesMatch(sv(ev->id()))) return false;
-        if (authors && !authors->doesMatch(sv(ev->pubkey()))) return false;
-        if (kinds && !kinds->doesMatch(ev->kind())) return false;
+        if (ids && !ids->doesMatch(ev.id())) return false;
+        if (authors && !authors->doesMatch(ev.pubkey())) return false;
+        if (kinds && !kinds->doesMatch(ev.kind())) return false;
 
         for (const auto &[tag, filt] : tags) {
             bool foundMatch = false;
 
-            for (const auto &tagPair : *(ev->tagsFixed32())) {
-                auto eventTag = tagPair->key();
-                if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
+            ev.foreachTag([&](char tagName, std::string_view tagVal){
+                if (tagName == tag && filt.doesMatch(tagVal)) {
                     foundMatch = true;
-                    break;
+                    return false;
                 }
-            }
-
-            if (!foundMatch) {
-                for (const auto &tagPair : *(ev->tagsGeneral())) {
-                    auto eventTag = tagPair->key();
-                    if (eventTag == tag && filt.doesMatch(sv(tagPair->val()))) {
-                        foundMatch = true;
-                        break;
-                    }
-                }
-            }
+                return true;
+            });
 
             if (!foundMatch) return false;
         }
@@ -240,7 +230,7 @@ struct NostrFilterGroup {
         return NostrFilterGroup(pretendReqQuery, maxFilterLimit);
     }
 
-    bool doesMatch(const NostrIndex::Event *ev) const {
+    bool doesMatch(PackedEventView ev) const {
         for (const auto &f : filters) {
             if (f.doesMatch(ev)) return true;
         }

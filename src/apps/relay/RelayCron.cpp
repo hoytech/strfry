@@ -91,7 +91,7 @@ void RelayServer::runCron() {
                 if (expiration == 1) { // Ephemeral event
                     auto view = env.lookup_Event(txn, levId);
                     if (!view) throw herr("missing event from index, corrupt DB?");
-                    uint64_t created = view->flat_nested()->created_at();
+                    uint64_t created = PackedEventView(view->packed()).created_at();
 
                     if (created <= ephemeralCutoff) {
                         numEphemeral++;
