@@ -239,7 +239,7 @@ In nostr, each `REQ` message from a subscriber can contain multiple filters. We 
 
 A `FilterGroup` is a vector of `Filter` objects. When the Ingester receives a `REQ`, the JSON filter items are compiled into `Filter`s and the original JSON is discarded. Each filter item's specified fields are compiled into sorted lookup tables called filter sets.
 
-In order to determine if an event matches against a `Filter`, first the `since` and `until` fields are checked. Then, each field of the event for which a filter item was specified is looked up in the corresponding lookup table. Specifically, the upper-bound index is determined using a binary search (for example `std::upper_bound`). This is the first element greater than the event's item. Then the preceeding table item is checked for either a prefix (`ids`/`authors`) or exact (everything else) match.
+In order to determine if an event matches against a `Filter`, first the `since` and `until` fields are checked. Then, each field of the event for which a filter item was specified is looked up in the corresponding lookup table. Specifically, the upper-bound index is determined using a binary search (for example `std::upper_bound`). This is the first element greater than the event's item. Then the preceeding table item is checked for a match.
 
 Since testing `Filter`s against events is performed so frequently, it is a performance-critical operation and some optimisations have been applied. For example, each filter item in the lookup table is represented by a 4 byte data structure, one of which is the first byte of the field and the rest are offset/size lookups into a single memory allocation containing the remaining bytes. Under typical scenarios, this will greatly reduce the amount of memory that needs to be loaded to process a filter. Filters with 16 or fewer items can often be rejected with the load of a single cache line. Because filters aren't scanned linearly, the number of items in a filter (ie amount of pubkeys) doesn't have a significant impact on processing resources.
 
@@ -251,7 +251,7 @@ Because events are stored in the same flatbuffers format in memory and "in the d
 
 When a user's `REQ` is being processed for the initial "old" data, each `Filter` in its `FilterGroup` is analysed and the best index is determined according to a simple heuristic. For each filter item in the `Filter`, the index is scanned backwards starting at the upper-bound of that filter item. Because all indices are composite keyed with `created_at`, the scanner also jumps to the `until` time when possible. Each event is compared against the compiled `Filter` and, if it matches, sent to the Websocket thread to be sent to the subscriber. The scan completes when one of the following is true:
 
-* The key no longer matches the filter item (exact or prefix, depending on field)
+* The key no longer matches the filter item
 * The event's `created_at` is before the `since` filter field
 * The filter's `limit` field of delivered events has been reached
 
@@ -280,7 +280,7 @@ After the subscription is all caught up to the current transaction's snapshot, t
 
 Whenever a new event is processed, all of its fields are looked up in the various monitor sets, which provides a list of filters that should be fully processed to check for a match. If an event has no fields in common with a filter, a match will not be attempted for this filter.
 
-For example, for each prefix in the `authors` field in a filter, an entry is added to the `allAuthors` monitor set. When a new event is subsequently detected, the `pubkey` is looked up in `allAuthors` according to a binary search. Then the data-structure is scanned until it stops seeing records that are prefix matches against the `pubkey`. All of these matching records are pointers to corresponding `Filter`s of the REQs that have subscribed to this author. The filters must then be processed to determine if the event satisfies the other parameters of each filter (`since`/`until`/etc).
+For example, for each item in the `authors` field in a filter, an entry is added to the `allAuthors` monitor set. When a new event is subsequently detected, the `pubkey` is looked up in `allAuthors` according to a binary search. Then the data-structure is scanned until it stops seeing records that match the `pubkey`. All of these matching records are pointers to corresponding `Filter`s of the REQs that have subscribed to this author. The filters must then be processed to determine if the event satisfies the other parameters of each filter (`since`/`until`/etc).
 
 After comparing the event against each filter detected via the inverted index, that filter is marked as "up-to-date" with this event's ID, whether the filter matched or not. This prevents needlessly re-comparing this filter against the same event in the future (in case one of the *other* index lookups matches it). If a filter *does* match, then the entire filter group is marked as up-to-date. This prevents sending the same event multiple times in case multiple filters in a filter group match, and also prevents needlessly comparing other filters in the group against an event that has already been sent.
 

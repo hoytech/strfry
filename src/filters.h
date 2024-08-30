@@ -29,8 +29,9 @@ struct FilterSetBytes {
 
         std::sort(arr.begin(), arr.end());
 
-        for (const auto &item : arr) {
-            if (items.size() > 0 && item.starts_with(at(items.size() - 1))) continue; // remove duplicates and redundant prefixes
+        for (size_t i = 0; i < arr.size(); i++) {
+            const auto &item = arr[i];
+            if (i > 0 && item == arr[i - 1]) continue; // remove duplicates
             items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), (uint8_t)item[0] });
             buf += item;
         }
@@ -72,7 +73,7 @@ struct FilterSetBytes {
         }
 
         if (first == 0) return false;
-        if (candidate.starts_with(std::string_view(buf.data() + items[first - 1].offset, items[first - 1].size))) return true;
+        if (candidate == std::string_view(buf.data() + items[first - 1].offset, items[first - 1].size)) return true;
 
         return false;
     }
@@ -123,14 +124,14 @@ struct NostrFilter {
         for (const auto &[k, v] : filterObj.get_object()) {
             if (v.is_array() && v.get_array().size() == 0) {
                 neverMatch = true;
-                break;
+                continue;
             }
 
             if (k == "ids") {
-                ids.emplace(v, true, 1, 32);
+                ids.emplace(v, true, 32, 32);
                 numMajorFields++;
             } else if (k == "authors") {
-                authors.emplace(v, true, 1, 32);
+                authors.emplace(v, true, 32, 32);
                 numMajorFields++;
             } else if (k == "kinds") {
                 kinds.emplace(v);
@@ -159,7 +160,7 @@ struct NostrFilter {
             }
         }
 
-        if (tags.size() > 2) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
+        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 

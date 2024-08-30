@@ -100,17 +100,6 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsPrefix = [&](btree_map<std::string, MonitorSet> &m, const std::string &key, std::function<bool(const std::string&)> matches){
-            auto it = m.lower_bound(key.substr(0, 1));
-
-            if (it == m.end()) return;
-
-            while (it != m.end() && it->first[0] == key[0]) {
-                if (matches(it->first)) processMonitorSet(it->second);
-                it = std::next(it);
-            }
-        };
-
         auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
             auto it = m.upper_bound(key);
 
@@ -128,15 +117,15 @@ struct ActiveMonitors : NonCopyable {
 
         {
             auto id = std::string(packed.id());
-            processMonitorsPrefix(allIds, id, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
-                return id.starts_with(val);
+            processMonitorsExact(allIds, id, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
+                return id == val;
             }));
         }
 
         {
             auto pubkey = std::string(packed.pubkey());
-            processMonitorsPrefix(allAuthors, pubkey, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
-                return pubkey.starts_with(val);
+            processMonitorsExact(allAuthors, pubkey, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
+                return pubkey == val;
             }));
         }
 

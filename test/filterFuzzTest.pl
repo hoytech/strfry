@@ -89,7 +89,9 @@ c1e5e04d92d9bd20701bff4cbdac1cdc317d405035883b7adcf9a6a5308d0f54
 
 my $topics = [qw{
 bitcoin
+nos
 nostr
+nostrnovember
 gitlog
 introductions
 jb55
@@ -111,14 +113,14 @@ sub genRandomFilterGroup {
             if (rand() < .15) {
                 $f->{ids} = [];
                 for (1..(rand()*10)) {
-                    push @{$f->{ids}}, randPrefix($ids->[int(rand() * @$ids)], $useLimit);
+                    push @{$f->{ids}}, $ids->[int(rand() * @$ids)];
                 }
             }
 
             if (rand() < .3) {
                 $f->{authors} = [];
                 for (1..(rand()*5)) {
-                    push @{$f->{authors}}, randPrefix($pubkeys->[int(rand() * @$pubkeys)], $useLimit);
+                    push @{$f->{authors}}, $pubkeys->[int(rand() * @$pubkeys)];
                 }
             }
 
@@ -172,13 +174,6 @@ sub genRandomFilterGroup {
     }
 
     return \@filters;
-}
-
-sub randPrefix {
-    my $v = shift;
-    my $noPrefix = shift;
-    return $v if $noPrefix || rand() < .5;
-    return substr($v, 0, (int(rand() * 20) + 1) * 2);
 }
 
 sub genRandomMonitorCmds {
@@ -235,6 +230,13 @@ sub testMonitor {
 
     my $fge = encode_json($interestFg);
     print "filt: $fge\n\n";
+
+    # HACK for debugging:
+    #$fge = q{[{"#t":["nostrnovember","nostr"]}]};
+    #$monCmds = [
+    #    ["sub",1000000,"mysub",decode_json($fge)],
+    #    ["interest",1000000,"mysub"],
+    #];
 
     print "DOING MONS\n";
     my $pid = open2(my $outfile, my $infile, './strfry monitor | jq -r .id | sort | sha256sum');

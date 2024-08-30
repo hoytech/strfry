@@ -15,5 +15,4 @@ std::string renderPercent(double p);
 uint64_t parseUint64(const std::string &s);
 std::string parseIP(const std::string &ip);
 uint64_t getDBVersion(lmdb::txn &txn);
-std::string padBytes(std::string_view str, size_t n, char padChar);
 void exitOnSigPipe();
