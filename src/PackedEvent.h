@@ -53,8 +53,8 @@ struct PackedEventView {
         std::string_view b = buf.substr(88);
 
         while (b.size()) {
-            bool done = cb(b[0], b.substr(2, (size_t)b[1]));
-            if (done) break;
+            bool ret = cb(b[0], b.substr(2, (size_t)b[1]));
+            if (!ret) break;
             b = b.substr(2 + b[1]);
         }
     }
