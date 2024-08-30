@@ -63,6 +63,7 @@ enum class EventSourceType {
     Import = 3,
     Stream = 4,
     Sync = 5,
+    Stored = 6,
 };
 
 inline std::string eventSourceTypeToStr(EventSourceType t) {
@@ -88,16 +89,13 @@ enum class EventWriteStatus {
 struct EventToWrite {
     std::string packedStr;
     std::string jsonStr;
-    uint64_t receivedAt;
-    EventSourceType sourceType;
-    std::string sourceInfo;
     void *userData = nullptr;
     EventWriteStatus status = EventWriteStatus::Pending;
     uint64_t levId = 0;
 
     EventToWrite() {}
 
-    EventToWrite(std::string packedStr, std::string jsonStr, uint64_t receivedAt, EventSourceType sourceType, std::string sourceInfo, void *userData = nullptr) : packedStr(packedStr), jsonStr(jsonStr), receivedAt(receivedAt), sourceType(sourceType), sourceInfo(sourceInfo), userData(userData) {
+    EventToWrite(std::string packedStr, std::string jsonStr, void *userData = nullptr) : packedStr(packedStr), jsonStr(jsonStr), userData(userData) {
     }
 
     std::string_view id() {

@@ -183,9 +183,9 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, hoytech::curr_time_us(), EventSourceType::Stream, url, okMsg);
+            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, EventSourceType::Stream, url, okMsg);
             if (res == PluginEventSifterResult::Accept) {
-                router->writer.write({ std::move(evJson), EventSourceType::Stream, url });
+                router->writer.write({ std::move(evJson), });
             } else {
                 if (okMsg.size()) LI << groupName << " / " << url << " : pluginDown blocked event " << evJson.at("id").get_string() << ": " << okMsg;
             }
@@ -206,7 +206,7 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, ev.receivedAt(), (EventSourceType)ev.sourceType(), ev.sourceInfo(), okMsg);
+            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, EventSourceType::Stored, "", okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 for (auto &[url, c] : conns) {
                     if (c.ws) c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);

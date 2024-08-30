@@ -314,7 +314,7 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
         }
 
         if (ev.status == EventWriteStatus::Pending) {
-            ev.levId = env.insert_Event(txn, ev.receivedAt, ev.packedStr, (uint64_t)ev.sourceType, ev.sourceInfo);
+            ev.levId = env.insert_Event(txn, ev.packedStr);
 
             tmpBuf.clear();
             tmpBuf += '\x00';

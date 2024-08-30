@@ -22,17 +22,11 @@ tables:
   ## Primary key is auto-incremented, called "levId" for Local EVent ID
   Event:
     fields:
-      - name: receivedAt # microseconds
       - name: packed
-        type: ubytes
-      - name: sourceType
-      - name: sourceInfo
         type: ubytes
 
     indices:
       created_at:
-        integer: true
-      receivedAt:
         integer: true
       id:
         comparator: StringUint64
@@ -57,7 +51,6 @@ tables:
         PackedEventView packed(v.packed());
         created_at = packed.created_at();
         uint64_t indexTime = *created_at;
-        receivedAt = v.receivedAt();
 
         id = makeKey_StringUint64(packed.id(), indexTime);
         pubkey = makeKey_StringUint64(packed.pubkey(), indexTime);

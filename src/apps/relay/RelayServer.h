@@ -65,7 +65,6 @@ struct MsgWriter : NonCopyable {
     struct AddEvent {
         uint64_t connId;
         std::string ipAddr;
-        uint64_t receivedAt;
         std::string packedStr;
         std::string jsonStr;
     };
