@@ -24,7 +24,6 @@ struct DBScan : NonCopyable {
     enum class KeyMatchResult {
         Yes,
         No,
-        NoButContinue,
     };
 
     struct ScanCursor {
@@ -111,13 +110,13 @@ struct DBScan : NonCopyable {
 
             cursors.reserve(f.ids->size());
             for (uint64_t i = 0; i < f.ids->size(); i++) {
-                std::string prefix = f.ids->at(i);
+                std::string search = f.ids->at(i);
 
                 cursors.emplace_back(
-                    padBytes(prefix, 32 + 8, '\xFF'),
+                    search + std::string(8, '\xFF'),
                     MAX_U64,
-                    [prefix](std::string_view k){
-                        return k.starts_with(prefix) ? KeyMatchResult::Yes : KeyMatchResult::No;
+                    [search](std::string_view k){
+                        return k.starts_with(search) ? KeyMatchResult::Yes : KeyMatchResult::No;
                     }
                 );
             }
@@ -161,22 +160,15 @@ struct DBScan : NonCopyable {
                 for (uint64_t j = 0; j < f.kinds->size(); j++) {
                     uint64_t kind = f.kinds->at(j);
 
-                    std::string prefix = f.authors->at(i);
-                    if (prefix.size() == 32) prefix += lmdb::to_sv<uint64_t>(kind);
+                    std::string search = f.authors->at(i);
+                    search += lmdb::to_sv<uint64_t>(kind);
 
                     cursors.emplace_back(
-                        padBytes(prefix, 32 + 8 + 8, '\xFF'),
+                        search + std::string(8, '\xFF'),
                         MAX_U64,
-                        [prefix, kind](std::string_view k){
-                            if (!k.starts_with(prefix)) return KeyMatchResult::No;
-                            if (prefix.size() == 32 + 8) return KeyMatchResult::Yes;
-
-                            ParsedKey_StringUint64Uint64 parsedKey(k);
-                            if (parsedKey.n1 == kind) return KeyMatchResult::Yes;
-
-                            // With a prefix pubkey, continue scanning (pubkey,kind) backwards because with this index
-                            // we don't know the next pubkey to jump back to
-                            return KeyMatchResult::NoButContinue;
+                        [search, kind](std::string_view k){
+                            if (!k.starts_with(search)) return KeyMatchResult::No;
+                            return KeyMatchResult::Yes;
                         }
                     );
                 }
@@ -189,13 +181,13 @@ struct DBScan : NonCopyable {
 
             cursors.reserve(f.authors->size());
             for (uint64_t i = 0; i < f.authors->size(); i++) {
-                std::string prefix = f.authors->at(i);
+                std::string search = f.authors->at(i);
 
                 cursors.emplace_back(
-                    padBytes(prefix, 32 + 8, '\xFF'),
+                    search + std::string(8, '\xFF'),
                     MAX_U64,
-                    [prefix](std::string_view k){
-                        return k.starts_with(prefix) ? KeyMatchResult::Yes : KeyMatchResult::No;
+                    [search](std::string_view k){
+                        return k.starts_with(search) ? KeyMatchResult::Yes : KeyMatchResult::No;
                     }
                 );
             }

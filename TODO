@@ -2,8 +2,6 @@
   latest negentropy
   make all std::function's const refs
   split source meta-data off Event table 
-  remove prefix matching
-    fix related github bug, add tests
 
 
 

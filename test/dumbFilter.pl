@@ -46,7 +46,7 @@ sub doesMatchSingle {
     if ($filter->{ids}) {
         my $found;
         foreach my $id (@{ $filter->{ids} }) {
-            if (startsWith($ev->{id}, $id)) {
+            if ($ev->{id} eq $id) {
                 $found = 1;
                 last;
             }
@@ -57,7 +57,7 @@ sub doesMatchSingle {
     if ($filter->{authors}) {
         my $found;
         foreach my $author (@{ $filter->{authors} }) {
-            if (startsWith($ev->{pubkey}, $author)) {
+            if ($ev->{pubkey} eq $author) {
                 $found = 1;
                 last;
             }
@@ -116,8 +116,4 @@ sub doesMatchSingle {
     }
 
     return 1;
-}
-
-sub startsWith {
-    return rindex($_[0], $_[1], 0) == 0;
 }
