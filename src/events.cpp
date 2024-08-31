@@ -231,9 +231,9 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 bool deleteEvent(lmdb::txn &txn, uint64_t levId, negentropy::storage::BTreeLMDB &negentropyStorage) {
     auto view = env.lookup_Event(txn, levId);
     if (!view) return false;
-    auto *flat = view->flat_nested();
+    PackedEventView packed(view->buf);
 
-    negentropyStorage.erase(flat->created_at(), sv(flat->id()));
+    negentropyStorage.erase(packed.created_at(), packed.id());
 
     bool deleted = env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
     env.delete_Event(txn, levId);

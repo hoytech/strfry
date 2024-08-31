@@ -161,7 +161,8 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         for (auto levId : view->levIds) {
             try {
                 auto ev = lookupEventByLevId(txn, levId);
-                view->storageVector.insert(packed.created_at(), packed.id().substr(0, view->ne.idSize));
+                PackedEventView packed(ev.buf);
+                view->storageVector.insert(packed.created_at(), packed.id());
             } catch (std::exception &) {
                 // levId was deleted when query was paused
             }

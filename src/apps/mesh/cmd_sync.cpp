@@ -76,7 +76,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
         for (auto levId : levIds) {
             auto ev = lookupEventByLevId(txn, levId);
-            storageVector.insert(packed.created_at(), packed.id().substr(0, ne.idSize));
+            PackedEventView packed(ev.buf);
+            storageVector.insert(packed.created_at(), packed.id());
         }
 
         LI << "Filter matches " << numEvents << " events";
