@@ -9,8 +9,27 @@
 static const char USAGE[] =
 R"(
     Usage:
-      import [--show-rejected] [--no-verify] [--debounce-millis=<debounce-millis>] [--write-batch=<write-batch>]
+      import [--show-rejected] [--no-verify] [--debounce-millis=<debounce-millis>] [--write-batch=<write-batch>] [--fried]
 )";
+
+
+
+EventToWrite parseFried(std::string &line) {
+    if (line.size() < 64) throw herr("fried too small");
+    if (!line.ends_with("\"}")) throw herr("fried parse error");
+
+    size_t i;
+    for (i = line.size() - 3; i > 0 && line[i] != '"'; i--) {}
+
+    if (!std::string_view(line).substr(0, i + 1).ends_with(",\"fried\":\"")) throw herr("fried parse error");
+
+    std::string packed = from_hex(std::string_view(line).substr(i + 1, line.size() - i - 3));
+
+    line[i - 9] = '}';
+    line.resize(i - 8);
+
+    return { std::move(packed), std::move(line), };
+}
 
 
 void cmd_import(const std::vector<std::string> &subArgs) {
@@ -22,6 +41,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     if (args["--debounce-millis"]) debounceMillis = args["--debounce-millis"].asLong();
     uint64_t writeBatch = 10'000;
     if (args["--write-batch"]) writeBatch = args["--write-batch"].asLong();
+    bool fried = args["--fried"].asBool();
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
@@ -46,16 +66,25 @@ void cmd_import(const std::vector<std::string> &subArgs) {
         std::getline(std::cin, line);
         if (!line.size()) continue;
 
-        tao::json::value evJson;
+        if (fried) {
+            try {
+                writer.write(parseFried(line));
+            } catch (std::exception &e) {
+                LW << "Unable to parse fried JSON on line " << currLine;
+                continue;
+            }
+        } else {
+            tao::json::value evJson;
 
-        try {
-            evJson = tao::json::from_string(line);
-        } catch (std::exception &e) {
-            LW << "Unable to parse JSON on line " << currLine;
-            continue;
+            try {
+                evJson = tao::json::from_string(line);
+            } catch (std::exception &e) {
+                LW << "Unable to parse JSON on line " << currLine;
+                continue;
+            }
+
+            writer.write({ std::move(evJson), });
         }
-
-        writer.write({ std::move(evJson), });
         writer.wait();
     }
 
