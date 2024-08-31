@@ -1,22 +1,22 @@
 1.0 release
   update DB version
-  rapid import/export
-  latest negentropy
+  update supported NIP list
+  negentropy
     multi-filter support
-    remove this? negentropy queries stored in events
+    handle dups in sync
+    make sure no crashes due to parse error
   make all std::function's const refs
   improve JSON parsing error messages
     https://github.com/hoytech/strfry/issues/83
-  docs: mention you have to run `make update-submodules` after a pull
+  bug in cron?
+    https://github.com/hoytech/strfry/pull/117
+
   go through github issues
+  docs
+    general update
+    mention you have to run `make update-submodules` after a pull
 
 
-
-
-triage
-  split plugins for relay/stream
-  more config params in negentropy
-  ? limit for total number of events, not just per filter
 
 
 features
