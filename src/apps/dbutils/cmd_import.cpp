@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <iostream>
 
 #include <docopt.h>
@@ -37,11 +40,11 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     bool showRejected = args["--show-rejected"].asBool();
     bool noVerify = args["--no-verify"].asBool();
+    bool fried = args["--fried"].asBool();
     uint64_t debounceMillis = 1'000;
     if (args["--debounce-millis"]) debounceMillis = args["--debounce-millis"].asLong();
-    uint64_t writeBatch = 10'000;
+    uint64_t writeBatch = fried ? 100'000 : 10'000;
     if (args["--write-batch"]) writeBatch = args["--write-batch"].asLong();
-    bool fried = args["--fried"].asBool();
 
     if (noVerify) LW << "not verifying event IDs or signatures!";
 
@@ -58,13 +61,16 @@ void cmd_import(const std::vector<std::string> &subArgs) {
            << ". Processed " << writer.totalProcessed << " lines. " << writer.totalWritten << " added, " << writer.totalRejected << " rejected, " << writer.totalDups << " dups";
     };
 
-    std::string line;
+    size_t bufLen = 65536;
+    char *buf = (char*)::malloc(bufLen);
+
     uint64_t currLine = 0;
 
-    while (std::cin) {
+    while (ssize_t numRead = ::getline(&buf, &bufLen, ::stdin)) {
+        if (numRead <= 0) break;
         currLine++;
-        std::getline(std::cin, line);
-        if (!line.size()) continue;
+
+        std::string line(buf, (size_t)numRead-1);
 
         if (fried) {
             try {
