@@ -184,6 +184,12 @@ struct WriterPipeline {
         validatorInbox.push_move(std::move(inp));
     }
 
+    void write(EventToWrite &&inp) {
+        totalProcessed++;
+        numLive++;
+        writerInbox.push_move(std::move(inp));
+    }
+
     void flush() {
         validatorInbox.push_move({ tao::json::null, });
         flushInbox.wait();
