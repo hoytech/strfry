@@ -137,35 +137,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
         NostrFilterGroup filter;
         auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;
 
-        if (arr.at(2).is_string()) {
-            auto ev = lookupEventById(txn, from_hex(arr.at(2).get_string()));
-            if (!ev) {
-                sendToConn(connId, tao::json::to_string(tao::json::value::array({
-                    "NEG-ERR",
-                    arr[1].get_string(),
-                    "FILTER_NOT_FOUND"
-                })));
-
-                return;
-            }
-
-            tao::json::value json = tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId));
-
-            try {
-                filter = std::move(NostrFilterGroup::unwrapped(tao::json::from_string(json.at("content").get_string()), maxFilterLimit));
-            } catch (std::exception &e) {
-                sendToConn(connId, tao::json::to_string(tao::json::value::array({
-                    "NEG-ERR",
-                    arr[1].get_string(),
-                    "FILTER_INVALID"
-                })));
-
-                return;
-            }
-        } else {
-            filter = std::move(NostrFilterGroup::unwrapped(arr.at(2), maxFilterLimit));
-        }
-
+        filter = std::move(NostrFilterGroup::unwrapped(arr.at(2), maxFilterLimit));
         Subscription sub(connId, arr[1].get_string(), std::move(filter));
 
         std::string negPayload = from_hex(arr.at(3).get_string());

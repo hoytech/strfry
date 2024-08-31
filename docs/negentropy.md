@@ -27,13 +27,13 @@ We're going to call the two sides engaged in the sync the client and the relay (
 [
     "NEG-OPEN",
     <subscription ID string>,
-    <nostr filter or event ID>,
+    <nostr filter>,
     <initialMessage, lowercase hex-encoded>
 ]
 ```
 
 * The subscription ID is used by each side to identify which query a message refers to. It only needs to be long enough to distinguish it from any other concurrent NEG requests on this websocket connection (an integer that increments once per `NEG-OPEN` is fine). If a `NEG-OPEN` is issued for a currently open subscription ID, the existing subscription is first closed.
-* The nostr filter is as described in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md), or is an event ID whose `content` contains the JSON-encoded filter/array of filters.
+* The nostr filter is as described in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md).
 * `initialMessage` is the string returned by `initiate()`, hex-encoded.
 
 ### Error message (relay to client):
@@ -55,10 +55,6 @@ Current reason codes are:
   * The maximum number of records that can be processed can optionally be returned as the 4th element in the response
 * `CLOSED`
   * Because the `NEG-OPEN` queries are stateful, relays may choose to time-out inactive queries to recover memory resources
-* `FILTER_NOT_FOUND`
-  * If an event ID is used as the filter, this error will be returned if the relay does not have this event. The client should retry with the full filter, or upload the event to the relay.
-* `FILTER_INVALID`
-  * The event's `content` was not valid JSON, or the filter was invalid for some other reason.
 
 After a `NEG-ERR` is issued, the subscription is considered to be closed.
 
