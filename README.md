@@ -31,7 +31,7 @@ A C++20 compiler is required, along with a few other common dependencies. On Deb
 
 #### Linux
 
-    sudo apt install -y git build-essential libyaml-perl libtemplate-perl libregexp-grammars-perl libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
+    sudo apt install -y git g++ make libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     make setup-golpe
@@ -39,7 +39,7 @@ A C++20 compiler is required, along with a few other common dependencies. On Deb
 
 #### FreeBSD
 
-    pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng p5-Regexp-Grammars p5-Module-Install-Template p5-YAML
+    pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     gmake setup-golpe

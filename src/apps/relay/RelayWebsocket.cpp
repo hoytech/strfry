@@ -48,7 +48,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
 
 
-    tao::json::value supportedNips = tao::json::value::array({ 1, 2, 4, 9, 11, 12, 16, 20, 22, 28, 33, 40, 114 });
+    tao::json::value supportedNips = tao::json::value::array({ 1, 2, 4, 9, 11, 20, 22, 28, 40, 70, 114 });
 
     auto getServerInfoHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
@@ -56,12 +56,18 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 { "supported_nips", supportedNips },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
                 { "version", APP_GIT_VERSION },
+                { "limitation", tao::json::value({
+                    { "max_message_length", cfg().relay__maxWebsocketPayloadSize },
+                    { "max_subscriptions", cfg().relay__maxSubsPerConnection },
+                    { "max_limit", cfg().relay__maxFilterLimit },
+                }) },
             });
 
             if (cfg().relay__info__name.size()) nip11["name"] = cfg().relay__info__name;
             if (cfg().relay__info__description.size()) nip11["description"] = cfg().relay__info__description;
             if (cfg().relay__info__contact.size()) nip11["contact"] = cfg().relay__info__contact;
             if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = cfg().relay__info__pubkey;
+            if (cfg().relay__info__icon.size()) nip11["icon"] = cfg().relay__info__icon;
 
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nip11));
             ver = cfg().version();

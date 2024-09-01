@@ -1,7 +1,13 @@
 appName: strfry
-onAppStartup: true
-useGlobalH: true
-customLMDBSetup: true
+features:
+    ssl: true
+    config: true
+    onAppStartup: true
+    db: true
+    customLMDBSetup: true
+    flatbuffers: true
+    websockets: true
+    templar: true
 
 flatBuffers: |
     include "../fbs/nostr-index.fbs";
