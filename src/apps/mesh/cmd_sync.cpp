@@ -151,6 +151,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     uint64_t inFlightUp = 0;
     bool inFlightDown = false; // bool because we can't count on getting every EVENT we request (might've been deleted mid-query)
     std::vector<std::string> have, need;
+    flat_hash_set<std::string> seenHave, seenNeed;
     bool syncDone = false;
     uint64_t totalHaves = 0, totalNeeds = 0;
     Decompressor decomp;
@@ -168,6 +169,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 try {
                     auto inputMsg = from_hex(msg.at(2).get_string());
 
+                    std::vector<std::string> currHave, currNeed;
+
                     if (treeId) {
                         negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, *treeId);
 
@@ -176,11 +179,23 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
 
                         Negentropy ne(subStorage, frameSizeLimit);
                         ne.setInitiator();
-                        neMsg = ne.reconcile(inputMsg, have, need);
+                        neMsg = ne.reconcile(inputMsg, currHave, currNeed);
                     } else {
                         Negentropy ne(storageVector, frameSizeLimit);
                         ne.setInitiator();
-                        neMsg = ne.reconcile(inputMsg, have, need);
+                        neMsg = ne.reconcile(inputMsg, currHave, currNeed);
+                    }
+
+                    for (auto &id : currHave) {
+                        if (seenHave.contains(id)) continue;
+                        seenHave.insert(id);
+                        have.push_back(std::move(id));
+                    }
+
+                    for (auto &id : currNeed) {
+                        if (seenNeed.contains(id)) continue;
+                        seenNeed.insert(id);
+                        need.push_back(std::move(id));
                     }
                 } catch (std::exception &e) {
                     LE << "Unable to parse negentropy message from relay: " << e.what();
