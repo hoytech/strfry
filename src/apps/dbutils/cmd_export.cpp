@@ -48,6 +48,8 @@ void cmd_export(const std::vector<std::string> &subArgs) {
         std::string_view json = getEventJson(txn, decomp, levId);
 
         if (fried) {
+            if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
+
             auto ev = lookupEventByLevId(txn, levId);
 
             o.clear();
