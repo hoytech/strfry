@@ -5,6 +5,7 @@
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
     PluginEventSifter writePolicyPlugin;
+    NegentropyFilterCache neFilterCache;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -61,7 +62,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         try {
             auto txn = env.txn_rw();
-            writeEvents(txn, newEvents);
+            writeEvents(txn, neFilterCache, newEvents);
             txn.commit();
         } catch (std::exception &e) {
             LE << "Error writing " << newEvents.size() << " events: " << e.what();

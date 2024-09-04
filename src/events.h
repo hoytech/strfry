@@ -1,11 +1,11 @@
 #pragma once
 
 #include <secp256k1_schnorrsig.h>
-#include <negentropy/storage/BTreeLMDB.h>
 
 #include "golpe.h"
 
 #include "PackedEvent.h"
+#include "NegentropyFilterCache.h"
 #include "Decompressor.h"
 
 
@@ -99,6 +99,7 @@ struct EventToWrite {
     EventToWrite(std::string packedStr, std::string jsonStr, void *userData = nullptr) : packedStr(packedStr), jsonStr(jsonStr), userData(userData) {
     }
 
+    // FIXME: do we need these methods anymore?
     std::string_view id() {
         return PackedEventView(packedStr).id();
     }
@@ -109,5 +110,21 @@ struct EventToWrite {
 };
 
 
-void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLevel = 1);
-bool deleteEvent(lmdb::txn &txn, uint64_t levId, negentropy::storage::BTreeLMDB &negentropyStorage);
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel = 1);
+bool deleteEventBasic(lmdb::txn &txn, uint64_t levId);
+
+template <typename C>
+uint64_t deleteEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, const C &levIds) {
+    uint64_t numDeleted = 0;
+
+    neFilterCache.ctx(txn, [&](const std::function<void(const PackedEventView &, bool)> &updateNegentropy){
+        for (auto levId : levIds) {
+            auto evToDel = env.lookup_Event(txn, levId);
+            if (!evToDel) continue; // already deleted
+            updateNegentropy(PackedEventView(evToDel->buf), false);
+            if (deleteEventBasic(txn, levId)) numDeleted++;
+        }
+    });
+
+    return numDeleted;
+}

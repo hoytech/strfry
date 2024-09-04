@@ -24,7 +24,8 @@ static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     auto s = env.lookup_Meta(txn, 1);
 
     if (!s) {
-        env.insert_Meta(txn, CURR_DB_VERSION, 1);
+        env.insert_Meta(txn, CURR_DB_VERSION, 1, 1);
+        env.insert_NegentropyFilter(txn, "{}");
         return;
     }
 

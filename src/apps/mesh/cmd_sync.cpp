@@ -50,39 +50,56 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     tao::json::value filterJson = tao::json::from_string(filterStr);
     auto filterCompiled = NostrFilterGroup::unwrapped(filterJson);
 
-
-    bool isFullDbQuery = filterCompiled.isFullDbQuery();
+    std::optional<uint64_t> treeId;
     negentropy::storage::Vector storageVector;
 
-    if (!isFullDbQuery) {
-        DBQuery query(filterJson);
-        Decompressor decomp;
 
+    {
         auto txn = env.txn_ro();
 
-        uint64_t numEvents = 0;
-        std::vector<uint64_t> levIds;
-
-        while (1) {
-            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
-                levIds.push_back(levId);
-                numEvents++;
-            });
-
-            if (complete) break;
+        auto filterJsonNoTimes = filterJson;
+        if (filterJsonNoTimes.is_object()) {
+            filterJsonNoTimes.get_object().erase("since");
+            filterJsonNoTimes.get_object().erase("until");
         }
+        auto filterJsonNoTimesStr = tao::json::to_string(filterJsonNoTimes);
 
-        std::sort(levIds.begin(), levIds.end());
+        env.foreach_NegentropyFilter(txn, [&](auto &f){
+            if (f.filter() == filterJsonNoTimesStr) {
+                treeId = f.primaryKeyId;
+                return false;
+            }
+            return true;
+        });
 
-        for (auto levId : levIds) {
-            auto ev = lookupEventByLevId(txn, levId);
-            PackedEventView packed(ev.buf);
-            storageVector.insert(packed.created_at(), packed.id());
+        if (!treeId) {
+            DBQuery query(filterJson);
+            Decompressor decomp;
+
+            uint64_t numEvents = 0;
+            std::vector<uint64_t> levIds;
+
+            while (1) {
+                bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+                    levIds.push_back(levId);
+                    numEvents++;
+                });
+
+                if (complete) break;
+            }
+
+            std::sort(levIds.begin(), levIds.end());
+
+            for (auto levId : levIds) {
+                auto ev = lookupEventByLevId(txn, levId);
+                PackedEventView packed(ev.buf);
+                storageVector.insert(packed.created_at(), packed.id());
+            }
+
+            LI << "Filter matches " << numEvents << " events";
+
+            storageVector.seal();
         }
-
-        LI << "Filter matches " << numEvents << " events";
-
-        storageVector.seal();
     }
 
 
@@ -98,8 +115,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         auto txn = env.txn_ro();
         std::string neMsg;
 
-        if (isFullDbQuery) {
-            negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, 0);
+        if (treeId) {
+            negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, *treeId);
 
             const auto &f = filterCompiled.filters.at(0);
             negentropy::storage::SubRange subStorage(storageBtree, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
@@ -151,8 +168,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 try {
                     auto inputMsg = from_hex(msg.at(2).get_string());
 
-                    if (isFullDbQuery) {
-                        negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, 0);
+                    if (treeId) {
+                        negentropy::storage::BTreeLMDB storageBtree(txn, negentropyDbi, *treeId);
 
                         const auto &f = filterCompiled.filters.at(0);
                         negentropy::storage::SubRange subStorage(storageBtree, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));

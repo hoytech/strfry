@@ -85,6 +85,8 @@ struct WriterPipeline {
         writerThread = std::thread([&]() {
             setThreadName("Writer");
 
+            NegentropyFilterCache neFilterCache;
+
             while (1) {
                 // Debounce
 
@@ -141,7 +143,7 @@ struct WriterPipeline {
                 if (newEventsToProc.size()) {
                     {
                         auto txn = env.txn_rw();
-                        writeEvents(txn, newEventsToProc);
+                        writeEvents(txn, neFilterCache, newEventsToProc);
                         txn.commit();
                     }
 

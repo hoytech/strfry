@@ -134,15 +134,22 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
     if (arr.at(0) == "NEG-OPEN") {
         if (arr.get_array().size() < 4) throw herr("negentropy query missing elements");
 
-        NostrFilterGroup filter;
         auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;
 
-        filter = std::move(NostrFilterGroup::unwrapped(arr.at(2), maxFilterLimit));
+        auto filterJson = arr.at(2);
+
+        NostrFilterGroup filter = NostrFilterGroup::unwrapped(filterJson, maxFilterLimit);
         Subscription sub(connId, arr[1].get_string(), std::move(filter));
+
+        if (filterJson.is_object()) {
+            filterJson.get_object().erase("since");
+            filterJson.get_object().erase("until");
+        }
+        std::string filterStr = tao::json::to_string(filterJson);
 
         std::string negPayload = from_hex(arr.at(3).get_string());
 
-        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), std::move(negPayload)}});
+        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), std::move(filterStr), std::move(negPayload)}});
     } else if (arr.at(0) == "NEG-MSG") {
         std::string negPayload = from_hex(arr.at(2).get_string());
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegMsg{connId, SubId(arr[1].get_string()), std::move(negPayload)}});

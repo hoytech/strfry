@@ -17,6 +17,7 @@ struct NegentropyViews {
 
     struct StatelessView {
         Subscription sub;
+        uint64_t treeId;
     };
 
     using UserView = std::variant<MemoryView, StatelessView>;
@@ -42,7 +43,7 @@ struct NegentropyViews {
         return true;
     }
 
-    bool addStatelessView(uint64_t connId, const SubId &subId, Subscription &&sub) {
+    bool addStatelessView(uint64_t connId, const SubId &subId, Subscription &&sub, uint64_t treeId) {
         {
             auto *existing = findView(connId, subId);
             if (existing) removeView(connId, subId);
@@ -55,7 +56,7 @@ struct NegentropyViews {
             return false;
         }
 
-        connViews.try_emplace(subId, UserView{ StatelessView{ std::move(sub), } });
+        connViews.try_emplace(subId, UserView{ StatelessView{ std::move(sub), treeId, } });
 
         return true;
     }
@@ -188,15 +189,24 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             if (auto msg = std::get_if<MsgNegentropy::NegOpen>(&newMsg.msg)) {
                 auto connId = msg->sub.connId;
                 auto subId = msg->sub.subId;
+                std::optional<uint64_t> treeId;
 
-                if (msg->sub.filterGroup.isFullDbQuery()) {
-                    negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, 0);
+                env.foreach_NegentropyFilter(txn, [&](auto &f){
+                    if (f.filter() == msg->filterStr) {
+                        treeId = f.primaryKeyId;
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (treeId) {
+                    negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, *treeId);
 
                     const auto &f = msg->sub.filterGroup.filters.at(0);
                     negentropy::storage::SubRange subStorage(storage, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));
                     handleReconcile(connId, subId, subStorage, msg->negPayload);
 
-                    if (!views.addStatelessView(connId, subId, std::move(msg->sub))) {
+                    if (!views.addStatelessView(connId, subId, std::move(msg->sub), *treeId)) {
                         queries.removeSub(connId, subId);
                         sendNoticeError(connId, std::string("too many concurrent NEG requests"));
                     }
@@ -231,7 +241,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     }
                     handleReconcile(msg->connId, msg->subId, view->storageVector, msg->negPayload);
                 } else if (auto *view = std::get_if<NegentropyViews::StatelessView>(userView)) {
-                    negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, 0);
+                    negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, view->treeId);
 
                     const auto &f = view->sub.filterGroup.filters.at(0);
                     negentropy::storage::SubRange subStorage(storage, negentropy::Bound(f.since), negentropy::Bound(f.until == MAX_U64 ? MAX_U64 : f.until + 1));

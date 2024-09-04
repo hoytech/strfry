@@ -227,23 +227,17 @@ std::string_view getEventJson(lmdb::txn &txn, Decompressor &decomp, uint64_t lev
 
 
 
+// Do not use externally: does not handle negentropy trees
 
-bool deleteEvent(lmdb::txn &txn, uint64_t levId, negentropy::storage::BTreeLMDB &negentropyStorage) {
-    auto view = env.lookup_Event(txn, levId);
-    if (!view) return false;
-    PackedEventView packed(view->buf);
-
-    negentropyStorage.erase(packed.created_at(), packed.id());
-
+bool deleteEventBasic(lmdb::txn &txn, uint64_t levId) {
     bool deleted = env.dbi_EventPayload.del(txn, lmdb::to_sv<uint64_t>(levId));
     env.delete_Event(txn, levId);
-
     return deleted;
 }
 
 
 
-void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLevel) {
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel) {
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
         auto aC = a.createdAt();
         auto bC = b.createdAt();
@@ -254,95 +248,99 @@ void writeEvents(lmdb::txn &txn, std::vector<EventToWrite> &evs, uint64_t logLev
     std::vector<uint64_t> levIdsToDelete;
     std::string tmpBuf;
 
-    negentropy::storage::BTreeLMDB negentropyStorage(txn, negentropyDbi, 0);
+    neFilterCache.ctx(txn, [&](const std::function<void(const PackedEventView &, bool)> &updateNegentropy){
+        for (size_t i = 0; i < evs.size(); i++) {
+            auto &ev = evs[i];
 
-    for (size_t i = 0; i < evs.size(); i++) {
-        auto &ev = evs[i];
+            PackedEventView packed(ev.packedStr);
 
-        PackedEventView packed(ev.packedStr);
+            if (lookupEventById(txn, packed.id()) || (i != 0 && ev.id() == evs[i-1].id())) {
+                ev.status = EventWriteStatus::Duplicate;
+                continue;
+            }
 
-        if (lookupEventById(txn, packed.id()) || (i != 0 && ev.id() == evs[i-1].id())) {
-            ev.status = EventWriteStatus::Duplicate;
-            continue;
-        }
+            if (env.lookup_Event__deletion(txn, std::string(packed.id()) + std::string(packed.pubkey()))) {
+                ev.status = EventWriteStatus::Deleted;
+                continue;
+            }
 
-        if (env.lookup_Event__deletion(txn, std::string(packed.id()) + std::string(packed.pubkey()))) {
-            ev.status = EventWriteStatus::Deleted;
-            continue;
-        }
+            {
+                std::optional<std::string> replace;
 
-        {
-            std::optional<std::string> replace;
+                if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
+                    packed.foreachTag([&](char tagName, std::string_view tagVal){
+                        if (tagName != 'd') return true;
+                        replace = std::string(tagVal);
+                        return false;
+                    });
+                }
 
-            if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
+                if (replace) {
+                    auto searchStr = std::string(packed.pubkey()) + *replace;
+                    auto searchKey = makeKey_StringUint64(searchStr, packed.kind());
+
+                    env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
+                        ParsedKey_StringUint64 parsedKey(k);
+                        if (parsedKey.s == searchStr && parsedKey.n == packed.kind()) {
+                            auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+
+                            auto thisTimestamp = packed.created_at();
+                            auto otherPacked = PackedEventView(otherEv.buf);
+                            auto otherTimestamp = otherPacked.created_at();
+
+                            if (otherTimestamp < thisTimestamp ||
+                                (otherTimestamp == thisTimestamp && packed.id() < otherPacked.id())) {
+                                if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                                levIdsToDelete.push_back(otherEv.primaryKeyId);
+                            } else {
+                                ev.status = EventWriteStatus::Replaced;
+                            }
+                        }
+
+                        return false;
+                    }, true);
+                }
+            }
+
+            if (packed.kind() == 5) {
+                // Deletion event, delete all referenced events
                 packed.foreachTag([&](char tagName, std::string_view tagVal){
-                    if (tagName != 'd') return true;
-                    replace = std::string(tagVal);
-                    return false;
+                    if (tagName == 'e') {
+                        auto otherEv = lookupEventById(txn, tagVal);
+                        if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
+                            if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(tagVal);
+                            levIdsToDelete.push_back(otherEv->primaryKeyId);
+                        }
+                    }
+                    return true;
                 });
             }
 
-            if (replace) {
-                auto searchStr = std::string(packed.pubkey()) + *replace;
-                auto searchKey = makeKey_StringUint64(searchStr, packed.kind());
+            if (ev.status == EventWriteStatus::Pending) {
+                ev.levId = env.insert_Event(txn, ev.packedStr);
 
-                env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
-                    ParsedKey_StringUint64 parsedKey(k);
-                    if (parsedKey.s == searchStr && parsedKey.n == packed.kind()) {
-                        auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                tmpBuf.clear();
+                tmpBuf += '\x00';
+                tmpBuf += ev.jsonStr;
+                env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
 
-                        auto thisTimestamp = packed.created_at();
-                        auto otherPacked = PackedEventView(otherEv.buf);
-                        auto otherTimestamp = otherPacked.created_at();
+                updateNegentropy(PackedEventView(ev.packedStr), true);
 
-                        if (otherTimestamp < thisTimestamp ||
-                            (otherTimestamp == thisTimestamp && packed.id() < otherPacked.id())) {
-                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
-                            levIdsToDelete.push_back(otherEv.primaryKeyId);
-                        } else {
-                            ev.status = EventWriteStatus::Replaced;
-                        }
-                    }
+                ev.status = EventWriteStatus::Written;
 
-                    return false;
-                }, true);
-            }
-        }
+                // Deletions happen after event was written to ensure levIds are not reused
 
-        if (packed.kind() == 5) {
-            // Deletion event, delete all referenced events
-            packed.foreachTag([&](char tagName, std::string_view tagVal){
-                if (tagName == 'e') {
-                    auto otherEv = lookupEventById(txn, tagVal);
-                    if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
-                        if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(tagVal);
-                        levIdsToDelete.push_back(otherEv->primaryKeyId);
-                    }
+                for (auto levId : levIdsToDelete) {
+                    auto evToDel = env.lookup_Event(txn, levId);
+                    if (!evToDel) continue; // already deleted
+                    updateNegentropy(PackedEventView(evToDel->buf), false);
+                    deleteEventBasic(txn, levId);
                 }
-                return true;
-            });
+
+                levIdsToDelete.clear();
+            }
+
+            if (levIdsToDelete.size()) throw herr("unprocessed deletion");
         }
-
-        if (ev.status == EventWriteStatus::Pending) {
-            ev.levId = env.insert_Event(txn, ev.packedStr);
-
-            tmpBuf.clear();
-            tmpBuf += '\x00';
-            tmpBuf += ev.jsonStr;
-            env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
-
-            negentropyStorage.insert(ev.createdAt(), ev.id());
-
-            ev.status = EventWriteStatus::Written;
-
-            // Deletions happen after event was written to ensure levIds are not reused
-
-            for (auto levId : levIdsToDelete) deleteEvent(txn, levId, negentropyStorage);
-            levIdsToDelete.clear();
-        }
-
-        if (levIdsToDelete.size()) throw herr("unprocessed deletion");
-    }
-
-    negentropyStorage.flush();
+    });
 }

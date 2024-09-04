@@ -17,6 +17,7 @@ tables:
     fields:
       - name: dbVersion
       - name: endianness
+      - name: negentropyModificationCounter
 
   ## Meta-info of nostr events, suitable for indexing
   ## Primary key is auto-incremented, called "levId" for Local EVent ID
@@ -75,6 +76,11 @@ tables:
     fields:
       - name: dict
         type: ubytes
+
+  NegentropyFilter:
+    fields:
+      - name: filter
+        type: string
 
 tablesRaw:
   ## Raw nostr event JSON, possibly compressed
