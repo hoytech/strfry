@@ -31,7 +31,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessEvent(txn, msg->connId, msg->ipAddr, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
-                                sendOKResponse(msg->connId, arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
+                                sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("invalid: ") + e.what());
                                 if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
                             }
@@ -134,10 +134,12 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao:
 void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
     if (arr.get_array().size() != 2) throw herr("arr too small/big");
 
-    tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(arr[1].get_string())}});
+    tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(jsonGetString(arr[1], "CLOSE subscription id was not a string"))}});
 }
 
 void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp, uint64_t connId, const tao::json::value &arr) {
+    const auto &subscriptionStr = jsonGetString(arr[1], "NEG-OPEN subscription id was not a string");
+
     if (arr.at(0) == "NEG-OPEN") {
         if (arr.get_array().size() < 4) throw herr("negentropy query missing elements");
 
@@ -146,7 +148,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
         auto filterJson = arr.at(2);
 
         NostrFilterGroup filter = NostrFilterGroup::unwrapped(filterJson, maxFilterLimit);
-        Subscription sub(connId, jsonGetString(arr[1], "NEG-OPEN subscription id was not a string"), std::move(filter));
+        Subscription sub(connId, subscriptionStr, std::move(filter));
 
         if (filterJson.is_object()) {
             filterJson.get_object().erase("since");
@@ -154,14 +156,14 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
         }
         std::string filterStr = tao::json::to_string(filterJson);
 
-        std::string negPayload = from_hex(arr.at(3).get_string());
+        std::string negPayload = from_hex(jsonGetString(arr.at(3), "negentropy payload not a string"));
 
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), std::move(filterStr), std::move(negPayload)}});
     } else if (arr.at(0) == "NEG-MSG") {
-        std::string negPayload = from_hex(arr.at(2).get_string());
-        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegMsg{connId, SubId(arr[1].get_string()), std::move(negPayload)}});
+        std::string negPayload = from_hex(jsonGetString(arr.at(2), "negentropy payload not a string"));
+        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegMsg{connId, SubId(subscriptionStr), std::move(negPayload)}});
     } else if (arr.at(0) == "NEG-CLOSE") {
-        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegClose{connId, SubId(arr[1].get_string())}});
+        tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegClose{connId, SubId(subscriptionStr)}});
     } else {
         throw herr("unknown command");
     }

@@ -36,8 +36,8 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
         auto tagVal = tag.size() >= 2 ? jsonGetString(tag.at(1), "tag val was not a string") : "";
 
         if (tagName == "e" || tagName == "p") {
+            if (tagVal.size() != 64) throw herr("unexpected size for fixed-size tag: ", tagName);
             tagVal = from_hex(tagVal, false);
-            if (tagVal.size() != 32) throw herr("unexpected size for fixed-size tag");
 
             tagBuilder.add(tagName[0], tagVal);
         } else if (tagName == "expiration") {
@@ -135,6 +135,8 @@ void verifyEventTimestamp(PackedEventView packed) {
 
 
 void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &packedStr, std::string &jsonStr) {
+    if (!origJson.is_object()) throw herr("event is not an object");
+
     packedStr = nostrJsonToPackedEvent(origJson);
     PackedEventView packed(packedStr);
     if (verifyTime) verifyEventTimestamp(packed);
