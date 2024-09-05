@@ -1,30 +1,8 @@
-1.0 release
-  negentropy
-    make sure no crashes due to parse error
-  make all std::function's const refs
-  FixedBytes32
-    negentropy have/need, seenHave/seenNeed
-    negentropy command Record.id field
-    ActiveMonitors allIds/allAuthors
-    cmd_stream downloadedIds
-    nostrHash
-  improve JSON parsing error messages
-    https://github.com/hoytech/strfry/issues/83
-  HELLO/WELCOME msgs? auth?
-
-  update DB version
-  update supported NIP list (add 70: protected events)
-  go through github issues
-  docs
-    general update
-    mention you have to run `make update-submodules` after a pull
-
-
-
-
 features
   in sync/stream, log bytes up/down and compression ratios
   NIP-42 AUTH
+  NIP-45 COUNT
+  archival mode (no deleting of events)
   slow-websocket connection detection and back-pressure
   ? less verbose default logging
   ? kill plugin if it times out
