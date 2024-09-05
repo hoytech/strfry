@@ -85,7 +85,7 @@ struct ActiveMonitors : NonCopyable {
         conns.erase(connId);
     }
 
-    void process(lmdb::txn &txn, defaultDb::environment::View_Event &ev, std::function<void(RecipientList &&, uint64_t)> cb) {
+    void process(lmdb::txn &txn, defaultDb::environment::View_Event &ev, const std::function<void(RecipientList &&, uint64_t)> &cb) {
         RecipientList recipients;
 
         auto processMonitorSet = [&](MonitorSet &ms){
@@ -101,7 +101,7 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, std::function<bool(const T &)> matches){
+        auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, const std::function<bool(const T &)> &matches){
             auto it = m.upper_bound(key);
 
             if (it == m.begin()) return;
@@ -118,21 +118,21 @@ struct ActiveMonitors : NonCopyable {
 
         {
             Bytes32 id(packed.id());
-            processMonitorsExact(allIds, id, static_cast<std::function<bool(const Bytes32&)>>([&](const Bytes32 &val){
+            processMonitorsExact(allIds, id, static_cast<const std::function<bool(const Bytes32&)> &>([&](const Bytes32 &val){
                 return id == val;
             }));
         }
 
         {
             Bytes32 pubkey(packed.pubkey());
-            processMonitorsExact(allAuthors, pubkey, static_cast<std::function<bool(const Bytes32&)>>([&](const Bytes32 &val){
+            processMonitorsExact(allAuthors, pubkey, static_cast<const std::function<bool(const Bytes32&)> &>([&](const Bytes32 &val){
                 return pubkey == val;
             }));
         }
 
         packed.foreachTag([&](char tagName, std::string_view tagVal){
             auto &tagSpec = getTagSpec(tagName, tagVal);
-            processMonitorsExact(allTags, tagSpec, static_cast<std::function<bool(const std::string&)>>([&](const std::string &val){
+            processMonitorsExact(allTags, tagSpec, static_cast<const std::function<bool(const std::string&)> &>([&](const std::string &val){
                 return tagSpec == val;
             }));
             return true;
@@ -140,7 +140,7 @@ struct ActiveMonitors : NonCopyable {
 
         {
             auto kind = packed.kind();
-            processMonitorsExact(allKinds, kind, static_cast<std::function<bool(const uint64_t&)>>([&](const uint64_t &val){
+            processMonitorsExact(allKinds, kind, static_cast<const std::function<bool(const uint64_t&)> &>([&](const uint64_t &val){
                 return kind == val;
             }));
         }

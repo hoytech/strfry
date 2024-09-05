@@ -226,7 +226,7 @@ struct DBScan : NonCopyable {
         refillScanDepth = 10 * initialScanDepth;
     }
 
-    bool scan(lmdb::txn &txn, std::function<bool(uint64_t)> handleEvent, std::function<bool(uint64_t)> doPause) {
+    bool scan(lmdb::txn &txn, const std::function<bool(uint64_t)> &handleEvent, const std::function<bool(uint64_t)> &doPause) {
         auto cmp = [](auto &a, auto &b){
             return a.created() == b.created() ? a.levId() > b.levId() : a.created() > b.created();
         };
@@ -299,7 +299,7 @@ struct DBQuery : NonCopyable {
     DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup::unwrapped(filter, maxLimit))) {}
 
     // If scan is complete, returns true
-    bool process(lmdb::txn &txn, std::function<void(const Subscription &, uint64_t)> cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
+    bool process(lmdb::txn &txn, const std::function<void(const Subscription &, uint64_t)> &cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
         while (filterGroupIndex < sub.filterGroup.size()) {
             const auto &f = sub.filterGroup.filters[filterGroupIndex];
 
@@ -370,7 +370,7 @@ struct DBQuery : NonCopyable {
 };
 
 
-inline void foreachByFilter(lmdb::txn &txn, const tao::json::value &filter, std::function<void(uint64_t)> cb) {
+inline void foreachByFilter(lmdb::txn &txn, const tao::json::value &filter, const std::function<void(uint64_t)> &cb) {
     DBQuery query(filter);
 
     query.process(txn, [&](const auto &, uint64_t levId){

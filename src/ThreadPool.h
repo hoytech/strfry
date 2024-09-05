@@ -19,7 +19,7 @@ struct ThreadPool {
         join();
     }
 
-    void init(std::string name, uint64_t numThreads_, std::function<void(Thread &t)> cb) {
+    void init(std::string name, uint64_t numThreads_, const std::function<void(Thread &t)> &cb) {
         if (numThreads_ == 0) throw herr("must have more than 0 threads");
 
         numThreads = numThreads_;
@@ -49,7 +49,7 @@ struct ThreadPool {
         pool[who].inbox.push_move_all(m);
     }
 
-    void dispatchToAll(std::function<M()> cb) {
+    void dispatchToAll(const std::function<M()> &cb) {
         for (size_t i = 0; i < numThreads; i++) pool[i].inbox.push_move(cb());
     }
 
