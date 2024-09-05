@@ -1,3 +1,49 @@
+1.0.0
+  * Refactored database format to use a custom PackedEvent encoding, removed some
+    unnecessary indices. This reduces the size of the DB and should help improve
+    query performance in some cases.
+  * Because of the above, the DB version has been increased to 3, meaning events
+    will need to be exported and reimported into a new DB.
+  * Added a special `--fried` mode for import and export that greatly (10x or more)
+    speeds up the process.
+  * Removed prefix matching on ids and authors fields. This was removed from
+    NIP-01. Now, you must use exactly 32 byte (64 hex character) values.
+  * Upgraded negentropy to protocol version 1.
+  * Use the C++ negentropy implementation's BTree support to cache the results
+    of negentropy fingerprints over arbitrary nostr queries. By default the
+    query {} (the full DB) is tracked, but additional queries can be added
+    using the new `strfry negentropy` command.
+  * The negentropy version is now indicated in the NIP-11 relay information
+    and the HTML landing page.
+  * Parsing-related error messages were greatly improved. Instead of just getting
+    "bad msg: std::get: wrong index for variant", in most situations you will
+    now get a more useful message such as "first element not a command like REQ"
+  * Refactored some critical areas like ActiveMonitors to use a precise 32-byte
+    type instead of std::string. This will reduce pointer chasing and memory
+    usage and, more importantly, improve CPU caching.
+  * The perl libraries needed at compile-time are now bundled in golpe, so they
+    do not need to be separately installed to build strfry.
+  * Bugfix: When querying for 2 or more tags where one of the tags was a prefix
+    of the other, matching events would not be returned. Reported by mrkvon. 
+
+0.9.7
+  * `--fried` support from 1.0.0 was back-ported, allowing export of DBs
+    in a fried format for efficient import by 1.0.0+ relays.
+  * Bugfix: The cron thread was incorrectly removing expireable events prior
+    to their expiry. Reported and fixed by KoalaSat.
+  * A `limitation` entry is now included in the NIP-11 output. This exposes
+    configured relay limits such as max message size. Added by Alex Gleason.
+  * Node info support added: The relay now replies to requests to /nodeinfo/2.1
+    and /.well-known/nodeinfo . Added by Alex Gleason.
+  * NIP-70 support: Events with a "_" tag are considered protected and relays
+    should only allow them to be posted by their author. Since strfry does
+    not yet support AUTH, these events are always rejected. Added by fiatjaf.
+  * NIP-11 icon support added by zappityzap.
+  * Preliminary FreeBSD support added by cosmicpsyop.
+  * Switch import to use WriterPipeline, allowing strfry import be used as a
+    general-purpose non-relay event ingester. To do so, users must ensure that
+    the stdout of their process they pipe into import is line buffered.
+
 0.9.6
   * Bugfix: Sometimes malformed or old-format negentropy messages would throw
     uncaught exceptions which would cause the relay to crash. Now it properly
