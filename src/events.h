@@ -4,6 +4,7 @@
 
 #include "golpe.h"
 
+#include "Bytes32.h"
 #include "PackedEvent.h"
 #include "NegentropyFilterCache.h"
 #include "Decompressor.h"
@@ -36,7 +37,7 @@ inline bool isEphemeralKind(uint64_t kind) {
 
 
 std::string nostrJsonToPackedEvent(const tao::json::value &v);
-std::string nostrHash(const tao::json::value &origJson);
+Bytes32 nostrHash(const tao::json::value &origJson);
 
 bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view hash, std::string_view pubkey);
 void verifyNostrEvent(secp256k1_context *secpCtx, PackedEventView packed, const tao::json::value &origJson);

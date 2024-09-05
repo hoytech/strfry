@@ -3,6 +3,7 @@
 #include <docopt.h>
 #include "golpe.h"
 
+#include "Bytes32.h"
 #include "NegentropyFilterCache.h"
 #include "events.h"
 #include "DBQuery.h"
@@ -74,7 +75,7 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
 
         struct Record {
             uint64_t created_at;
-            uint8_t id[32];
+            Bytes32 id;
         };
 
         std::vector<Record> recs;
@@ -100,8 +101,8 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
             bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
                 auto ev = lookupEventByLevId(txn, levId);
                 auto packed = PackedEventView(ev.buf);
-                recs.push_back({ packed.created_at(), });
-                memcpy(recs.back().id, packed.id().data(), 32);
+                recs.emplace_back(packed.created_at(), packed.id());
+                //memcpy(recs.back().id, packed.id().data(), 32);
             });
 
             if (complete) break;
@@ -112,7 +113,7 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
         negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, treeId);
 
         for (const auto &r : recs) {
-            storage.insert(r.created_at, std::string_view((char*)r.id, 32));
+            storage.insert(r.created_at, r.id.sv());
         }
 
         storage.flush();

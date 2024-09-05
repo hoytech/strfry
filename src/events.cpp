@@ -68,7 +68,7 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
     return std::move(builder.buf);
 }
 
-std::string nostrHash(const tao::json::value &origJson) {
+Bytes32 nostrHash(const tao::json::value &origJson) {
     tao::json::value arr = tao::json::empty_array;
 
     arr.emplace_back(0);
@@ -84,7 +84,7 @@ std::string nostrHash(const tao::json::value &origJson) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256(reinterpret_cast<unsigned char*>(encoded.data()), encoded.size(), hash);
 
-    return std::string(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
+    return Bytes32(std::string_view(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH));
 }
 
 bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view hash, std::string_view pubkey) {
@@ -106,7 +106,7 @@ bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view ha
 
 void verifyNostrEvent(secp256k1_context *secpCtx, PackedEventView packed, const tao::json::value &origJson) {
     auto hash = nostrHash(origJson);
-    if (hash != packed.id()) throw herr("bad event id");
+    if (hash != Bytes32(packed.id())) throw herr("bad event id");
 
     bool valid = verifySig(secpCtx, from_hex(jsonGetString(origJson.at("sig"), "event sig was not a string"), false), packed.id(), packed.pubkey());
     if (!valid) throw herr("bad signature");

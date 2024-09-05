@@ -7,6 +7,7 @@
 
 #include "golpe.h"
 
+#include "Bytes32.h"
 #include "WriterPipeline.h"
 #include "Subscription.h"
 #include "WSConnection.h"
@@ -150,8 +151,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     const uint64_t batchSizeDown = 50;
     uint64_t inFlightUp = 0;
     bool inFlightDown = false; // bool because we can't count on getting every EVENT we request (might've been deleted mid-query)
-    std::vector<std::string> have, need;
-    flat_hash_set<std::string> seenHave, seenNeed;
+    std::vector<Bytes32> have, need;
+    flat_hash_set<Bytes32> seenHave, seenNeed;
     bool syncDone = false;
     uint64_t totalHaves = 0, totalNeeds = 0;
     Decompressor decomp;
@@ -186,16 +187,18 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                         neMsg = ne.reconcile(inputMsg, currHave, currNeed);
                     }
 
-                    for (auto &id : currHave) {
+                    for (auto &idStr : currHave) {
+                        Bytes32 id(idStr);
                         if (seenHave.contains(id)) continue;
                         seenHave.insert(id);
-                        have.push_back(std::move(id));
+                        have.push_back(id);
                     }
 
-                    for (auto &id : currNeed) {
+                    for (auto &idStr : currNeed) {
+                        Bytes32 id(idStr);
                         if (seenNeed.contains(id)) continue;
                         seenNeed.insert(id);
-                        need.push_back(std::move(id));
+                        need.push_back(id);
                     }
                 } catch (std::exception &e) {
                     LE << "Unable to parse negentropy message from relay: " << e.what();
@@ -263,7 +266,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 auto id = std::move(have.back());
                 have.pop_back();
 
-                auto ev = lookupEventById(txn, id);
+                auto ev = lookupEventById(txn, id.sv());
                 if (!ev) {
                     LW << "Couldn't upload event because not found (deleted?)";
                     continue;
@@ -285,7 +288,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             tao::json::value ids = tao::json::empty_array;
 
             while (need.size() > 0 && ids.get_array().size() < batchSizeDown) {
-                ids.emplace_back(to_hex(need.back()));
+                ids.emplace_back(to_hex(need.back().sv()));
                 need.pop_back();
             }
 
