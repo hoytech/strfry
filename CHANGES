@@ -1,3 +1,21 @@
+0.9.7
+  * `--fried` support from 1.0.0 was back-ported, allowing export of DBs
+    in a fried format for efficient import by 1.0.0+ relays.
+  * Bugfix: The cron thread was incorrectly removing expireable events prior
+    to their expiry. Reported and fixed by KoalaSat.
+  * A `limitation` entry is now included in the NIP-11 output. This exposes
+    configured relay limits such as max message size. Added by Alex Gleason.
+  * Node info support added: The relay now replies to requests to /nodeinfo/2.1
+    and /.well-known/nodeinfo . Added by Alex Gleason.
+  * NIP-70 support: Events with a "_" tag are considered protected and relays
+    should only allow them to be posted by their author. Since strfry does
+    not yet support AUTH, these events are always rejected. Added by fiatjaf.
+  * NIP-11 icon support added by zappityzap.
+  * Preliminary FreeBSD support added by cosmicpsyop.
+  * Switch import to use WriterPipeline, allowing strfry import be used as a
+    general-purpose non-relay event ingester. To do so, users must ensure that
+    the stdout of their process they pipe into import is line buffered.
+
 0.9.6
   * Bugfix: Sometimes malformed or old-format negentropy messages would throw
     uncaught exceptions which would cause the relay to crash. Now it properly
