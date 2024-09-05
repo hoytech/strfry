@@ -40,7 +40,7 @@ struct FilterSetBytes {
     }
 
     std::string at(size_t n) const {
-        if (n >= items.size()) throw("FilterSetBytes access out of bounds");
+        if (n >= items.size()) throw herr("FilterSetBytes access out of bounds");
         auto &item = items[n];
         return buf.substr(item.offset, item.size);
     }
@@ -93,7 +93,7 @@ struct FilterSetUint {
     }
 
     uint64_t at(size_t n) const {
-        if (n >= items.size()) throw("FilterSetBytes access out of bounds");
+        if (n >= items.size()) throw herr("FilterSetBytes access out of bounds");
         return items[n];
     }
 
