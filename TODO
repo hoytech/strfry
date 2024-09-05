@@ -1,16 +1,22 @@
 1.0 release
-  update DB version
-  update supported NIP list
-  negentropy
-    multi-filter support
-    handle dups in sync
-    make sure no crashes due to parse error
-  make all std::function's const refs
-  improve JSON parsing error messages
-    https://github.com/hoytech/strfry/issues/83
   bug in cron?
     https://github.com/hoytech/strfry/pull/117
+  negentropy
+    include ne version in feature output
+    make sure no crashes due to parse error
+  make all std::function's const refs
+  FixedBytes32
+    negentropy have/need, seenHave/seenNeed
+    negentropy command Record.id field
+    ActiveMonitors allIds/allAuthors
+    cmd_stream downloadedIds
+    nostrHash
+  improve JSON parsing error messages
+    https://github.com/hoytech/strfry/issues/83
+  HELLO/WELCOME msgs? auth?
 
+  update DB version
+  update supported NIP list
   go through github issues
   docs
     general update
