@@ -48,7 +48,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
 
 
-    tao::json::value supportedNips = tao::json::value::array({ 1, 2, 4, 9, 11, 20, 22, 28, 40, 70 });
+    tao::json::value supportedNips = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70 });
 
     auto getServerInfoHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
