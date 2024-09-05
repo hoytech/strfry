@@ -85,7 +85,8 @@ void RelayServer::runCron() {
                 auto expiration = lmdb::from_sv<uint64_t>(k);
                 auto levId =  lmdb::from_sv<uint64_t>(v);
 
-                if (levId == mostRecent) return true;
+                if (expiration > now) return false;
+                if (levId == mostRecent) return true; // don't delete because it could cause levId re-use
 
                 if (expiration == 1) { // Ephemeral event
                     auto view = env.lookup_Event(txn, levId);
@@ -96,12 +97,12 @@ void RelayServer::runCron() {
                         numEphemeral++;
                         expiredLevIds.emplace_back(levId);
                     }
-                } else if (expiration <= now) {
+                } else {
                     numExpired++;
                     expiredLevIds.emplace_back(levId);
                 }
 
-                return expiration <= now;
+                return true;
             });
         }
 
