@@ -6,11 +6,17 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     Decompressor decomp;
     QueryScheduler queries;
 
-    queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
-        sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
+    queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload) {
+        if (sub.filterGroup.ids_only()) {
+            auto ev = lookupEventByLevId(txn, levId);
+            auto id = to_hex(sv(ev.flat_nested()->id()));
+            sendHave(sub.connId, sub.subId, id);
+        } else {
+            sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
+        }
     };
 
-    queries.onComplete = [&](lmdb::txn &, Subscription &sub){
+    queries.onComplete = [&](lmdb::txn &, Subscription &sub) {
         sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "EOSE", sub.subId.str() })));
         tpReqMonitor.dispatch(sub.connId, MsgReqMonitor{MsgReqMonitor::NewSub{std::move(sub)}});
     };
