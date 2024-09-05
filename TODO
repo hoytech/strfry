@@ -1,8 +1,5 @@
 1.0 release
-  bug in cron?
-    https://github.com/hoytech/strfry/pull/117
   negentropy
-    include ne version in feature output
     make sure no crashes due to parse error
   make all std::function's const refs
   FixedBytes32
@@ -16,7 +13,7 @@
   HELLO/WELCOME msgs? auth?
 
   update DB version
-  update supported NIP list
+  update supported NIP list (add 70: protected events)
   go through github issues
   docs
     general update
