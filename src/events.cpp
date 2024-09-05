@@ -2,6 +2,7 @@
 #include <negentropy.h>
 
 #include "events.h"
+#include "jsonParseUtils.h"
 
 
 std::string nostrJsonToPackedEvent(const tao::json::value &v) {
@@ -9,13 +10,15 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
 
     // Extract values from JSON, add strings to builder
 
-    auto id = from_hex(v.at("id").get_string(), false);
-    auto pubkey = from_hex(v.at("pubkey").get_string(), false);
-    uint64_t created_at = v.at("created_at").get_unsigned();
-    uint64_t kind = v.at("kind").get_unsigned();
+    auto id = from_hex(jsonGetString(v.at("id"), "event id field was not a string"), false);
+    auto pubkey = from_hex(jsonGetString(v.at("pubkey"), "event pubkey field was not a string"), false);
+    uint64_t created_at = jsonGetUnsigned(v.at("created_at"), "event created_at field was not an integer");
+    uint64_t kind = jsonGetUnsigned(v.at("kind"), "event kind field was not an integer");
 
     if (id.size() != 32) throw herr("unexpected id size");
     if (pubkey.size() != 32) throw herr("unexpected pubkey size");
+
+    jsonGetString(v.at("content"), "event content field was not a string");
 
     uint64_t expiration = 0;
 
@@ -24,13 +27,13 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
         tagBuilder.add('d', "");
     }
 
-    if (v.at("tags").get_array().size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
+    if (jsonGetArray(v.at("tags"), "tags field not an array").size() > cfg().events__maxNumTags) throw herr("too many tags: ", v.at("tags").get_array().size());
     for (auto &tagArr : v.at("tags").get_array()) {
-        auto &tag = tagArr.get_array();
+        auto &tag = jsonGetArray(tagArr, "tag in tags field was not an array");
         if (tag.size() < 1) throw herr("too few fields in tag");
 
-        auto tagName = tag.at(0).get_string();
-        auto tagVal = tag.size() >= 2 ? tag.at(1).get_string() : "";
+        auto tagName = jsonGetString(tag.at(0), "tag name was not a string");
+        auto tagVal = tag.size() >= 2 ? jsonGetString(tag.at(1), "tag val was not a string") : "";
 
         if (tagName == "e" || tagName == "p") {
             tagVal = from_hex(tagVal, false);
@@ -105,7 +108,7 @@ void verifyNostrEvent(secp256k1_context *secpCtx, PackedEventView packed, const 
     auto hash = nostrHash(origJson);
     if (hash != packed.id()) throw herr("bad event id");
 
-    bool valid = verifySig(secpCtx, from_hex(origJson.at("sig").get_string(), false), packed.id(), packed.pubkey());
+    bool valid = verifySig(secpCtx, from_hex(jsonGetString(origJson.at("sig"), "event sig was not a string"), false), packed.id(), packed.pubkey());
     if (!valid) throw herr("bad signature");
 }
 
@@ -129,6 +132,7 @@ void verifyEventTimestamp(PackedEventView packed) {
 
     if (packed.expiration() > 1 && packed.expiration() <= now) throw herr("event expired");
 }
+
 
 void parseAndVerifyEvent(const tao::json::value &origJson, secp256k1_context *secpCtx, bool verifyMsg, bool verifyTime, std::string &packedStr, std::string &jsonStr) {
     packedStr = nostrJsonToPackedEvent(origJson);

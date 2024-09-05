@@ -16,6 +16,7 @@
 #include "ThreadPool.h"
 #include "events.h"
 #include "filters.h"
+#include "jsonParseUtils.h"
 #include "Decompressor.h"
 
 

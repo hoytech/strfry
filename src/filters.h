@@ -121,6 +121,8 @@ struct NostrFilter {
     explicit NostrFilter(const tao::json::value &filterObj, uint64_t maxFilterLimit) {
         uint64_t numMajorFields = 0;
 
+        if (!filterObj.is_object()) throw herr("provided filter is not an object");
+
         for (const auto &[k, v] : filterObj.get_object()) {
             if (v.is_array() && v.get_array().size() == 0) {
                 neverMatch = true;

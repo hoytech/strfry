@@ -20,11 +20,10 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
 
                         if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAll: " << msg->payload; 
 
-                        if (!payload.is_array()) throw herr("message is not an array");
-                        auto &arr = payload.get_array();
-                        if (arr.size() < 2) throw herr("bad message");
+                        auto &arr = jsonGetArray(payload, "message is not an array");
+                        if (arr.size() < 2) throw herr("too few array elements");
 
-                        auto &cmd = arr[0].get_string();
+                        auto &cmd = jsonGetString(arr[0], "first element not a command like REQ");
 
                         if (cmd == "EVENT") {
                             if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
@@ -32,7 +31,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessEvent(txn, msg->connId, msg->ipAddr, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
-                                sendOKResponse(msg->connId, arr[1].at("id").get_string(), false, std::string("invalid: ") + e.what());
+                                sendOKResponse(msg->connId, arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
+                                               false, std::string("invalid: ") + e.what());
                                 if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
                             }
                         } else if (cmd == "REQ") {
@@ -93,13 +93,20 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     PackedEventView packed(packedStr);
 
     {
-        for (const auto &tagArr : origJson.at("tags").get_array()) {
-            auto tag = tagArr.get_array();
-            if (tag.size() == 1 && tag.at(0).get_string() == "-") {
-                LI << "Protected event, skipping";
-                sendOKResponse(connId, to_hex(packed.id()), false, "blocked: event marked as protected");
-                return;
+        bool foundProtected = false;
+
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
+            if (tagName == '-') {
+                foundProtected = true;
+                return false;
             }
+            return true;
+        });
+
+        if (foundProtected) {
+            LI << "Protected event, skipping";
+            sendOKResponse(connId, to_hex(packed.id()), false, "blocked: event marked as protected");
+            return;
         }
     }
 
@@ -119,7 +126,7 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao:
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
     if (arr.get_array().size() > 2 + 20) throw herr("arr too big");
 
-    Subscription sub(connId, arr[1].get_string(), NostrFilterGroup(arr));
+    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), NostrFilterGroup(arr));
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
 }
@@ -139,7 +146,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp
         auto filterJson = arr.at(2);
 
         NostrFilterGroup filter = NostrFilterGroup::unwrapped(filterJson, maxFilterLimit);
-        Subscription sub(connId, arr[1].get_string(), std::move(filter));
+        Subscription sub(connId, jsonGetString(arr[1], "NEG-OPEN subscription id was not a string"), std::move(filter));
 
         if (filterJson.is_object()) {
             filterJson.get_object().erase("since");
