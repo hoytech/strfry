@@ -66,7 +66,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
 
     uint64_t currLine = 0;
 
-    while (ssize_t numRead = ::getline(&buf, &bufLen, ::stdin)) {
+    while (ssize_t numRead = ::getline(&buf, &bufLen, stdin)) {
         if (numRead <= 0) break;
         currLine++;
 
