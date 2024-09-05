@@ -56,6 +56,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 { "supported_nips", supportedNips },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
                 { "version", APP_GIT_VERSION },
+                { "negentropy", negentropy::PROTOCOL_VERSION - 0x60 },
                 { "limitation", tao::json::value({
                     { "max_message_length", cfg().relay__maxWebsocketPayloadSize },
                     { "max_subscriptions", cfg().relay__maxSubsPerConnection },
@@ -81,7 +82,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             struct {
                 std::string supportedNips;
                 std::string version;
-            } ctx = { tao::json::to_string(supportedNips), APP_GIT_VERSION };
+                uint64_t negentropy;
+            } ctx = { tao::json::to_string(supportedNips), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60 };
 
             rendered = preGenerateHttpResponse("text/html", ::strfrytmpl::landing(ctx).str);
             ver = cfg().version();
