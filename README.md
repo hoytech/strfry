@@ -162,7 +162,7 @@ This will download all missing events from the remote relay and insert them into
 
 Instead of a "full DB" sync, you can also sync the result of a nostr filter (or multiple filters, use a JSON array of them):
 
-    ./strfry sync wss://relay.example.com '{"authors":["003b"]}'
+    ./strfry sync wss://relay.example.com --filter '{"authors":["..."]}'
 
 Warning: Syncing can consume a lot of memory and bandwidth if the DBs are highly divergent (for example if your local DB is empty and your filter matches many events).
 
