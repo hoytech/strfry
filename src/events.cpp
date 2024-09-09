@@ -211,7 +211,7 @@ std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::s
         if (outCompressedSize) *outCompressedSize = raw.size();
         return buf;
     } else {
-        throw("Unexpected first byte in EventPayload");
+        throw herr("Unexpected first byte in EventPayload");
     }
 }
 
