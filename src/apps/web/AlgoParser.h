@@ -157,11 +157,13 @@ struct AlgoParseState {
             if (parsedKey.s == pubkey && parsedKey.n1 == kind) {
                 auto levId = lmdb::from_sv<uint64_t>(v);
                 auto ev = lookupEventByLevId(txn, levId);
+                PackedEventView packed(ev.buf);
 
-                for (const auto &tagPair : *(ev.flat_nested()->tagsFixed32())) {
-                    if ((char)tagPair->key() != 'p') continue;
-                    output.insert(std::string(sv(tagPair->val())));
-                }
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName != 'p') return true;
+                    output.insert(std::string(tagVal));
+                    return true;
+                });
             }
 
             return false;

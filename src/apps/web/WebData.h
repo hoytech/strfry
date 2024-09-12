@@ -142,9 +142,10 @@ struct User {
 
             auto levId = lmdb::from_sv<uint64_t>(v);
             auto ev = lookupEventByLevId(txn, levId);
+            PackedEventView packed(ev.buf);
 
-            if (ev.flat_nested()->kind() == 3) {
-                auto pubkey = std::string(sv(ev.flat_nested()->pubkey()));
+            if (packed.kind() == 3) {
+                auto pubkey = std::string(packed.pubkey());
 
                 if (!alreadySeen.contains(pubkey)) {
                     alreadySeen.insert(pubkey);
@@ -206,19 +207,23 @@ struct Event {
 
 
     std::string getId() const {
-        return std::string(sv(ev.flat_nested()->id()));
+        PackedEventView packed(ev.buf);
+        return std::string(packed.id());
     }
 
     uint64_t getKind() const {
-        return ev.flat_nested()->kind();
+        PackedEventView packed(ev.buf);
+        return packed.kind();
     }
 
     uint64_t getCreatedAt() const {
-        return ev.flat_nested()->created_at();
+        PackedEventView packed(ev.buf);
+        return packed.created_at();
     }
 
     std::string getPubkey() const {
-        return std::string(sv(ev.flat_nested()->pubkey()));
+        PackedEventView packed(ev.buf);
+        return std::string(packed.pubkey());
     }
 
     std::string getNoteId() const {

@@ -10,16 +10,16 @@ void WebServer::runWriter(ThreadPool<MsgWebWriter>::Thread &thr) {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     PluginEventSifter writePolicy;
 
+    NegentropyFilterCache neFilterCache;
+
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
-        auto now = hoytech::curr_time_us();
 
         std::vector<EventToWrite> newEvents;
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWebWriter::Request>(&newMsg.msg)) {
                 auto &req = msg->req;
-                EventSourceType sourceType = req.ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
 
                 Url u(req.url);
                 if (u.path.size() != 1 || u.path[0] != "submit-post") {
@@ -27,23 +27,23 @@ void WebServer::runWriter(ThreadPool<MsgWebWriter>::Thread &thr) {
                     continue;
                 }
 
-                std::string flatStr, jsonStr;
+                std::string packedStr, jsonStr;
 
                 try {
                     tao::json::value json = tao::json::from_string(req.body);
-                    parseAndVerifyEvent(json, secpCtx, true, true, flatStr, jsonStr);
+                    parseAndVerifyEvent(json, secpCtx, true, true, packedStr, jsonStr);
                 } catch(std::exception &e) {
                     sendHttpResponse(req, tao::json::to_string(tao::json::value({{ "message", e.what() }})), "404 Not Found", "application/json; charset=utf-8");
                     continue;
                 }
 
-                newEvents.emplace_back(std::move(flatStr), std::move(jsonStr), now, sourceType, req.ipAddr, &req);
+                newEvents.emplace_back(std::move(packedStr), std::move(jsonStr), &req);
             }
         }
 
         try {
             auto txn = env.txn_rw();
-            writeEvents(txn, newEvents);
+            writeEvents(txn, neFilterCache, newEvents);
             txn.commit();
         } catch (std::exception &e) {
             LE << "Error writing " << newEvents.size() << " events: " << e.what();
@@ -61,8 +61,8 @@ void WebServer::runWriter(ThreadPool<MsgWebWriter>::Thread &thr) {
 
 
         for (auto &newEvent : newEvents) {
-            auto *flat = flatbuffers::GetRoot<NostrIndex::Event>(newEvent.flatStr.data());
-            auto eventIdHex = to_hex(sv(flat->id()));
+            PackedEventView packed(newEvent.packedStr);
+            auto eventIdHex = to_hex(packed.id());
 
             tao::json::value output = tao::json::empty_object;
             std::string message;
@@ -71,7 +71,7 @@ void WebServer::runWriter(ThreadPool<MsgWebWriter>::Thread &thr) {
                 LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 output["message"] = message = "ok";
                 output["written"] = true;
-                output["event"] = encodeBech32Simple("note", sv(flat->id()));
+                output["event"] = encodeBech32Simple("note", packed.id());
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 output["message"] = message = "duplicate: have this event";
                 output["written"] = true;

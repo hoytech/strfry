@@ -36,21 +36,24 @@ struct AlgoScanner {
             if (output.size() > limit) return false;
 
             auto ev = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
-            auto kind = ev.flat_nested()->kind();
-            auto id = sv(ev.flat_nested()->id());
+            PackedEventView packed(ev.buf);
+
+            auto kind = packed.kind();
+            auto id = packed.id();
 
             if (kind == 1) {
-                auto pubkey = std::string(sv(ev.flat_nested()->pubkey()));
+                auto pubkey = std::string(packed.pubkey());
 
                 bool foundETag = false;
-                for (const auto &tagPair : *(ev.flat_nested()->tagsFixed32())) {
-                    if ((char)tagPair->key() == 'e') {
-                        auto tagEventId = std::string(sv(tagPair->val()));
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == 'e') {
+                        auto tagEventId = std::string(tagVal);
                         eventInfoCache.emplace(tagEventId, EventInfo{});
                         eventInfoCache[tagEventId].comments++;
                         foundETag = true;
                     }
-                }
+                    return true;
+                });
                 if (foundETag) return true; // not root event
 
                 eventInfoCache.emplace(id, EventInfo{});
@@ -62,18 +65,19 @@ struct AlgoScanner {
 
                 output.emplace_back(FilteredEvent{ev.primaryKeyId, std::string(id), eventInfo});
             } else if (kind == 7) {
-                auto pubkey = std::string(sv(ev.flat_nested()->pubkey()));
+                auto pubkey = std::string(packed.pubkey());
                 //if (a.voters && !a.voters->contains(pubkey)) return true;
 
-                const auto &tagsArr = *(ev.flat_nested()->tagsFixed32());
-                for (auto it = tagsArr.rbegin(); it != tagsArr.rend(); ++it) {
-                    auto tagPair = *it;
-                    if ((char)tagPair->key() == 'e') {
-                        auto tagEventId = std::string(sv(tagPair->val()));
-                        eventInfoCache.emplace(tagEventId, EventInfo{});
-                        eventInfoCache[tagEventId].score++;
-                        break;
-                    }
+                std::optional<std::string_view> lastETag;
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == 'e') lastETag = tagVal;
+                    return true;
+                });
+
+                if (lastETag) {
+                    auto tagEventId = std::string(*lastETag);
+                    eventInfoCache.emplace(tagEventId, EventInfo{});
+                    eventInfoCache[tagEventId].score++;
                 }
             }
 
@@ -97,11 +101,13 @@ struct AlgoScanner {
             if (parsedKey.s == pubkey && parsedKey.n1 == kind) {
                 auto levId = lmdb::from_sv<uint64_t>(v);
                 auto ev = lookupEventByLevId(txn, levId);
+                PackedEventView packed(ev.buf);
 
-                for (const auto &tagPair : *(ev.flat_nested()->tagsFixed32())) {
-                    if ((char)tagPair->key() != 'p') continue;
-                    output.insert(std::string(sv(tagPair->val())));
-                }
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName != 'p') return true;
+                    output.insert(std::string(tagVal));
+                    return true;
+                });
             }
 
             return false;
