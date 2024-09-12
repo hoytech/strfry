@@ -8,6 +8,8 @@ In order to reduce complexity, strfry's design attempts to keep policy logic out
 
 A plugin can be implemented in any programming language that supports reading lines from stdin, decoding JSON, and printing JSON to stdout. If a plugin is installed, strfry will send the event (along with some other information like IP address) to the plugin over stdin. The plugin should then decide what to do with it and print out a JSON object containing this decision.
 
+Currently strfry always waits until it receives a response from a plugin before sending another request. In the future, multiple requests may be sent concurrently, which is why output messages must include the event ID.
+
 The plugin command can be any shell command, which lets you set environment variables, command-line switches, etc. If the plugin command contains no spaces, it is assumed to be a path to a script. In this case, whenever the script's modification-time changes, the plugin will be reloaded upon the next write attempt.
 
 If the plugin's command in `strfry.conf` (or a router config file) change, then the plugin will also be reloaded.
@@ -20,8 +22,8 @@ Input messages contain the following keys:
 * `type`: Currently always `new`
 * `event`: The event posted by the client, with all the required fields such as `id`, `pubkey`, etc
 * `receivedAt`: Unix timestamp of when this event was received by the relay
-* `sourceType`: The channel where this event came from: `IP4`, `IP6`, `Import`, `Stream`, or `Sync`.
-* `sourceInfo`: Specifics of the event's source. Either an IP address or a relay URL (for stream/sync)
+* `sourceType`: The channel where this event came from: `IP4`, `IP6`, `Import`, `Stream`, `Sync`, or `Stored`.
+* `sourceInfo`: Specifics of the event's source. Usually an IP address.
 
 
 ## Output messages
