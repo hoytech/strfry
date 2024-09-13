@@ -13,8 +13,8 @@
     of negentropy fingerprints over arbitrary nostr queries. By default the
     query {} (the full DB) is tracked, but additional queries can be added
     using the new `strfry negentropy` command.
-  * The negentropy version is now indicated in the NIP-11 relay information
-    and the HTML landing page.
+  * Advertises NIP-77 support (negentropy syncing). The negentropy version is now
+    also indicated in the NIP-11 relay information and the HTML landing page.
   * Parsing-related error messages were greatly improved. Instead of just getting
     "bad msg: std::get: wrong index for variant", in most situations you will
     now get a more useful message such as "first element not a command like REQ"
@@ -25,6 +25,7 @@
     do not need to be separately installed to build strfry.
   * Bugfix: When querying for 2 or more tags where one of the tags was a prefix
     of the other, matching events would not be returned. Reported by mrkvon. 
+  * Updated and re-organised the README.md docs
 
 0.9.7
   * `--fried` support from 1.0.0 was back-ported, allowing export of DBs
