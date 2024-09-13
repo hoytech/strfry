@@ -4,7 +4,7 @@
 
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
-* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 70
+* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 70, 77
 * No external database required: All data is stored locally on the filesystem in LMDB
 * Hot reloading of config file: No server restart needed for many config param changes
 * Zero downtime restarts, for upgrading binary without impacting users
