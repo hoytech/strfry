@@ -120,14 +120,16 @@ void verifyEventTimestamp(PackedEventView packed) {
     auto now = hoytech::curr_time_s();
     auto ts = packed.created_at();
 
-    uint64_t earliest = now - (packed.expiration() == 1 ? cfg().events__rejectEphemeralEventsOlderThanSeconds : cfg().events__rejectEventsOlderThanSeconds);
+    bool isEphemeral = packed.expiration() == 1;
+
+    uint64_t earliest = now - (isEphemeral ? cfg().events__rejectEphemeralEventsOlderThanSeconds : cfg().events__rejectEventsOlderThanSeconds);
     uint64_t latest = now + cfg().events__rejectEventsNewerThanSeconds;
 
     // overflows
     if (earliest > now) earliest = 0;
     if (latest < now) latest = MAX_U64 - 1;
 
-    if (ts < earliest) throw herr("created_at too early");
+    if (ts < earliest) throw herr(isEphemeral ? "ephemeral event expired" : "created_at too early");
     if (ts > latest) throw herr("created_at too late");
 
     if (packed.expiration() > 1 && packed.expiration() <= now) throw herr("event expired");
