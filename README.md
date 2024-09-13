@@ -9,6 +9,7 @@ strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nos
 * Hot reloading of config file: No server restart needed for many config param changes
 * Zero downtime restarts, for upgrading binary without impacting users
 * Websocket compression using permessage-deflate with optional sliding window, when supported by clients. Optional on-disk compression using zstd dictionaries.
+* Durable writes: The relay never returns an `OK` until an event has been confirmed as committed to the DB
 * Built-in support for real-time streaming (up/down/both) events from remote relays, and bulk import/export of events from/to jsonl files
 * [negentropy](https://github.com/hoytech/negentropy)-based set reconcilliation for efficient syncing with clients or between relays, accurate counting of events between relays, and more
 
@@ -22,10 +23,9 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
 
 * [Setup](#setup)
     * [Compile](#compile)
-        * [Linux](#linux)
-        * [FreeBSD](#freebsd)
 * [Operating](#operating)
     * [Running a relay](#running-a-relay)
+    * [Selecting and Deleting Events](#selecting-and-deleting-events)
     * [Importing data](#importing-data)
     * [Exporting data](#exporting-data)
         * [Fried Exports](#fried-exports)
@@ -33,6 +33,7 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Sync](#sync)
 * [Advanced](#advanced)
     * [DB Upgrade](#db-upgrade)
+    * [DB Compaction](#db-compaction)
     * [Zero Downtime Restarts](#zero-downtime-restarts)
     * [Plugins](#plugins)
     * [Router](#router)
@@ -72,7 +73,7 @@ On Debian/Ubuntu use these commands:
     make setup-golpe
     make -j4
 
-FreeBSD has slightly different commands (warning, possibly out of date):
+FreeBSD has slightly different commands (warning: possibly out of date):
 
     pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng
     git clone https://github.com/hoytech/strfry && cd strfry/
@@ -99,6 +100,20 @@ For dev/testing, the config file `./strfry.conf` is used by default. It stores d
 
 By default, it listens on port 7777 and only accepts connections from localhost. In production, you'll probably want a systemd unit file and a reverse proxy such as nginx to support SSL and other features.
 
+### Selecting and Deleting Events
+
+Because strfry uses a custom LMDB schema, there is no SQL interface for managing the DB. Instead, regular nostr filters (as described in [NIP-01](https://nips.nostr.com/1)) can be used for basic tasks.
+
+For example, `strfry scan` can be used to select all events matching a particular nostr filter:
+
+    ./strfry scan '{"kinds":[0,1]}'
+
+Each matching event will be printed on its own line (in other words, in JSONL format).
+
+The `strfry delete` command can be used to delete events from the DB that match a specified nostr filter. For example, to delete all events from a particular pubkey, use the following command:
+
+    ./strfry delete --filter '{"authors":["4c7a4fa1a6842266f3f8ca4f19516cf6aa8b5ff6063bc3ec5c995e61e5689c39"]}'
+
 ### Importing data
 
 The `strfry import` command reads line-delimited JSON (jsonl) from its standard input and imports events that validate into the DB in batches of 10,000 at a time:
@@ -111,7 +126,7 @@ The `strfry import` command reads line-delimited JSON (jsonl) from its standard 
 
 The `strfry export` command will print events from the DB to standard output in jsonl, ordered by their `created_at` field (ascending).
 
-Optionally, you can limit the time period exported with the `--since` and `--until` flags.
+Optionally, you can limit the time period exported with the `--since` and `--until` flags. Normally exports will be in ascending order by `created_at` (oldest first). You can reverse this with `--reverse`.
 
 #### Fried Exports
 
@@ -137,18 +152,18 @@ Both of these operations can be concurrently multiplexed over the same websocket
 
     ./strfry stream wss://relay.example.com --dir both
 
-`strfry stream` will compress messages with permessage-deflate in both directions, if supported by the server. Sliding window compression is not supported for now.
+`strfry stream` will compress messages with permessage-deflate in both directions, if supported by the remote relay. Sliding window compression is not supported for now.
 
-If you want to open many concurrent streams, see the [strfry router] command for an easier and more efficient approach.
+If you want to open many concurrent streams, see the [strfry router](#router) command for an easier and more efficient approach.
 
 
 ### Sync
 
-This command uses the negentropy protocol and performs a set reconcilliation between the local DB and the specified relay's remote DB.
+This command uses the [negentropy](https://github.com/hoytech/negentropy) protocol and performs a set reconcilliation between the local DB and the specified relay's remote DB.
 
-Effectively what this does is figure out which events the remote relay has that you don't, and vice versa. Assuming that you both have common subsets of events, it does this more efficiently than simply transferring the full set of events (or even just their ids).
+That is a fancy way of saying that it figures out which events the remote relay has that it doesn't, and vice versa. Assuming that both sides have some events in common, it does this more efficiently than simply transferring the full set of events (or even just their ids). You can read about the algorithm used in our [article on Range-Based Set Reconciliation](https://logperiodic.com/rbsr.html).
 
-You can read about the algorithm used on the [negentropy project page](https://github.com/hoytech/negentropy). There are both C++ and Javascript reference implementations.
+In addition to the C++ implementation used by strfry, negentropy has also been implemented in Javascript, Rust, Go, and more.
 
 Here is how to perform a "full DB" set reconcilliation against a remote server:
 
@@ -184,12 +199,24 @@ In order to upgrade the DB, you should export and then import again using [fried
 
 After you have confirmed everything is working OK, the `dbdump.jsonl` and `data.mdb.bak` files can be deleted.
 
-The `strfry compact` command creates a raw dump of the LMDB file (after compaction) so it cannot be used for DB upgrade purposes. It can however be useful for reclaiming space or for a migration of a DB to a new server running the same version of strfry.
+
+### DB Compaction
+
+The `strfry compact` command creates a raw dump of the LMDB file (after compaction) and stores in the specified file (use `-` to print to stdout). It cannot be used for DB upgrade purposes. It can however be useful for reclaiming space caused by fragmentation, or for migrating a DB to a new server that is running the same version of strfry.
+
+To reclaim space, it is recommended to actually stop strfry for a compaction:
+
+    ## ... stop strfry ...
+    ./strfry compact - > strfry-db/data.mdb.compacted
+    mv strfry-db/data.mdb.compacted strfry-db/data.mdb
+    ## ... start strfry ...
+
+For migration purposes, no restart is required to perform the compaction.
 
 
 ### Zero Downtime Restarts
 
-strfry can have multiple different running instances simultaneously listening on the same port, because it uses the `REUSE_PORT` linux socket option. One of the reasons you may want to do this is to restart the relay without impacting currently connected users. This allows you to upgrade the strfry binary, or perform major configuration changes (for the subset of config options that require a restart).
+strfry can have multiple different running instances simultaneously listening on the same port because it uses the `REUSE_PORT` linux socket option. One of the reasons you may want to do this is to restart the relay without impacting currently connected users. This allows you to upgrade the strfry binary, or perform major configuration changes (for the subset of config options that require a restart).
 
 If you send a `SIGUSR1` signal to a strfry process, it will initiate a "graceful shutdown". This means that it will no longer accept new websocket connections, and after its last existing websocket connection is closed, it will exit.
 
@@ -212,7 +239,7 @@ So, the typical flow for a zero downtime restart is:
 
 ### Plugins
 
-When hosting a relay, you may not want to accept certain events. To avoid having to encode that logic into strfry itself, we have a plugin system. Any programming language can be used to build a plugin, using a simple line-based JSON interface.
+When hosting a relay, you may not want to accept certain events. To avoid having to encode that logic into strfry itself, we have a plugin system. Any programming language can be used to build a plugin using a simple line-based JSON interface.
 
 In addition to write-policy plugins, plugins can also be used inside [strfry router](#router) to determine which events to stream up/down to other relays.
 
@@ -223,7 +250,7 @@ See the [plugin documentation](https://github.com/hoytech/strfry/blob/master/doc
 
 ### Router
 
-If you are building a complicated "mesh" topology of routers, or mirroing events to neighbour relays (up and/or down), you can use [strfry stream](#stream) to stream the events as the come in. However, when handling multiple streams, the efficiency and convenience of this can be improved with `strfry router`.
+If you are building a "mesh" topology of routers, or mirroring events to neighbour relays (up and/or down), you can use [strfry stream](#stream) to stream the events as the come in. However, when handling multiple streams, the efficiency and convenience of this can be improved with the `strfry router` command.
 
 `strfry router` handles many streams in one process, supports pre-filtering events using nostr filters and/or [plugins](#plugins), and more. See the [router documentation](https://github.com/hoytech/strfry/blob/master/docs/router.md) for more details.
 
@@ -266,13 +293,13 @@ Note that the tree starts empty. To populate it, use the `negentropy build` comm
       size: 33245
       fingerprint: 37c005e6a1ded72df4b9d4aa688689db
 
-Now, negentropy queries for kind 0 (optionally including `since`/`until`) can be performed efficiently and statelessly.
+Now negentropy queries for kind 0 (optionally including `since`/`until`) can be performed efficiently and statelessly.
 
 
 
 ### Compression Dictionaries
 
-Although nostr events are compressed during transfer using websocket compression, they are stored uncompressed on disk by default. In order to attempt to reduce the size of the strfry DB, the `strfry dict` command can be used to compress these events while still allowing them to be efficiently served via a relay. Only the raw relay JSON itself is compressed: The indices needed for efficient retrieval are not. Since the indices are often quite large, the relative effectiveness of this compression depends on the type of nostr events stored.
+Although nostr events are compressed during transfer using websocket compression, they are stored uncompressed on disk by default. In order to attempt to reduce the size of the strfry DB, the `strfry dict` command can be used to compress these events while still allowing them to be efficiently served via a relay. Only the raw event JSON itself is compressed: The indices needed for efficient retrieval are not. Since the indices are often quite large, the relative effectiveness of this compression depends on the type of nostr events stored.
 
 `strfry dict` uses [zstd dictionaries](https://facebook.github.io/zstd/#small-data) to compress events. First you must build one or more dictionaries with `strfry dict train`. You can provide this command a nostr filter and it will select just these events. You may want to use custom dictionaries for certain kinds of events, or segment based on some other criteria. If desired, dictionary training can happen entirely offline without interfering with relay operation.
 
@@ -292,19 +319,17 @@ The [golpe](https://github.com/hoytech/golpe) application framework is used for 
 
 ### Database
 
-strfry is built on the embedded [LMDB](https://www.symas.com/lmdb) database (using the [lmdbxx](https://github.com/hoytech/lmdbxx/) C++ interface). This means that records are accessed directly from the page cache. The read data-path requires no locking/system calls and it scales optimally with additional cores.
+strfry is built on the embedded [LMDB](https://www.symas.com/lmdb) database (using [my fork of lmdbxx](https://github.com/hoytech/lmdbxx/) C++ interface). This means that records are accessed directly from the page cache. The read data-path requires no locking/system calls and it scales optimally with additional cores.
 
-Database records are serialised with [Flatbuffers](https://google.github.io/flatbuffers/) serialisation, which allows fast and zero-copy access to individual fields within the records. A [RasgueaDB](https://github.com/hoytech/rasgueadb) layer is used for maintaining indices and executing queries.
+Database records are serialised either with [Flatbuffers](https://google.github.io/flatbuffers/) or a bespoke packed representation, both of which allow fast and zero-copy access to individual fields within the records. A [RasgueaDB](https://github.com/hoytech/rasgueadb) layer is used for maintaining indices and executing queries.
 
 The query engine is quite a bit less flexible than a general-purpose SQL engine, however the types of queries that can be performed via the nostr protocol are fairly constrained, so we can ensure that almost all queries have good index support. All possible query plans are determined at compile-time, so there is no SQL generation/parsing overhead, or risk of SQL injection.
 
-When an event is inserted, indexable data (id, pubkey, tags, kind, and created_at) is loaded into a flatbuffers object. Signatures and non-indexed tags are removed, along with recommended relay fields, etc, to keep the record size minimal (and therefore improve cache usage). The full event's raw JSON is stored separately. The raw JSON is re-serialised to remove any unauthenticated fields from the event.
+When an event is inserted, indexable data (id, pubkey, tags, kind, and created_at) is loaded into a packed representation. Signatures and non-indexed tags are removed, along with recommended relay fields, etc, to keep the record size minimal (and therefore improve cache usage). The full event's raw JSON is stored separately. The raw JSON is re-serialised to remove any unauthenticated fields from the event, and to canonicalise the JSON representation (alphabetic ordering of fields, standard character escaping, etc).
 
-Various indices are created based on the indexed fields. Almost all indices are "clustered" with the event's `created_at` timestamp, allowing efficient `since`/`until` scans. Many queries can be serviced by index-only scans, and don't need to load the flatbuffers object at all.
+Various indices are created based on the indexed fields. Almost all indices are "clustered" with the event's `created_at` timestamp, allowing efficient `since`/`until` scans. Many queries can be serviced by index-only scans, and don't need to load the packed representation at all.
 
-I've tried to build the query engine with efficiency and performance in mind, but it is possible a SQL engine could find better execution plans, perhaps depending on the query. I haven't done any benchmarking or profiling yet, so your mileage may vary.
-
-One benefit of a custom query engine is that we have the flexibility to optimise it for real-time streaming use-cases more than we could a general-purpose DB. For example, a user on a slow connection should not unnecessarily tie up resources. Our query engine supports pausing a query and storing it (it takes up a few hundred to a few thousand bytes, depending on query complexity), and resuming it later when the client's socket buffer has drained. Additionally, we can pause long-running queries to satisfy new queries as quickly as possible. This is all done without any data-base thread pools. There *are* worker threads, but they only exist to take advantage of multiple CPUs, not to block on client I/O.
+One benefit of a custom query engine is that we have the flexibility to optimise it for real-time streaming use-cases more than we could a general-purpose DB. For example, a user on a slow connection should not unnecessarily tie up resources. Our query engine supports pausing a query and storing it (it takes up a few hundred to a few thousand bytes, depending on query complexity), and resuming it later when the client's socket buffer has drained. Additionally, we can pause long-running queries to satisfy new queries as quickly as possible. This is all done without any database thread pools. There *are* worker threads, but they only exist to take advantage of multiple CPUs, not to block on client I/O.
 
 
 ### Threads and Inboxes
@@ -353,9 +378,9 @@ This thread is responsible for most DB writes:
 
 * Adding new events to the DB
 * Performing event deletion (NIP-09)
-* Deleting replaceable events (NIP-16)
+* Deleting replaceable events
 
-It is important there is only 1 writer thread, because LMDB has an exclusive-write lock, so multiple writers would imply contention. Additionally, when multiple events queue up, there is work that can be amortised across the batch. This serves as a natural counterbalance against high write volumes.
+It is important there is only 1 writer thread: Because LMDB has an exclusive-write lock, multiple writers would imply contention. Additionally, when multiple events queue up, there is work that can be amortised across the batch (and the `fsync`). This serves as a natural counterbalance against high write volumes.
 
 ### ReqWorker
 
@@ -371,7 +396,7 @@ In nostr, each `REQ` message from a subscriber can contain multiple filters. We 
 
 A `FilterGroup` is a vector of `Filter` objects. When the Ingester receives a `REQ`, the JSON filter items are compiled into `Filter`s and the original JSON is discarded. Each filter item's specified fields are compiled into sorted lookup tables called filter sets.
 
-In order to determine if an event matches against a `Filter`, first the `since` and `until` fields are checked. Then, each field of the event for which a filter item was specified is looked up in the corresponding lookup table. Specifically, the upper-bound index is determined using a binary search (for example `std::upper_bound`). This is the first element greater than the event's item. Then the preceeding table item is checked for a match.
+In order to determine if an event matches against a `Filter`, first the `since` and `until` fields are checked. Then, each field of the event for which a filter item was specified is looked up in the corresponding lookup table. Specifically, the upper-bound index is determined using a binary search (for example `std::upper_bound`). This is the first element greater than the event's item. Then the preceding table item is checked for a match.
 
 Since testing `Filter`s against events is performed so frequently, it is a performance-critical operation and some optimisations have been applied. For example, each filter item in the lookup table is represented by a 4 byte data structure, one of which is the first byte of the field and the rest are offset/size lookups into a single memory allocation containing the remaining bytes. Under typical scenarios, this will greatly reduce the amount of memory that needs to be loaded to process a filter. Filters with 16 or fewer items can often be rejected with the load of a single cache line. Because filters aren't scanned linearly, the number of items in a filter (ie amount of pubkeys) doesn't have a significant impact on processing resources.
 
@@ -379,7 +404,7 @@ Since testing `Filter`s against events is performed so frequently, it is a perfo
 
 The DB querying engine used by ReqWorker is called `DBScan`. This engine is designed to take advantage of indices that have been added to the database. The indices have been selected so that no filters require full table scans (over the `created_at` index), except ones that only use `since`/`until` (or nothing).
 
-Because events are stored in the same flatbuffers format in memory and "in the database" (there isn't really any difference with LMDB), compiled filters can be applied to either.
+Because events are stored in the same packed representation in memory and "in the database" (there isn't really any difference with LMDB), compiled filters can be applied to either.
 
 When a user's `REQ` is being processed for the initial "old" data, each `Filter` in its `FilterGroup` is analysed and the best index is determined according to a simple heuristic. For each filter item in the `Filter`, the index is scanned backwards starting at the upper-bound of that filter item. Because all indices are composite keyed with `created_at`, the scanner also jumps to the `until` time when possible. Each event is compared against the compiled `Filter` and, if it matches, sent to the Websocket thread to be sent to the subscriber. The scan completes when one of the following is true:
 
@@ -396,15 +421,15 @@ An important property of `DBScan` is that queries can be paused and resumed with
 
 The second stage of a REQ request is comparing newly-added events against the REQ's filters. If they match, the event should be sent to the subscriber.
 
-ReqMonitor is not directly notified when new events have been written. This is important because new events can be added in a variety of ways. For instance, the `strfry import` command, event syncing, and multiple independent strfry servers using the same DB (ie, `REUSE_PORT`).
+ReqMonitor is not directly notified when new events have been written. This is important because new events can be added in a variety of ways. For instance, the `strfry import` command, event syncing, and multiple independent strfry instances using the same DB (ie, `REUSE_PORT`).
 
-Instead, ReqMonitor watches for file change events using the OS's inotify API. When the file has changed, it scans all the events that were added to the DB since the last time it ran.
+Instead, ReqMonitor watches for file change events using the OS's filesystem change monitoring API ([inotify](https://www.man7.org/linux/man-pages/man7/inotify.7.html) on Linux). When the file has changed, it scans all the events that were added to the DB since the last time it ran.
 
 Note that because of this design decision, ephemeral events work differently than in other relay implementations. They *are* stored to the DB, however they have a very short retention-policy lifetime and will be deleted after 5 minutes (by default).
 
 #### ActiveMonitors
 
-Even though filter scanning is quite fast, strfry further attempts to optimise the case where a large number of concurrent REQs need to be monitored for.
+Even though filter scanning is quite fast, strfry further attempts to optimise the case where a large number of concurrent REQs need to be monitored.
 
 When ReqMonitor first receives a subscription, it first compares its filter group against all the events that have been written since the subscription's DBScan started (since those are omitted from DBScan).
 
