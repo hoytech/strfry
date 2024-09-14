@@ -1,3 +1,10 @@
+1.0.1
+  * Prevent exporting a v2 DB using --fried. The packed representation will be
+    corrupted. Instead, you should downgrade to 0.9.7 to do the export, or do
+    it without fried.
+  * Fix build error on some platforms that don't include stdint.h in another
+    header. Reported by fiatjaf.
+
 1.0.0
   * Refactored database format to use a custom PackedEvent encoding, removed some
     unnecessary indices. This reduces the size of the DB and should help improve
