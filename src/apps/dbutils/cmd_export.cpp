@@ -30,6 +30,11 @@ void cmd_export(const std::vector<std::string> &subArgs) {
 
     if (dbVersion == 0) throw herr("migration from DB version 0 not supported by this version of strfry");
 
+    if (fried) {
+        if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
+        if (dbVersion < 3) throw herr("can't export old DB version with --fried: please downgrade to 0.9.7");
+    }
+
     uint64_t start = reverse ? until : since;
     uint64_t startDup = reverse ? MAX_U64 : 0;
 
@@ -48,8 +53,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
         std::string_view json = getEventJson(txn, decomp, levId);
 
         if (fried) {
-            if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
-
             auto ev = lookupEventByLevId(txn, levId);
 
             o.clear();
