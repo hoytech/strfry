@@ -1,0 +1,24 @@
+name: ubuntu-docker
+
+on: [push, pull_request]
+
+jobs:
+  ubuntu-docker:
+    runs-on: ubuntu-latest
+    name: A job to build and run strfry Ubuntu using Docker
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build the Ubuntu jammy Docker image for strfry
+      run: |
+        docker build . --file ubuntu.Dockerfile --tag jammy/strfry
+        
+    - name: Run the Ubuntu jammy Docker image for strfry
+      run: |
+        docker images
+        pwd
+        docker run -v /home/runner/work/strfry/strfry/strfry-db:/app/strfry-db -v /home/runner/work/strfry/strfry/strfry.conf:/app/strfry.conf -t jammy/strfry &
+
