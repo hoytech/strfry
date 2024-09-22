@@ -71,7 +71,7 @@ On Debian/Ubuntu use these commands:
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     make setup-golpe
-    make -j4
+    make -j$(nproc)
 
 FreeBSD has slightly different commands (warning: possibly out of date):
 
@@ -79,7 +79,7 @@ FreeBSD has slightly different commands (warning: possibly out of date):
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     gmake setup-golpe
-    gmake -j4
+    gmake -j$(sysctl -n hw.ncpu)
 
 To upgrade strfry, do the following:
 
