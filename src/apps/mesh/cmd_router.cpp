@@ -218,7 +218,7 @@ struct Router {
     };
 
     std::string routerConfigFile;
-    uint64_t connectionTimeoutUs = 5'000'000;
+    uint64_t connectionTimeoutUs = 20'000'000;
 
     WriterPipeline writer;
     Decompressor decomp;
@@ -292,6 +292,19 @@ struct Router {
 
     void reconcileConfig() {
         LI << "Loading router config file: " << routerConfigFile;
+
+	try {
+            auto routerConfig = loadRawTaoConfig(routerConfigFile);
+
+	    if (routerConfig.find("timeout")) {
+	        connectionTimeoutUs = stoi(routerConfig.at("timeout").get_string()) * 1'000'000;
+	        LI << "Using configured timeout (seconds): " << (connectionTimeoutUs / 1'000'000);
+	    } else {
+	        LI << "Using default timeout (seconds): " << connectionTimeoutUs / 1'000'000;
+	    }
+	} catch (std::exception &e) {
+            LE << "Failed to parse router timeout in config: " << e.what();
+	}
 
         try {
             auto routerConfig = loadRawTaoConfig(routerConfigFile);
