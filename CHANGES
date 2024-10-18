@@ -1,6 +1,8 @@
   * New config param: relay.info.nips which allows you to override the NIPs
     that are claimed to be supported (requested by ismyhc)
   * New connectionTimeout parameter in router config (thanks Braydon Fuller!)
+  * Bugfix: IPv4-mapped IPv6 addresses in X-Real-IP headers were not parsed
+    correctly (reported by Petr Kracík)
 
 1.0.1
   * Prevent exporting a v2 DB using --fried. The packed representation will be

@@ -197,6 +197,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
         if (cfg().relay__realIpHeader.size()) {
             auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString(); // not string_view: parseIP needs trailing 0 byte
+
+            // HACK: uWebSockets strips leading : characters, which interferes with IPv6 parsing.
+            // This fixes it for the common ::1 and ::ffff:1.2.3.4 cases. FIXME: fix the underlying library.
+            if (header == "1" || header.starts_with("ffff:")) header = std::string("::") + header;
+
             c->ipAddr = parseIP(header);
             if (c->ipAddr.size() == 0) LW << "Couldn't parse IP from header " << cfg().relay__realIpHeader << ": " << header;
         }
