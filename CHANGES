@@ -1,3 +1,4 @@
+1.0.2
   * New config param: relay.info.nips which allows you to override the NIPs
     that are claimed to be supported (requested by ismyhc)
   * New connectionTimeout parameter in router config (thanks Braydon Fuller!)
