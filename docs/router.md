@@ -18,6 +18,8 @@ The config file must have a section `streams`. Within that, you may have as many
 
 ### Example
 
+    connectionTimeout = 20
+
     streams {
         ## Stream down events from our friend relays
 
