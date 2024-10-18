@@ -31,7 +31,7 @@ config:
     desc: "NIP-11: URL pointing to an image to be used as an icon for the relay"
     default: ""
   - name: relay__info__nips
-    desc: "List of supported lists as JSON array, or empty string to use default. Example: [1,2]"
+    desc: "List of supported lists as JSON array, or empty string to use default. Example: \"[1,2]\""
     default: ""
 
   - name: relay__maxWebsocketPayloadSize
