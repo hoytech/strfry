@@ -1,3 +1,7 @@
+  * New config param: relay.info.nips which allows you to override the NIPs
+    that are claimed to be supported (requested by ismyhc)
+  * New connectionTimeout parameter in router config (thanks Braydon Fuller!)
+
 1.0.1
   * Prevent exporting a v2 DB using --fried. The packed representation will be
     corrupted. Instead, you should downgrade to 0.9.7 to do the export, or do
