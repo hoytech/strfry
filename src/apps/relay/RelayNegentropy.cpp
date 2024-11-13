@@ -149,7 +149,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
                 "NEG-ERR",
                 sub.subId.str(),
-                "RESULTS_TOO_BIG",
+                "blocked: too many query results",
                 cfg().relay__negentropy__maxSyncEvents
             })));
 
@@ -228,7 +228,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
                         "NEG-ERR",
                         msg->subId.str(),
-                        "CLOSED"
+                        "closed: unknown subscription handle"
                     })));
 
                     continue;
