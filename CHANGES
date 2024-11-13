@@ -1,3 +1,6 @@
+1.0.3
+  * Use negentropy error message format specified in NIP-77
+
 1.0.2
   * New config param: relay.info.nips which allows you to override the NIPs
     that are claimed to be supported (requested by ismyhc)
