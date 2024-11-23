@@ -4,7 +4,6 @@
 
 #include "Bech32Utils.h"
 #include "WebUtils.h"
-#include "AlgoScanner.h"
 #include "WebTemplates.h"
 #include "DBQuery.h"
 
@@ -699,26 +698,19 @@ struct UserEvents {
 
 
 struct CommunitySpec {
-    bool valid = true;
     tao::json::value raw;
-
-    std::string name;
-    std::string desc;
-    std::string algo;
-
     std::string adminNpub;
-    std::string adminUsername;
     std::string adminTopic;
 };
 
-inline CommunitySpec lookupCommunitySpec(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, std::string_view algoDescriptor) {
+inline CommunitySpec lookupCommunitySpec(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, std::string_view descriptor) {
     CommunitySpec spec;
 
-    size_t pos = algoDescriptor.find("/");
-    if (pos == std::string_view::npos) throw herr("bad algo descriptor");
-    spec.adminNpub = std::string(algoDescriptor.substr(0, pos));
+    size_t pos = descriptor.find("/");
+    if (pos == std::string_view::npos) throw herr("bad descriptor");
+    spec.adminNpub = std::string(descriptor.substr(0, pos));
     std::string authorPubkey = decodeBech32Simple(spec.adminNpub);
-    spec.adminTopic = algoDescriptor.substr(pos + 1);
+    spec.adminTopic = descriptor.substr(pos + 1);
 
     tao::json::value filter = tao::json::value({
         { "authors", tao::json::value::array({ to_hex(authorPubkey) }) },
@@ -729,22 +721,12 @@ inline CommunitySpec lookupCommunitySpec(lmdb::txn &txn, Decompressor &decomp, U
     bool found = false;
 
     foreachByFilter(txn, filter, [&](uint64_t levId){
-        tao::json::value ev = tao::json::from_string(getEventJson(txn, decomp, levId));
-        spec.algo = ev.at("content").get_string();
+        spec.raw = tao::json::from_string(getEventJson(txn, decomp, levId));
         found = true;
         return false;
     });
 
-    if (!found) throw herr("unable to find algo");
-
-    spec.raw = tao::json::from_string(spec.algo);
-
-    spec.name = spec.raw.at("name").get_string();
-    spec.desc = spec.raw.at("desc").get_string();
-    spec.algo = spec.raw.at("algo").get_string();
-
-    auto *user = userCache.getUser(txn, decomp, authorPubkey);
-    spec.adminUsername = user->username;
+    if (!found) throw herr("unable to find community");
 
     return spec;
 }
