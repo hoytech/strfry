@@ -1,0 +1,79 @@
+name: strfry
+version: ${VERSION}
+origin: net
+comment: Metapackage for strfry
+www: http://hoytech.com
+maintainer: Doug Hoytech <doug@hoytech.com>
+prefix: /
+desc: strfry is a relay for the nostr protocol
+flatsize:      ${DIR_SIZE}
+categories:    [net]
+${DEPS}
+licenselogic = "single";
+licenses: [GPLv3]
+users: [strfry]
+groups: [strfry]
+files: {
+  /usr/local/bin/strfry: { sum: 'sha256sum', uname: strfry, gname: strfry, perm: 0755 },
+  /etc/strfry.conf:{ sum: 'sha256sum', uname: strfry, gname: strfry, perm: 0644 };
+  /usr/local/etc/rc.d/strfry:{ sum: 'sha256sum', uname: root, gname: root, perm: 0755 };
+}
+directories: {
+  /var/lib/strfry : 'y';
+}
+scripts: {
+  pre-deinstall: <<EOD
+#!/bin/sh
+
+
+EOD
+  post-deinstall: <<EOD
+#!/bin/sh
+
+if /usr/sbin/pw  user show strfry >/dev/null 2>&1; then
+  /usr/sbin/pw user del strfry
+fi
+
+if /usr/sbin/pw group show strfry >/dev/null 2>&1; then
+  /usr/sbin/pw group del strfry
+fi
+
+EOD
+
+  post-install: <<EOD
+#!/bin/sh
+
+ln -s /etc/strfry.conf /usr/local/etc/strfry.conf >/dev/null 2>&1
+chown strfry:strfry /var/lib/strfry >/dev/null 2>&1
+if ! grep -q "strfry_enable=" /etc/rc.conf; then
+    echo 'strfry_enable="YES"' >> /etc/rc.conf
+fi
+
+
+EOD
+
+  pre-install: <<EOD
+#!/bin/sh
+
+echo "==> Creating groups."
+
+# Create strfry group if it doesn't exist
+if ! /usr/sbin/pw group show strfry >/dev/null 2>&1; then
+  echo "Creating group 'strfry' with gid '933'."
+  /usr/sbin/pw group add strfry -g 933
+else
+  echo "Using existing group 'strfry'."
+fi
+
+echo "==> Creating users"
+
+# Create strfry user if it doesn't exist
+if ! /usr/sbin/pw user show strfry >/dev/null 2>&1; then
+  echo "Creating user 'strfry' with uid '933'."
+  /usr/sbin/pw user add strfry -u 933 -g 933  -c "strfry daemon" -d /var/empty -s /usr/sbin/nologin
+else
+  echo "Using existing user 'strfry'."
+fi
+
+EOD
+}
