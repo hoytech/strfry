@@ -1,0 +1,16 @@
+VULTR_API_KEY   = "EGJGEJIGJKSDGJKSDKSDGJKLDG444JLKG"
+region          = "ewr"
+plan            = "vhp-1c-2gb-amd"
+# $12 plans
+# Plan           = "vc2-1c-1gb"
+# plan           = "vhf-2c-4gb"
+# plan           = "vhp-1c-2gb-amd"
+os              = 447
+# os             = 1743 ubuntu 22.04
+# os             = 2136 debian 12
+# os             = 447  freebsd 13
+label           = "relay.example.com"
+hostname        = "relay"
+script_filename = "startup.freebsd.sh"
+# script_filename = "startup.ubuntu.sh"
+ssh_key_filename= "~/.ssh/id.pub"
