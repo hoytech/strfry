@@ -76,12 +76,6 @@ h2 {
             margin-left: 5px;
         }
 
-        .community-rules {
-            font-size: 70%;
-            color: darkmagenta;
-            margin-left: 5px;
-        }
-
         .new-post-link {
             margin-left: 20px;
         }
@@ -258,9 +252,9 @@ table.vert {
 }
 
 
-/* communities */
+/* feeds */
 
-.community-item {
+.feed-item {
     margin-bottom: 8px;
     overflow: hidden;
 
@@ -281,31 +275,6 @@ table.vert {
         padding-top: 5px;
         font-size: 75%;
         color: #828282;
-    }
-}
-
-.community-info {
-    h2 {
-        margin-bottom: 10px;
-        font-size: 110%;
-        font-weight: bold;
-    }
-
-    > div {
-        padding-left: 5px;
-        margin-bottom: 25px;
-    }
-
-    .desc {
-        white-space: pre-line;
-    }
-
-    .algo {
-        white-space: pre;
-        font-family: monospace;
-        margin-top: 25px;
-        padding: 10px 10px 10px 10px;
-        background-color: lightgoldenrodyellow;
     }
 }
 
