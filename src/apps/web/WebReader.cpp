@@ -94,9 +94,9 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 
 
-TemplarResult renderCommunityEvents(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const CommunitySpec &communitySpec) {
-    AlgoScanner a(txn, communitySpec.algo);
-    auto events = a.getEvents(txn, decomp, 60);
+TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const std::string &feedId) {
+    FeedReader feedReader(txn, feedId);
+    auto events = feedReader.getEvents(txn, decomp);
 
     std::vector<TemplarResult> rendered;
     auto now = hoytech::curr_time_s();
@@ -120,11 +120,11 @@ TemplarResult renderCommunityEvents(lmdb::txn &txn, Decompressor &decomp, UserCa
             fe.info,
         };
 
-        rendered.emplace_back(tmpl::community::item(ctx));
+        rendered.emplace_back(tmpl::feed::item(ctx));
         n++;
     }
 
-    return tmpl::community::list(rendered);
+    return tmpl::feed::list(rendered);
 }
 
 
@@ -148,32 +148,16 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
     // Normal frame:
 
     std::optional<TemplarResult> body;
-    std::optional<CommunitySpec> communitySpec;
     std::string title;
 
     // Or, raw:
 
     std::optional<std::string> rawBody;
 
-    if (u.path.size() == 0 || u.path[0] == "algo") {
-        communitySpec = lookupCommunitySpec(txn, decomp, userCache, cfg().web__homepageCommunity);
-        httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
-    }
-
     if (u.path.size() == 0) {
-        body = renderCommunityEvents(txn, decomp, userCache, *communitySpec);
-    } else if (u.path[0] == "algo") {
-        struct {
-            std::string community;
-            const CommunitySpec &communitySpec;
-            std::string_view descriptor;
-        } ctx = {
-            "homepage",
-            *communitySpec,
-            cfg().web__homepageCommunity,
-        };
+        body = renderFeed(txn, decomp, userCache, cfg().web__homepageFeedId);
 
-        body = tmpl::community::communityInfo(ctx);
+        httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
@@ -320,7 +304,6 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
         struct {
             const TemplarResult &body;
-            const std::optional<CommunitySpec> &communitySpec;
             std::string_view title;
             std::string staticFilesPrefix;
             std::string_view staticOddbeanCssHash;
@@ -328,7 +311,6 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             std::string_view staticOddbeanSvgHash;
         } ctx = {
             *body,
-            communitySpec,
             title,
             cfg().web__staticFilesPrefix.size() ? cfg().web__staticFilesPrefix : "/static",
             oddbeanStatic__oddbean_css__hash().substr(0, 16),
