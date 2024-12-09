@@ -1,10 +1,8 @@
 #include "WebServer.h"
 #include "WebData.h"
 
-
+#include "FeedReader.h"
 #include "WebStaticFiles.h"
-
-
 
 
 
@@ -95,8 +93,8 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 
 TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const std::string &feedId) {
-    FeedReader feedReader(txn, feedId);
-    auto events = feedReader.getEvents(txn, decomp);
+    FeedReader feedReader;
+    auto events = feedReader.getEvents(txn, decomp, feedId);
 
     std::vector<TemplarResult> rendered;
     auto now = hoytech::curr_time_s();
@@ -111,7 +109,7 @@ TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCa
             const Event &ev;
             const User &user;
             std::string timestamp;
-            AlgoScanner::EventInfo &info;
+            FeedReader::EventInfo &info;
         } ctx = {
             n,
             ev,
