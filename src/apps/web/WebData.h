@@ -694,39 +694,3 @@ struct UserEvents {
         return tmpl::user::comments(ctx);
     }
 };
-
-
-
-struct CommunitySpec {
-    tao::json::value raw;
-    std::string adminNpub;
-    std::string adminTopic;
-};
-
-inline CommunitySpec lookupCommunitySpec(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, std::string_view descriptor) {
-    CommunitySpec spec;
-
-    size_t pos = descriptor.find("/");
-    if (pos == std::string_view::npos) throw herr("bad descriptor");
-    spec.adminNpub = std::string(descriptor.substr(0, pos));
-    std::string authorPubkey = decodeBech32Simple(spec.adminNpub);
-    spec.adminTopic = descriptor.substr(pos + 1);
-
-    tao::json::value filter = tao::json::value({
-        { "authors", tao::json::value::array({ to_hex(authorPubkey) }) },
-        { "kinds", tao::json::value::array({ uint64_t(33700) }) },
-        { "#d", tao::json::value::array({ spec.adminTopic }) },
-    });
-
-    bool found = false;
-
-    foreachByFilter(txn, filter, [&](uint64_t levId){
-        spec.raw = tao::json::from_string(getEventJson(txn, decomp, levId));
-        found = true;
-        return false;
-    });
-
-    if (!found) throw herr("unable to find community");
-
-    return spec;
-}
