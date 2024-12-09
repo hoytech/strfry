@@ -7,8 +7,8 @@ config:
     desc: "Port to open for the http protocol"
     default: 8080
     noReload: true
-  - name: web__homepageCommunity
-    desc: "Community descriptor for homepage"
+  - name: web__homepageFeedId
+    desc: "Homepage Feed ID (pubkey/feedName)"
     default: ""
   - name: web__staticFilesPrefix
     desc: "URL or relative path prefix to use for static files (empty string to use versions embedded in binary)"
