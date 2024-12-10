@@ -13,7 +13,10 @@ struct FeedReader {
         EventInfo info;
     };
 
-    std::vector<FeedEvent> getEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &feedId) {
+    std::vector<FeedEvent> getEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &feedId, uint64_t resultsPerPage, uint64_t page) {
+        uint64_t skip = page * resultsPerPage;
+        uint64_t remaining = resultsPerPage;
+
         size_t pos = feedId.find(".");
         if (pos == std::string_view::npos) throw herr("bad feedId: ", feedId);
         std::string pubkey = from_hex(feedId.substr(0, pos));
@@ -38,20 +41,46 @@ struct FeedReader {
 
         std::vector<FeedEvent> output;
 
-        const auto &tags = feedJson.at("tags").get_array();
+        while (true) {
+            const auto &tags = feedJson.at("tags").get_array();
+            std::string prev;
 
-        for (const auto &tag : tags) {
-            if (tag[0] != "e") continue;
-            std::string id = from_hex(tag[1].get_string());
+            for (const auto &tag : tags) {
+                if (tag[0] == "prev") {
+                    prev = from_hex(tag[1].get_string());
+                    continue;
+                }
 
-            auto ev = lookupEventById(txn, id);
-            if (!ev) continue;
+                if (tag[0] != "e") continue;
+                std::string id = from_hex(tag[1].get_string());
 
-            output.push_back({
-                ev->primaryKeyId,
-                id,
-                buildEventInfo(txn, id),
-            });
+                auto ev = lookupEventById(txn, id);
+                if (!ev) continue;
+
+                if (skip) {
+                    skip--;
+                    continue;
+                }
+
+                output.push_back({
+                    ev->primaryKeyId,
+                    id,
+                    buildEventInfo(txn, id),
+                });
+
+                remaining--;
+                if (!remaining) break;
+            }
+
+            if (remaining && prev.size()) {
+                auto ev = lookupEventById(txn, prev);
+                if (ev) {
+                    feedJson = tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId));
+                    continue;
+                }
+            }
+
+            break;
         }
 
         return output;
