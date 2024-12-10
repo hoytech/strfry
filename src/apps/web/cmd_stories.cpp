@@ -12,7 +12,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      stories
+      stories [--top=<top>] [--days=<days>] [--oddbean]
 )";
 
 
@@ -32,15 +32,21 @@ struct FilteredEvent {
 void cmd_stories(const std::vector<std::string> &subArgs) {
     std::map<std::string, docopt::value> args = docopt::docopt(USAGE, subArgs, true, "");
 
+    uint64_t top = 10;
+    if (args["--top"]) top = args["--top"].asLong();
+    uint64_t days = 2;
+    if (args["--days"]) days = args["--days"].asLong();
+    bool oddbeanOnly = args["--oddbean"].asBool();
+
+    uint64_t limit = 10000;
+    uint64_t timeWindow = 86400*days;
+    uint64_t threshold = 10;
+
     Decompressor decomp;
     auto txn = env.txn_ro();
 
     flat_hash_map<Bytes32, EventInfo> eventInfoCache;
     std::vector<FilteredEvent> output;
-
-    uint64_t limit = 10000;
-    uint64_t timeWindow = 86400*2;
-    uint64_t threshold = 10;
 
     uint64_t now = hoytech::curr_time_s();
 
@@ -55,6 +61,7 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
 
         if (kind == 1) {
             bool foundETag = false;
+            bool isOddbeanTopic = false;
             packed.foreachTag([&](char tagName, std::string_view tagVal){
                 if (tagName == 'e') {
                     auto tagEventId = tagVal;
@@ -62,6 +69,7 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
                     eventInfoCache[tagEventId].comments++;
                     foundETag = true;
                 }
+                if (tagName == 't' && tagVal == "oddbean") isOddbeanTopic = true;
                 return true;
             });
             if (foundETag) return true; // not root event
@@ -69,7 +77,19 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
             eventInfoCache.emplace(id, EventInfo{});
             auto &eventInfo = eventInfoCache[id];
 
-            if (eventInfo.reactions < threshold) return true;
+            if (oddbeanOnly) {
+                if (!isOddbeanTopic) return true;
+
+                // Filter out posts from oddbot clients
+                tao::json::value json = tao::json::from_string(getEventJson(txn, decomp, ev.primaryKeyId));
+                const auto &tags = json.at("tags").get_array();
+                for (const auto &t : tags) {
+                    const auto &tArr = t.get_array();
+                    if (tArr.at(0) == "client" && tArr.size() >= 2 && tArr.at(1) == "oddbot") return true;
+                }
+            } else {
+                if (eventInfo.reactions < threshold) return true;
+            }
 
             output.emplace_back(FilteredEvent{ev.primaryKeyId, id, packed.created_at(), eventInfo});
         } else if (kind == 7) {
@@ -93,11 +113,16 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
         return o.created_at < (now - timeWindow);
     }), output.end());
 
-    std::sort(output.begin(), output.end(), [](const auto &a, const auto &b){
-        return a.info.reactions > b.info.reactions;
-    });
+    if (!oddbeanOnly) {
+        std::sort(output.begin(), output.end(), [](const auto &a, const auto &b){
+            return a.info.reactions > b.info.reactions;
+        });
+    }
 
     for (const auto &o : output) {
+        if (top == 0) break;
+        top--;
+
         tao::json::value ev = tao::json::from_string(getEventJson(txn, decomp, o.levId));
 
         std::string content = ev.at("content").get_string();

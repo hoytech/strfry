@@ -92,13 +92,14 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 
 
-TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const std::string &feedId) {
+TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const std::string &feedId, uint64_t resultsPerPage, uint64_t page) {
     FeedReader feedReader;
-    auto events = feedReader.getEvents(txn, decomp, feedId);
+    auto events = feedReader.getEvents(txn, decomp, feedId, resultsPerPage, page);
 
     std::vector<TemplarResult> rendered;
     auto now = hoytech::curr_time_s();
-    uint64_t n = 1;
+    uint64_t offset = (page * resultsPerPage) + 1;
+    uint64_t n = 0;
 
     for (auto &fe : events) {
         auto ev = Event::fromLevId(txn, fe.levId);
@@ -111,7 +112,7 @@ TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCa
             std::string timestamp;
             FeedReader::EventInfo &info;
         } ctx = {
-            n,
+            offset + n,
             ev,
             *userCache.getUser(txn, decomp, ev.getPubkey()),
             renderTimestamp(now, ev.getCreatedAt()),
@@ -122,7 +123,19 @@ TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCa
         n++;
     }
 
-    return tmpl::feed::list(rendered);
+    struct {
+        const std::vector<TemplarResult> &items;
+        uint64_t n;
+        uint64_t resultsPerPage;
+        uint64_t page;
+    } ctx = {
+        rendered,
+        n,
+        resultsPerPage,
+        page,
+    };
+
+    return tmpl::feed::list(ctx);
 }
 
 
@@ -153,7 +166,12 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
     std::optional<std::string> rawBody;
 
     if (u.path.size() == 0) {
-        body = renderFeed(txn, decomp, userCache, cfg().web__homepageFeedId);
+        uint64_t resultsPerPage = 30;
+        uint64_t page = 0;
+        auto pageStr = u.lookupQuery("p");
+        if (pageStr) page = std::stoull(std::string(*pageStr));
+
+        body = renderFeed(txn, decomp, userCache, cfg().web__homepageFeedId, resultsPerPage, page);
 
         httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
     } else if (u.path[0] == "e") {

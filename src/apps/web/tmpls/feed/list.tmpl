@@ -1,3 +1,8 @@
-<div> @(const auto &r : ctx)
+<div> @(const auto &r : ctx.items)
     $(r)
+</div>
+
+<div class="feed-nav-links">
+    <a href="./?p=$(ctx.page + 1)">More</a> ?(ctx.n != 0)
+    <span>The end.</span> ?(ctx.n == 0)
 </div>
