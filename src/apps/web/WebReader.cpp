@@ -173,7 +173,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
         body = renderFeed(txn, decomp, userCache, cfg().web__homepageFeedId, resultsPerPage, page);
 
-        httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
+        httpResp.extraHeaders += "Cache-Control: max-age=30\r\n";
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
