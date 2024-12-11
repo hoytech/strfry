@@ -1,5 +1,6 @@
 #pragma once
 
+#include<string.h>
 #include <hoytech/protected_queue.h>
 
 #include "golpe.h"
@@ -71,7 +72,7 @@ struct WriterPipeline {
                     try {
                         parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, packedStr, jsonStr);
                     } catch (std::exception &e) {
-                        if (verboseReject) LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
+                        if (verboseReject) LW << "Rejected event: " << m.eventJson.get_string().substr(0,200) << " reason: " << e.what();
                         numLive--;
                         totalRejected++;
                         continue;
