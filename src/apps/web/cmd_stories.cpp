@@ -38,7 +38,8 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
     if (args["--days"]) days = args["--days"].asLong();
     bool oddbeanOnly = args["--oddbean"].asBool();
 
-    uint64_t limit = 10000;
+    uint64_t eventLimit = 1000;
+    uint64_t scanLimit = 100000;
     uint64_t timeWindow = 86400*days;
     uint64_t threshold = 10;
 
@@ -51,7 +52,9 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
     uint64_t now = hoytech::curr_time_s();
 
     env.generic_foreachFull(txn, env.dbi_Event__created_at, lmdb::to_sv<uint64_t>(MAX_U64), lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
-        if (output.size() > limit) return false;
+        if (output.size() > eventLimit) return false;
+        if (scanLimit == 0) return false;
+        scanLimit--;
 
         auto ev = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
         PackedEventView packed(ev.buf);
