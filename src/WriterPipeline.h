@@ -1,5 +1,6 @@
 #pragma once
 
+#include<string.h>
 #include <hoytech/protected_queue.h>
 
 #include "golpe.h"
@@ -71,7 +72,10 @@ struct WriterPipeline {
                     try {
                         parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, packedStr, jsonStr);
                     } catch (std::exception &e) {
-                        if (verboseReject) LW << "Rejected event: " << m.eventJson << " reason: " << e.what();
+                        if (verboseReject) {
+                            jsonStr = tao::json::to_string(m.eventJson).substr(0,200);
+                            LW << "Rejected event: " << jsonStr << " reason: " << e.what();
+                        }
                         numLive--;
                         totalRejected++;
                         continue;
