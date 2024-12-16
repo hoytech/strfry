@@ -14,9 +14,10 @@
                 <a href="/" class="logo-link"><img class="logo" src="$(ctx.staticFilesPrefix)/oddbean.svg?$(ctx.staticOddbeanSvgHash)"></a>
 
                 <span>
-                    <a href="/" class="sitename">
-                        <span class="oddbean-name">Oddbean</span>
-                    </a>
+                    <a href="/" class="sitename"><span class="oddbean-name">Oddbean</span></a>
+                    <> ?(ctx.feedReader)
+                        / <a href="/f/$(ctx.feedReader->feedName)/info" class="feedname">$(ctx.feedReader->feedName)</a>
+                    </>
                 </span>
 
                 <a href="/post" class="new-post-link">new post</a>
