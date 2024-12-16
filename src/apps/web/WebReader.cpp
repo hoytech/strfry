@@ -178,6 +178,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
             body = et.render(txn, decomp, userCache);
+            title = et.getSummary();
         } else if (u.path.size() == 3) {
             if (u.path[2] == "reply") {
                 auto ev = Event::fromIdExternal(txn, u.path[1]);

@@ -241,7 +241,7 @@ struct Event {
     // FIXME: Don't truncate UTF-8 mid-sequence
     // FIXME: Don't put ellipsis if truncated text ends in punctuation
 
-    std::string summaryHtml() const {
+    std::string summaryHtml(bool withLink = true) const {
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
 
@@ -252,7 +252,7 @@ struct Event {
         textAbbrev(content, 100);
         templarInternal::htmlEscape(content, true);
 
-        if (firstUrl.size()) {
+        if (withLink && firstUrl.size()) {
             while (content.size() && isspace(content.back())) content.pop_back();
             if (content.empty()) {
                 content = firstUrl;
@@ -510,6 +510,17 @@ struct EventThread {
                 }
             }
         }
+    }
+
+
+    std::string getSummary() {
+        if (!rootEventId.size()) return "";
+
+        auto p = eventCache.find(rootEventId);
+        if (p == eventCache.end()) return "";
+
+        const auto &elem = p->second;
+        return elem.summaryHtml(false);
     }
 
 
