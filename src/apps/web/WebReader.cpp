@@ -92,9 +92,8 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 
 
-TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const std::string &feedId, uint64_t resultsPerPage, uint64_t page) {
-    FeedReader feedReader;
-    auto events = feedReader.getEvents(txn, decomp, feedId, resultsPerPage, page);
+TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const FeedReader &feedReader, uint64_t resultsPerPage, uint64_t page) {
+    auto events = feedReader.getEvents(txn, decomp, resultsPerPage, page);
 
     std::vector<TemplarResult> rendered;
     auto now = hoytech::curr_time_s();
@@ -165,15 +164,24 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
     std::optional<std::string> rawBody;
 
+    // Misc:
+
+    std::optional<FeedReader> feedReader;
+
     if (u.path.size() == 0) {
         uint64_t resultsPerPage = 30;
         uint64_t page = 0;
         auto pageStr = u.lookupQuery("p");
         if (pageStr) page = std::stoull(std::string(*pageStr));
 
-        body = renderFeed(txn, decomp, userCache, cfg().web__homepageFeedId, resultsPerPage, page);
+        feedReader.emplace(txn, decomp, "homepage");
 
-        httpResp.extraHeaders += "Cache-Control: max-age=30\r\n";
+        if (feedReader->found) {
+            body = renderFeed(txn, decomp, userCache, *feedReader, resultsPerPage, page);
+            httpResp.extraHeaders += "Cache-Control: max-age=30\r\n";
+        } else {
+            rawBody = "Feed not found.";
+        }
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
@@ -267,6 +275,26 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
                 body = tmpl::user::followers(ctx);
             }
         }
+    } else if (u.path[0] == "f") {
+        if (u.path.size() == 2) {
+            feedReader.emplace(txn, decomp, u.path[1]);
+            // FIXME: feed
+        } else if (u.path.size() == 3 && u.path[2] == "info") {
+            feedReader.emplace(txn, decomp, u.path[1]);
+
+            if (feedReader->found) {
+                struct {
+                    const std::optional<FeedReader> &feedReader;
+                } ctx = {
+                    feedReader,
+                };
+
+                body = tmpl::feed::info(ctx);
+                title = feedReader->feedName;
+            } else {
+                rawBody = "Feed not found.";
+            }
+        }
     } else if (u.path[0] == "search") {
         std::vector<TemplarResult> results;
 
@@ -326,6 +354,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             std::string_view staticOddbeanCssHash;
             std::string_view staticOddbeanJsHash;
             std::string_view staticOddbeanSvgHash;
+            const std::optional<FeedReader> &feedReader;
         } ctx = {
             *body,
             title,
@@ -333,6 +362,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             oddbeanStatic__oddbean_css__hash().substr(0, 16),
             oddbeanStatic__oddbean_js__hash().substr(0, 16),
             oddbeanStatic__oddbean_svg__hash().substr(0, 16),
+            feedReader,
         };
 
         responseData = std::move(tmpl::main(ctx).str);

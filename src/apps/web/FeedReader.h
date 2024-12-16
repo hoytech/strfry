@@ -1,6 +1,13 @@
 #pragma once
 
 struct FeedReader {
+    std::string feedId;
+
+    bool found = false;
+    tao::json::value feedJson;
+    std::string pubkey;
+    std::string feedName;
+
     struct EventInfo {
         uint64_t comments = 0;
         double score = 0.0;
@@ -13,36 +20,38 @@ struct FeedReader {
         EventInfo info;
     };
 
-    std::vector<FeedEvent> getEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &feedId, uint64_t resultsPerPage, uint64_t page) {
-        uint64_t skip = page * resultsPerPage;
-        uint64_t remaining = resultsPerPage;
+    FeedReader(lmdb::txn &txn, Decompressor &decomp, std::string_view feedId_) : feedId(feedId_) {
+        if (feedId == "homepage") feedId = cfg().web__homepageFeedId;
 
         size_t pos = feedId.find(".");
         if (pos == std::string_view::npos) throw herr("bad feedId: ", feedId);
-        std::string pubkey = from_hex(feedId.substr(0, pos));
-        std::string adminTopic = feedId.substr(pos + 1);
+        pubkey = from_hex(feedId.substr(0, pos));
+        feedName = feedId.substr(pos + 1);
 
         tao::json::value filter = tao::json::value({
             { "authors", tao::json::value::array({ to_hex(pubkey) }) },
             { "kinds", tao::json::value::array({ uint64_t(33800) }) },
-            { "#d", tao::json::value::array({ adminTopic }) },
+            { "#d", tao::json::value::array({ feedName }) },
         });
-
-        bool found = false;
-        tao::json::value feedJson;
 
         foreachByFilter(txn, filter, [&](uint64_t levId){
             feedJson = tao::json::from_string(getEventJson(txn, decomp, levId));
             found = true;
             return false;
         });
+    }
 
+    std::vector<FeedEvent> getEvents(lmdb::txn &txn, Decompressor &decomp, uint64_t resultsPerPage, uint64_t page) const {
         if (!found) throw herr("unable to lookup feedId: ", feedId);
 
         std::vector<FeedEvent> output;
+        uint64_t skip = page * resultsPerPage;
+        uint64_t remaining = resultsPerPage;
+
+        tao::json::value currFeedJson = feedJson;
 
         while (true) {
-            const auto &tags = feedJson.at("tags").get_array();
+            const auto &tags = currFeedJson.at("tags").get_array();
             std::string prev;
 
             for (const auto &tag : tags) {
@@ -75,7 +84,7 @@ struct FeedReader {
             if (remaining && prev.size()) {
                 auto ev = lookupEventById(txn, prev);
                 if (ev) {
-                    feedJson = tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId));
+                    currFeedJson = tao::json::from_string(getEventJson(txn, decomp, ev->primaryKeyId));
                     continue;
                 }
             }
@@ -86,7 +95,7 @@ struct FeedReader {
         return output;
     }
 
-    EventInfo buildEventInfo(lmdb::txn &txn, const std::string &id) {
+    EventInfo buildEventInfo(lmdb::txn &txn, const std::string &id) const {
         EventInfo output;
 
         std::string prefix = "e";
