@@ -168,13 +168,13 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
     std::optional<FeedReader> feedReader;
 
-    if (u.path.size() == 0) {
+    auto handleFeed = [&](std::string_view feedId){
         uint64_t resultsPerPage = 30;
         uint64_t page = 0;
         auto pageStr = u.lookupQuery("p");
         if (pageStr) page = std::stoull(std::string(*pageStr));
 
-        feedReader.emplace(txn, decomp, "homepage");
+        feedReader.emplace(txn, decomp, feedId);
 
         if (feedReader->found) {
             body = renderFeed(txn, decomp, userCache, *feedReader, resultsPerPage, page);
@@ -182,6 +182,10 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         } else {
             rawBody = "Feed not found.";
         }
+    };
+
+    if (u.path.size() == 0) {
+        handleFeed("homepage");
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
@@ -277,14 +281,21 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         }
     } else if (u.path[0] == "f") {
         if (u.path.size() == 2) {
-            feedReader.emplace(txn, decomp, u.path[1]);
-            // FIXME: feed
+            handleFeed(u.path[1]);
         } else if (u.path.size() == 3 && u.path[2] == "info") {
             feedReader.emplace(txn, decomp, u.path[1]);
 
-            std::string title, description, styleHeaderShade;
-            if (feedReader->content.get_object().contains("title")) title = feedReader->content["title"].get_string();
-            if (feedReader->content.get_object().contains("description")) description = feedReader->content["description"].get_string();
+            std::string title, description;
+
+            try {
+                auto &contentObj = feedReader->content.get_object();
+
+                if (contentObj.contains("title")) title = contentObj["title"].get_string();
+                if (contentObj.contains("description")) description = contentObj["description"].get_string();
+                //if (contentObj.contains("style") && contentObj["style"].is_object()) {
+                //    auto styleObj = contentObj["style"].get_object();
+                //}
+            } catch(...) {}
 
             std::string feedPath;
             if (u.path[1] == "homepage") feedPath = "/";
