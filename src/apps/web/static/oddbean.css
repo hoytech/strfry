@@ -283,6 +283,22 @@ table.vert {
     margin-left: 40px;
 }
 
+.feed-info {
+    .feed-id {
+        background-color: #dfdfdf;
+        font-family: monospace;
+        font-size: 90%;
+        display: inline;
+        padding: 5px;
+    }
+
+    .feed-description {
+        padding-left: 20px;
+        border-left: 2px solid blue;
+        white-space: pre;
+    }
+}
+
 
 /* voting */
 
