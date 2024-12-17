@@ -1,9 +1,13 @@
-<div class="feed-info-page">
-    <p>
-        Feed: $(ctx.feedReader->feedName)
+<div class="info-page feed-info">
+    <h2>Feed: <a href="$(ctx.feedPath)">$(ctx.title)</a></h2>
+
+    <pre class="feed-id">$(ctx.feedReader->feedId)</pre>
+
+    <p class="feed-curator">
+        Curator: <a href="/u/$(ctx.curator.npubId)">$(ctx.curator.username)</a>
     </p>
 
-    <p>
-        ID: $(ctx.feedReader->feedId)
+    <p class="feed-description">
+        $(ctx.description)
     </p>
 </div>

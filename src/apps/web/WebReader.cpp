@@ -282,11 +282,30 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         } else if (u.path.size() == 3 && u.path[2] == "info") {
             feedReader.emplace(txn, decomp, u.path[1]);
 
+            std::string title, description, styleHeaderShade;
+            if (feedReader->content.get_object().contains("title")) title = feedReader->content["title"].get_string();
+            if (feedReader->content.get_object().contains("description")) description = feedReader->content["description"].get_string();
+
+            std::string feedPath;
+            if (u.path[1] == "homepage") feedPath = "/";
+            else {
+                feedPath = "/f/";
+                feedPath += u.path[1];
+            }
+
             if (feedReader->found) {
                 struct {
                     const std::optional<FeedReader> &feedReader;
+                    const User &curator;
+                    const std::string &title;
+                    const std::string &description;
+                    const std::string &feedPath;
                 } ctx = {
                     feedReader,
+                    *userCache.getUser(txn, decomp, feedReader->pubkey),
+                    title,
+                    description,
+                    feedPath,
                 };
 
                 body = tmpl::feed::info(ctx);

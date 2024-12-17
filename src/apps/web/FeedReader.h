@@ -5,6 +5,7 @@ struct FeedReader {
 
     bool found = false;
     tao::json::value feedJson;
+    tao::json::value content;
     std::string pubkey;
     std::string feedName;
 
@@ -39,6 +40,12 @@ struct FeedReader {
             found = true;
             return false;
         });
+
+        if (!found) return;
+
+        try {
+            content = tao::json::from_string(feedJson.at("content").get_string());
+        } catch (...) {}
     }
 
     std::vector<FeedEvent> getEvents(lmdb::txn &txn, Decompressor &decomp, uint64_t resultsPerPage, uint64_t page) const {
