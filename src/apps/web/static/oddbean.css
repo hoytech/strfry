@@ -83,6 +83,10 @@ h2 {
         .about {
             margin-left: 20px;
         }
+
+        .feedname {
+            margin-left: 3px;
+        }
     }
 
     .login {
@@ -293,14 +297,14 @@ table.vert {
         background-color: #dfdfdf;
         font-family: monospace;
         font-size: 90%;
-        display: inline;
         padding: 5px;
+        overflow-x: auto;
     }
 
     .feed-description {
         padding-left: 20px;
         border-left: 2px solid blue;
-        white-space: pre;
+        white-space: pre-wrap;
     }
 }
 
