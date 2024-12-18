@@ -104,15 +104,30 @@ TemplarResult renderFeed(lmdb::txn &txn, Decompressor &decomp, UserCache &userCa
         auto ev = Event::fromLevId(txn, fe.levId);
         ev.populateJson(txn, decomp);
 
+        auto summary = ev.summaryHtml();
+        std::string url;
+        if (summary.url.size()) {
+            url = summary.url;
+        } else {
+            url += "/e/";
+            url += ev.getNoteId();
+        }
+
         struct {
             uint64_t n;
             const Event &ev;
+            const std::string &text;
+            const std::string &url;
+            const std::string &domain;
             const User &user;
             std::string timestamp;
             FeedReader::EventInfo &info;
         } ctx = {
             offset + n,
             ev,
+            summary.text,
+            url,
+            summary.getDomain(),
             *userCache.getUser(txn, decomp, ev.getPubkey()),
             renderTimestamp(now, ev.getCreatedAt()),
             fe.info,

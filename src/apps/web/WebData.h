@@ -237,11 +237,32 @@ struct Event {
         return encodeBech32Simple("note", root);
     }
 
+    struct Summary {
+        std::string text;
+        std::string url;
+
+        std::string getDomain() {
+            static RE2 matcher(R"((?i)https?://(?:[\w-]+[.])*([\w-]+[.]\w+))");
+
+            std::string_view contentSv(url);
+            re2::StringPiece input(contentSv);
+            re2::StringPiece match;
+
+            if (RE2::Consume(&input, matcher, &match)) {
+                return std::string(match);
+            }
+
+            return "";
+        };
+    };
+
     // FIXME: Use "subject" tag if present?
     // FIXME: Don't truncate UTF-8 mid-sequence
     // FIXME: Don't put ellipsis if truncated text ends in punctuation
 
-    std::string summaryHtml(bool withLink = true) const {
+    Summary summaryHtml() const {
+        Summary output;
+
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
 
@@ -252,6 +273,10 @@ struct Event {
         textAbbrev(content, 100);
         templarInternal::htmlEscape(content, true);
 
+        output.text = std::move(content);
+        output.url = std::move(firstUrl);
+
+/*
         if (withLink && firstUrl.size()) {
             while (content.size() && isspace(content.back())) content.pop_back();
             if (content.empty()) {
@@ -262,8 +287,9 @@ struct Event {
 
             return std::string("<a href=\"") + templarInternal::htmlEscape(firstUrl, true) + "\">" + content + "</a>";
         }
+        */
 
-        return content;
+        return output;
     }
 
 
@@ -520,7 +546,7 @@ struct EventThread {
         if (p == eventCache.end()) return "";
 
         const auto &elem = p->second;
-        return elem.summaryHtml(false);
+        return elem.summaryHtml().text;
     }
 
 
@@ -547,7 +573,7 @@ struct EventThread {
 
                 ctx.abbrev = focusOnPubkey && *focusOnPubkey != pubkey;
                 if (ctx.abbrev) {
-                    ctx.content = elem.summaryHtml();
+                    ctx.content = elem.summaryHtml().text;
                 } else {
                     ctx.content = templarInternal::htmlEscape(elem.json.at("content").get_string(), false);
                     preprocessEventContent(txn, decomp, elem, userCache, ctx.content);

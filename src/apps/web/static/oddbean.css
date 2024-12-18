@@ -271,6 +271,11 @@ table.vert {
         color: black;
     }
 
+    .summary > span {
+        color: #828282;
+        font-size: 75%;
+    }
+
     .info {
         padding-top: 5px;
         font-size: 75%;
