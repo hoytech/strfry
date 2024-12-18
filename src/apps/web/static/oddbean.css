@@ -304,7 +304,7 @@ table.vert {
     .feed-description {
         padding-left: 20px;
         border-left: 2px solid blue;
-        white-space: pre-wrap;
+        white-space: pre-line;
     }
 }
 
