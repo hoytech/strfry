@@ -10,7 +10,10 @@
 
     <div class="right">
         <div class="summary">
-            <a href="/e/$(ctx.ev.getNoteId())">$!(ctx.ev.summaryHtml())</a>
+            <a href="$(ctx.url)">$!(ctx.text)</a>
+            <span> ?(ctx.domain.size())
+                ($(ctx.domain))
+            </span>
         </div>
 
         <div class="info">
