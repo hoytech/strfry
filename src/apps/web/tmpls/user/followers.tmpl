@@ -1,4 +1,6 @@
 <div class="user-followers">
+    <h2><a href="/u/$(ctx.user.npubId)">$(ctx.user.username)</a> has $(ctx.numFollowers) known followers.</h2>
+
     <table class="vert">
         <tr>
             <th>user</th>
@@ -16,4 +18,10 @@
         </>
 
     </table>
+
+    <div class="pagination-links">
+        <a href="?p=$(ctx.page - 1)">Prev</a> ?(ctx.numPages && ctx.page > 0)
+        <span>$(ctx.page + 1) / $(ctx.numPages)</span>
+        <a href="?p=$(ctx.page + 1)">Next</a> ?(ctx.numPages && ctx.page < ctx.numPages-1)
+    </div>
 </div>

@@ -1,5 +1,4 @@
 read
-  ! paginate followers
   * nostr: links not replaced in feed titles
   * support nprofile/nevent/etc links
   * non-500 error pages when bech32 fails to parse, for example

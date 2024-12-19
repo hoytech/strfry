@@ -186,8 +186,11 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
     auto handleFeed = [&](std::string_view feedId){
         uint64_t resultsPerPage = 30;
         uint64_t page = 0;
-        auto pageStr = u.lookupQuery("p");
-        if (pageStr) page = std::stoull(std::string(*pageStr));
+
+        try {
+            auto pageStr = u.lookupQuery("p");
+            if (pageStr) page = std::stoull(std::string(*pageStr));
+        } catch(...) {}
 
         feedReader.emplace(txn, decomp, feedId);
 
@@ -267,28 +270,54 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
                 title = std::string("following: ") + user.username;
                 user.populateContactList(txn, decomp);
 
+                uint64_t numFollowing = 0;
+                if (user.kind3Event) {
+                    for (const auto &tagJson : user.kind3Event->at("tags").get_array()) {
+                        const auto &tag = tagJson.get_array();
+                        if (tag.size() >= 2 && tag.at(0).get_string() == "p") numFollowing++;
+                    }
+                }
+
                 struct {
                     User &user;
                     std::function<const User*(const std::string &)> getUser;
+                    uint64_t numFollowing;
                 } ctx = {
                     user,
                     [&](const std::string &pubkey){ return userCache.getUser(txn, decomp, pubkey); },
+                    numFollowing,
                 };
 
                 body = tmpl::user::following(ctx);
             } else if (u.path[2] == "followers") {
+                uint64_t resultsPerPage = 500;
+                uint64_t page = 0;
+
+                try {
+                    auto pageStr = u.lookupQuery("p");
+                    if (pageStr) page = std::stoull(std::string(*pageStr));
+                } catch(...) {}
+
                 User user(txn, decomp, userPubkey);
                 title = std::string("followers: ") + user.username;
-                auto followers = user.getFollowers(txn, decomp, user.pubkey);
+                uint64_t numFollowers = 0;
+                auto followers = user.getFollowers(txn, decomp, user.pubkey, page * resultsPerPage, resultsPerPage, &numFollowers);
+                uint64_t numPages = (numFollowers + resultsPerPage + 1) / resultsPerPage;
 
                 struct {
                     const User &user;
                     const std::vector<std::string> &followers;
+                    uint64_t numFollowers;
                     std::function<const User*(const std::string &)> getUser;
+                    uint64_t page;
+                    uint64_t numPages;
                 } ctx = {
                     user,
                     followers,
+                    numFollowers,
                     [&](const std::string &pubkey){ return userCache.getUser(txn, decomp, pubkey); },
+                    page,
+                    numPages,
                 };
 
                 body = tmpl::user::followers(ctx);
