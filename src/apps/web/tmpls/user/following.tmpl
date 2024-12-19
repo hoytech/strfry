@@ -1,4 +1,6 @@
 <div class="user-following">
+    <h2><a href="/u/$(ctx.user.npubId)">$(ctx.user.username)</a> is following $(ctx.numFollowing) users.</h2> ?(ctx.user.kind3Event)
+
     <div> ?(!ctx.user.kind3Event)
         No kind 3 contact list found for $(ctx.user.npubId)
     </div>

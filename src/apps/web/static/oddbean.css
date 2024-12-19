@@ -292,6 +292,14 @@ table.vert {
     margin-left: 40px;
 }
 
+.pagination-links {
+    margin-top: 40px;
+    text-align: center;
+    > * {
+        margin: 10px;
+    }
+}
+
 .feed-info {
     .feed-id {
         background-color: #dfdfdf;

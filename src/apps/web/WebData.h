@@ -128,12 +128,14 @@ struct User {
         kind3Event = loadKindEvent(txn, decomp, 3);
     }
 
-    std::vector<std::string> getFollowers(lmdb::txn &txn, Decompressor &decomp, const std::string &pubkey) {
+    std::vector<std::string> getFollowers(lmdb::txn &txn, Decompressor &decomp, const std::string &pubkey, uint64_t offset = 0, uint64_t limit = MAX_U64, uint64_t *countOut = nullptr) {
         std::vector<std::string> output;
         flat_hash_set<std::string> alreadySeen;
 
         std::string prefix = "p";
         prefix += pubkey;
+
+        uint64_t curr = 0;
 
         env.generic_foreachFull(txn, env.dbi_Event__tag, prefix, "", [&](std::string_view k, std::string_view v){
             ParsedKey_StringUint64 parsedKey(k);
@@ -148,13 +150,15 @@ struct User {
 
                 if (!alreadySeen.contains(pubkey)) {
                     alreadySeen.insert(pubkey);
-                    output.emplace_back(std::move(pubkey));
+                    curr++;
+                    if (curr >= offset && curr - offset < limit) output.emplace_back(std::move(pubkey));
                 }
             }
 
             return true;
         });
 
+        if (countOut) *countOut = curr;
         return output;
     }
 };
