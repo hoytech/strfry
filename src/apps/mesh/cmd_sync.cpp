@@ -237,7 +237,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
                 auto &evJson = msg.at(2);
 
                 std::string okMsg;
-                auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, EventSourceType::Sync, ws.remoteAddr, okMsg);
+                auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, EventSourceType::Sync, url, okMsg);
                 if (res == PluginEventSifterResult::Accept) {
                     writer.write({ std::move(evJson), });
                 } else {
