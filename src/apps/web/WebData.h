@@ -264,11 +264,12 @@ struct Event {
     // FIXME: Don't truncate UTF-8 mid-sequence
     // FIXME: Don't put ellipsis if truncated text ends in punctuation
 
-    Summary summaryHtml() const {
+    Summary summaryHtml(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache) const {
         Summary output;
 
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
+        preprocessEventContent(txn, decomp, userCache, content, false);
 
         auto textAbbrev = [](std::string &str, size_t maxLen){
             if (str.size() > maxLen) str = str.substr(0, maxLen-3) + "...";
@@ -329,78 +330,83 @@ struct Event {
             }
         }
     }
+
+    void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, std::string &content, bool withLinks = true) const {
+        static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub)1\w+))");
+
+        std::string output;
+
+        std::string_view contentSv(content);
+        re2::StringPiece input(contentSv);
+        re2::StringPiece prefix, match;
+
+        auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
+        auto appendLink = [&](std::string_view url, std::string_view text){
+            if (withLinks) {
+                output += "<a href=\"";
+                output += url;
+                output += "\">";
+                output += text;
+                output += "</a>";
+            } else {
+                output += text;
+            }
+        };
+
+        while (RE2::Consume(&input, matcher, &prefix, &match)) {
+            output += sv(prefix);
+
+            if (match.starts_with("http")) {
+                appendLink(sv(match), sv(match));
+            } else if (match.starts_with("nostr:note1")) {
+                std::string path = "/e/";
+                path += sv(match).substr(6);
+                appendLink(path, sv(match));
+            } else if (match.starts_with("nostr:npub1")) {
+                bool didTransform = false;
+
+                try {
+                    const auto *u = userCache.getUser(txn, decomp, decodeBech32Simple(sv(match).substr(6)));
+                    appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
+                    didTransform = true;
+                } catch(std::exception &e) {
+                    //LW << "tag parse error: " << e.what();
+                }
+
+                if (!didTransform) output += sv(match);
+            } else if (match.starts_with("#[")) {
+                bool didTransform = false;
+                auto offset = std::stoull(std::string(sv(match)).substr(2, match.size() - 3));
+
+                const auto &tags = json.at("tags").get_array();
+
+                try {
+                    const auto &tag = tags.at(offset).get_array();
+
+                    if (tag.at(0) == "p") {
+                        const auto *u = userCache.getUser(txn, decomp, from_hex(tag.at(1).get_string()));
+                        appendLink(std::string("/u/") + u->npubId, u->username);
+                        didTransform = true;
+                    } else if (tag.at(0) == "e") {
+                        appendLink(std::string("/e/") + encodeBech32Simple("note", from_hex(tag.at(1).get_string())), sv(match));
+                        didTransform = true;
+                    }
+                } catch(std::exception &e) {
+                    //LW << "tag parse error: " << e.what();
+                }
+
+                if (!didTransform) output += sv(match);
+            }
+        }
+
+        if (output.size()) {
+            output += std::string_view(input.data(), input.size());
+            std::swap(output, content);
+        }
+    }
 };
 
 
-inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub)1\w+))");
-
-    std::string output;
-
-    std::string_view contentSv(content);
-    re2::StringPiece input(contentSv);
-    re2::StringPiece prefix, match;
-
-    auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
-    auto appendLink = [&](std::string_view url, std::string_view text){
-        output += "<a href=\"";
-        output += url;
-        output += "\">";
-        output += text;
-        output += "</a>";
-    };
-
-    while (RE2::Consume(&input, matcher, &prefix, &match)) {
-        output += sv(prefix);
-
-        if (match.starts_with("http")) {
-            appendLink(sv(match), sv(match));
-        } else if (match.starts_with("nostr:note1")) {
-            std::string path = "/e/";
-            path += sv(match).substr(6);
-            appendLink(path, sv(match));
-        } else if (match.starts_with("nostr:npub1")) {
-            bool didTransform = false;
-
-            try {
-                const auto *u = userCache.getUser(txn, decomp, decodeBech32Simple(sv(match).substr(6)));
-                appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
-                didTransform = true;
-            } catch(std::exception &e) {
-                //LW << "tag parse error: " << e.what();
-            }
-
-            if (!didTransform) output += sv(match);
-        } else if (match.starts_with("#[")) {
-            bool didTransform = false;
-            auto offset = std::stoull(std::string(sv(match)).substr(2, match.size() - 3));
-
-            const auto &tags = ev.json.at("tags").get_array();
-
-            try {
-                const auto &tag = tags.at(offset).get_array();
-
-                if (tag.at(0) == "p") {
-                    const auto *u = userCache.getUser(txn, decomp, from_hex(tag.at(1).get_string()));
-                    appendLink(std::string("/u/") + u->npubId, u->username);
-                    didTransform = true;
-                } else if (tag.at(0) == "e") {
-                    appendLink(std::string("/e/") + encodeBech32Simple("note", from_hex(tag.at(1).get_string())), sv(match));
-                    didTransform = true;
-                }
-            } catch(std::exception &e) {
-                //LW << "tag parse error: " << e.what();
-            }
-
-            if (!didTransform) output += sv(match);
-        }
-    }
-
-    if (output.size()) {
-        output += std::string_view(input.data(), input.size());
-        std::swap(output, content);
-    }
-}
 
 
 inline std::string stripUrls(std::string &content) {
@@ -530,14 +536,14 @@ struct EventThread {
     }
 
 
-    std::string getThreadTitle() {
+    std::string getThreadTitle(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache) {
         if (!rootEventId.size()) return "";
 
         auto p = eventCache.find(rootEventId);
         if (p == eventCache.end()) return "";
 
         const auto &elem = p->second;
-        return elem.summaryHtml().text;
+        return elem.summaryHtml(txn, decomp, userCache).text;
     }
 
 
@@ -564,10 +570,10 @@ struct EventThread {
 
                 ctx.abbrev = focusOnPubkey && *focusOnPubkey != pubkey;
                 if (ctx.abbrev) {
-                    ctx.content = elem.summaryHtml().text;
+                    ctx.content = elem.summaryHtml(txn, decomp, userCache).text;
                 } else {
                     ctx.content = templarInternal::htmlEscape(elem.json.at("content").get_string(), false);
-                    preprocessEventContent(txn, decomp, elem, userCache, ctx.content);
+                    elem.preprocessEventContent(txn, decomp, userCache, ctx.content);
                 }
 
                 ctx.ev = &elem;
