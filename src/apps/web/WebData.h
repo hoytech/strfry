@@ -337,7 +337,7 @@ struct Event {
     }
 
     void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, std::string &content, bool withLinks = true) const {
-        static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub)1\w+))");
+        static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub|nevent|nprofile)1\w+))");
 
         std::string output;
 
@@ -367,6 +367,19 @@ struct Event {
                 std::string path = "/e/";
                 path += sv(match).substr(6);
                 appendLink(path, sv(match));
+            } else if (match.starts_with("nostr:nevent1")) {
+                bool didTransform = false;
+
+                try {
+                    auto id = decodeBech32GetSpecial(sv(match).substr(6));
+                    std::string path = "/e/";
+                    path += encodeBech32Simple("note", id);
+
+                    appendLink(path, sv(match));
+                    didTransform = true;
+                } catch(...) {}
+
+                if (!didTransform) output += sv(match);
             } else if (match.starts_with("nostr:npub1")) {
                 bool didTransform = false;
 
@@ -374,9 +387,18 @@ struct Event {
                     const auto *u = userCache.getUser(txn, decomp, decodeBech32Simple(sv(match).substr(6)));
                     appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
                     didTransform = true;
-                } catch(std::exception &e) {
-                    //LW << "tag parse error: " << e.what();
-                }
+                } catch(...) {}
+
+                if (!didTransform) output += sv(match);
+            } else if (match.starts_with("nostr:nprofile")) {
+                bool didTransform = false;
+
+                try {
+                    auto pubkey = decodeBech32GetSpecial(sv(match).substr(6));
+                    const auto *u = userCache.getUser(txn, decomp, pubkey);
+                    appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
+                    didTransform = true;
+                } catch(...) {}
 
                 if (!didTransform) output += sv(match);
             } else if (match.starts_with("#[")) {
