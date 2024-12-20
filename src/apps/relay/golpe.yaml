@@ -38,6 +38,10 @@ config:
     desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"
     default: 131072
     noReload: true
+  - name: relay__maxReqFilterSize
+    desc: "Maximum number of filters allowed in a REQ"
+    default: 20
+    noReload: true
   - name: relay__autoPingSeconds
     desc: "Websocket-level PING message frequency (should be less than any reverse proxy idle timeouts)"
     default: 55
