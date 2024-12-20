@@ -110,3 +110,29 @@ inline std::string stripUrls(std::string &content) {
     std::swap(output, content);
     return firstUrl;
 }
+
+inline void abbrevText(std::string &origStr, size_t maxLen) {
+    if (maxLen < 10) throw herr("abbrev too short");
+    if (origStr.size() <= maxLen) return;
+
+    std::string str = origStr.substr(0, maxLen-3);
+
+    {
+        // If string ends in a multi-byte UTF-8 encoded code-point, chop it off.
+        // This avoids cutting in the middle of an encoded code-point. It's a 99%
+        // solution, not perfect. See: https://metacpan.org/pod/Unicode::Truncate
+
+        auto endsInUtf8Extension = [&](){
+            return str.size() && (str.back() & 0b1100'0000) == 0b1000'0000;
+        };
+
+        if (endsInUtf8Extension()) {
+            do str.pop_back(); while (endsInUtf8Extension());
+            if (str.size()) str.pop_back();
+        }
+    }
+
+    str += "...";
+
+    std::swap(origStr, str);
+}
