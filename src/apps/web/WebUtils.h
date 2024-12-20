@@ -117,22 +117,16 @@ inline void abbrevText(std::string &origStr, size_t maxLen) {
 
     std::string str = origStr.substr(0, maxLen-3);
 
-    {
-        // If string ends in a multi-byte UTF-8 encoded code-point, chop it off.
-        // This avoids cutting in the middle of an encoded code-point. It's a 99%
-        // solution, not perfect. See: https://metacpan.org/pod/Unicode::Truncate
+    // If string ends in a multi-byte UTF-8 encoded code-point, chop it off.
+    // This avoids cutting in the middle of an encoded code-point. It's a 99%
+    // solution, not perfect. See: https://metacpan.org/pod/Unicode::Truncate
 
-        auto endsInUtf8Extension = [&](){
-            return str.size() && (str.back() & 0b1100'0000) == 0b1000'0000;
-        };
-
-        if (endsInUtf8Extension()) {
-            do str.pop_back(); while (endsInUtf8Extension());
-            if (str.size()) str.pop_back();
-        }
+    if (str.size() && (str.back() & 0b1000'0000)) {
+        while (str.size() && (str.back() & 0b1100'0000) == 0b1000'0000) str.pop_back();
+        if (str.size()) str.pop_back();
     }
 
-    str += "...";
+    str += "…";
 
     std::swap(origStr, str);
 }
