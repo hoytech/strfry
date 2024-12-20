@@ -1,7 +1,7 @@
 <div class="event-root">
     $(ctx.foundEvents)
 
-    <div class="orphan-separator"> ?(ctx.orphanNodes.size() > 0)
+    <div class="orphan-separator"> ?(ctx.isFullThreadLoaded && ctx.orphanNodes.size() > 0)
         <span>orphan notes (missing parents)</span>
     </div>
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cctype>
+
 #include "re2/re2.h"
 
 #include "Bech32Utils.h"
@@ -270,6 +273,9 @@ struct Event {
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
         preprocessEventContent(txn, decomp, userCache, content, false);
+
+        // If it was only a URL, just use raw URL
+        if (content.size() == 0 || std::all_of(content.begin(), content.end(), [](unsigned char c){ return std::isspace(c); })) content = firstUrl;
 
         auto textAbbrev = [](std::string &str, size_t maxLen){
             if (str.size() > maxLen) str = str.substr(0, maxLen-3) + "...";
@@ -600,9 +606,11 @@ struct EventThread {
         struct {
             TemplarResult foundEvents;
             std::vector<ReplyCtx> orphanNodes;
+            bool isFullThreadLoaded;
         } ctx;
 
         ctx.foundEvents = process(rootEventId);
+        ctx.isFullThreadLoaded = isFullThreadLoaded;
 
         for (auto &[id, e] : eventCache) {
             if (processedLevIds.contains(e.ev.primaryKeyId)) continue;
