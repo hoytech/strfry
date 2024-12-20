@@ -37,6 +37,8 @@ namespace bech32
 namespace
 {
 
+const size_t BECH32_MAX_SIZE = 5000;
+
 typedef std::vector<uint8_t> data;
 
 /** The Bech32 character set for encoding. */
@@ -204,7 +206,7 @@ DecodeResult decode(const std::string& str) {
     }
     if (lower && upper) return {};
     size_t pos = str.rfind('1');
-    if (str.size() > 90 || pos == str.npos || pos == 0 || pos + 7 > str.size()) {
+    if (str.size() > BECH32_MAX_SIZE || pos == str.npos || pos == 0 || pos + 7 > str.size()) {
         return {};
     }
     data values(str.size() - 1 - pos);

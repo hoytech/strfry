@@ -41,7 +41,7 @@ inline std::string encodeBech32Simple(const std::string &hrp, std::string_view v
     return bech32::encode(hrp, values5, bech32::Encoding::BECH32);
 }
 
-inline std::string decodeBech32Simple(std::string_view v) {
+inline std::string decodeBech32Raw(std::string_view v) {
     auto res = bech32::decode(std::string(v));
 
     if (res.encoding == bech32::Encoding::INVALID) throw herr("invalid bech32");
@@ -49,7 +49,43 @@ inline std::string decodeBech32Simple(std::string_view v) {
 
     std::vector<uint8_t> out;
     if (!convertbits<5, 8, false>(out, res.data)) throw herr("convertbits failed");
-    if (out.size() != 32) throw herr("unexpected size from bech32");
 
     return std::string((char*)out.data(), out.size());
+}
+
+inline std::string decodeBech32Simple(std::string_view v) {
+    auto out = decodeBech32Raw(v);
+    if (out.size() != 32) throw herr("unexpected size from bech32");
+    return out;
+}
+
+inline uint8_t getByte(std::string_view &encoded) {
+    if (encoded.size() < 1) throw herr("parse ends prematurely");
+    uint8_t output = encoded[0];
+    encoded = encoded.substr(1);
+    return output;
+}
+
+inline std::string getBytes(std::string_view &encoded, size_t n) {
+    if (encoded.size() < n) throw herr("parse ends prematurely");
+    auto res = encoded.substr(0, n);
+    encoded = encoded.substr(n);
+    return std::string(res);
+};
+
+inline std::string decodeBech32GetSpecial(std::string_view origStr) {
+    auto decoded = decodeBech32Raw(origStr);
+    std::string_view s(decoded);
+
+    while (s.size()) {
+        auto tag = getByte(s);
+        auto len = getByte(s);
+        auto val = getBytes(s, len);
+        if (tag == 0) {
+            if (len != 32) throw herr("unexpected size from bech32 special");
+            return std::string(val);
+        }
+    }
+
+    throw herr("no special tag found");
 }
