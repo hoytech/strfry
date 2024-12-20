@@ -280,19 +280,6 @@ struct Event {
         output.text = std::move(content);
         output.url = std::move(firstUrl);
 
-/*
-        if (withLink && firstUrl.size()) {
-            while (content.size() && isspace(content.back())) content.pop_back();
-            if (content.empty()) {
-                content = firstUrl;
-                textAbbrev(content, 100);
-                templarInternal::htmlEscape(content, true);
-            }
-
-            return std::string("<a href=\"") + templarInternal::htmlEscape(firstUrl, true) + "\">" + content + "</a>";
-        }
-        */
-
         return output;
     }
 
@@ -543,7 +530,7 @@ struct EventThread {
     }
 
 
-    std::string getSummary() {
+    std::string getThreadTitle() {
         if (!rootEventId.size()) return "";
 
         auto p = eventCache.find(rootEventId);
