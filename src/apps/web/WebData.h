@@ -62,9 +62,14 @@ struct User {
 
         kind0Json = loadKindJson(txn, decomp, 0);
 
-        try {
-            if (kind0Json) username = kind0Json->at("name").get_string();
-        } catch (std::exception &e) {
+        if (kind0Json) {
+            try {
+                username = kind0Json->at("name").get_string();
+            } catch (std::exception &e) {}
+
+            try {
+                if (!username.size()) username = kind0Json->at("display_name").get_string();
+            } catch (std::exception &e) {}
         }
 
         if (username.size() == 0) username = to_hex(pubkey.substr(0,4));
