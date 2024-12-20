@@ -1,6 +1,8 @@
 read
   * nostr: links not replaced in feed titles
   * support nprofile/nevent/etc links
+    example nevent: https://oddbean.com/e/note1qmye0at28we63aze93xjr92nzw725td0a5ncz3htwlc3wg78kp6q7802ad
+    example nprofile: https://oddbean.com/e/note1ykjalrpaj6jvxeuc434yd7ksrj8yd2vte478700ta8np250l3clsyjvh4q
   * non-500 error pages when bech32 fails to parse, for example
   * search field: enter anything, pubkey (hex or npub), eventId, etc. maybe even full-text search?
   * rss

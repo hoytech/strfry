@@ -62,7 +62,7 @@ h2 {
         align-items: center;
 
         @media only screen and (max-width: 576px){
-            .oddbean-name {
+            .oddbean-name, .about {
                 display: none;
             }
         }
@@ -86,6 +86,7 @@ h2 {
 
         .feedname {
             margin-left: 3px;
+            color: #0032f5;
         }
     }
 
@@ -114,9 +115,18 @@ h2 {
 
 #ob-footer {
     margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #65cb25;
+    margin-bottom: 30px;
+    padding-top: 10px;
+    border-top: 2px solid #65cb25;
     text-align: center;
+
+    .footer-links {
+        font-size: 90%;
+    }
+
+    > * {
+        margin-top: 15px;
+    }
 }
 
 
@@ -234,6 +244,20 @@ table.vert {
         padding-left: 20px;
         border-left: 1px dotted black;
     }
+
+    .orphan-separator {
+        width: 100%;
+        text-align: center;
+        border-bottom: 2px dashed #c60000;
+        line-height: 0.1em;
+        margin: 10px 0 20px;
+
+        > span {
+            color: #c60000;
+            padding: 0 10px;
+            background: #f6f6ef;
+        }
+    }
 }
 
 
@@ -311,7 +335,7 @@ table.vert {
 
     .feed-description {
         padding-left: 20px;
-        border-left: 2px solid blue;
+        border-left: 2px solid #0032f5;
         white-space: pre-line;
     }
 }

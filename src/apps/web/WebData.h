@@ -615,7 +615,9 @@ struct EventThread {
             if (processedLevIds.contains(e.ev.primaryKeyId)) continue;
             if (e.getKind() != 1) continue;
 
-            ctx.orphanNodes.emplace_back(e.getCreatedAt(), process(id));
+            if (!eventCache.contains(e.parent)) {
+                ctx.orphanNodes.emplace_back(e.getCreatedAt(), process(id));
+            }
         }
 
         std::sort(ctx.orphanNodes.begin(), ctx.orphanNodes.end(), [](auto &a, auto &b){ return a.timestamp < b.timestamp; });
