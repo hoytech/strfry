@@ -13,8 +13,6 @@
 
 
 
-std::string stripUrls(std::string &content);
-
 
 inline void preprocessMetaFieldContent(std::string &content) {
     static RE2 matcher(R"((?is)(.*?)(https?://\S+))");
@@ -418,33 +416,6 @@ struct Event {
 };
 
 
-
-
-inline std::string stripUrls(std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+))");
-
-    std::string output;
-    std::string firstUrl;
-
-    std::string_view contentSv(content);
-    re2::StringPiece input(contentSv);
-    re2::StringPiece prefix, match;
-
-    auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
-
-    while (RE2::Consume(&input, matcher, &prefix, &match)) {
-        output += sv(prefix);
-
-        if (firstUrl.empty()) {
-            firstUrl = std::string(sv(match));
-        }
-    }
-
-    output += std::string_view(input.data(), input.size());
-
-    std::swap(output, content);
-    return firstUrl;
-}
 
 
 struct ReplyCtx {
