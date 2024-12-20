@@ -71,7 +71,7 @@ struct User {
         }
 
         if (username.size() == 0) username = to_hex(pubkey.substr(0,4));
-        if (username.size() > 50) username = username.substr(0, 50) + "...";
+        abbrevText(username, 50);
     }
 
     std::optional<tao::json::value> loadKindJson(lmdb::txn &txn, Decompressor &decomp, uint64_t kind) {
@@ -280,11 +280,7 @@ struct Event {
         // If it was only a URL, just use raw URL
         if (content.size() == 0 || std::all_of(content.begin(), content.end(), [](unsigned char c){ return std::isspace(c); })) content = firstUrl;
 
-        auto textAbbrev = [](std::string &str, size_t maxLen){
-            if (str.size() > maxLen) str = str.substr(0, maxLen-3) + "...";
-        };
-
-        textAbbrev(content, 100);
+        abbrevText(content, 100);
         templarInternal::htmlEscape(content, true);
 
         output.text = std::move(content);
