@@ -588,7 +588,7 @@ struct EventThread {
             if (processedLevIds.contains(e.ev.primaryKeyId)) continue;
             if (e.getKind() != 1) continue;
 
-            if (!eventCache.contains(e.parent)) {
+            if (!isFullThreadLoaded || !eventCache.contains(e.parent)) {
                 ctx.orphanNodes.emplace_back(e.getCreatedAt(), process(id));
             }
         }
