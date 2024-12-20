@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "re2/re2.h"
+
 
 struct Url {
     std::vector<std::string_view> path;
@@ -81,4 +83,30 @@ inline std::string renderPoints(double points) {
     snprintf(buf, sizeof(buf), "%g", points);
 
     return std::string(buf);
+}
+
+inline std::string stripUrls(std::string &content) {
+    static RE2 matcher(R"((?is)(.*?)(https?://\S+))");
+
+    std::string output;
+    std::string firstUrl;
+
+    std::string_view contentSv(content);
+    re2::StringPiece input(contentSv);
+    re2::StringPiece prefix, match;
+
+    auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
+
+    while (RE2::Consume(&input, matcher, &prefix, &match)) {
+        output += sv(prefix);
+
+        if (firstUrl.empty()) {
+            firstUrl = std::string(sv(match));
+        }
+    }
+
+    output += std::string_view(input.data(), input.size());
+
+    std::swap(output, content);
+    return firstUrl;
 }
