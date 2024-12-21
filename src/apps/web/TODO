@@ -1,4 +1,6 @@
 read
+  ! caching of follower count
+  ! maybe limit user export size?
   * non-500 error pages when bech32 fails to parse, for example
   * search field: enter anything, pubkey (hex or npub), eventId, etc. maybe even full-text search?
   * rss
