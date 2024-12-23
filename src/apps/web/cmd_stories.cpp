@@ -12,13 +12,14 @@
 static const char USAGE[] =
 R"(
     Usage:
-      stories [--top=<top>] [--days=<days>] [--oddbean]
+      stories [--top=<top>] [--days=<days>] [--threshold=<threshold>] [--oddbean]
 )";
 
 
 struct EventInfo {
     uint64_t comments = 0;
     uint64_t reactions = 0;
+    double score = 0;
 };
 
 struct FilteredEvent {
@@ -36,12 +37,13 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
     if (args["--top"]) top = args["--top"].asLong();
     uint64_t days = 2;
     if (args["--days"]) days = args["--days"].asLong();
+    uint64_t threshold = 10;
+    if (args["--threshold"]) threshold = args["--threshold"].asLong();
     bool oddbeanOnly = args["--oddbean"].asBool();
 
     uint64_t eventLimit = 1000;
     uint64_t scanLimit = 100000;
     uint64_t timeWindow = 86400*days;
-    uint64_t threshold = 10;
 
     Decompressor decomp;
     auto txn = env.txn_ro();
@@ -91,7 +93,10 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
                     if (tArr.at(0) == "client" && tArr.size() >= 2 && tArr.at(1) == "oddbot") return true;
                 }
             } else {
-                if (eventInfo.reactions < threshold) return true;
+                eventInfo.score = 0;
+                eventInfo.score += eventInfo.reactions;
+                eventInfo.score += (double)eventInfo.comments * 2;
+                if (eventInfo.score < threshold) return true;
             }
 
             output.emplace_back(FilteredEvent{ev.primaryKeyId, id, packed.created_at(), eventInfo});
@@ -118,7 +123,7 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
 
     if (!oddbeanOnly) {
         std::sort(output.begin(), output.end(), [](const auto &a, const auto &b){
-            return a.info.reactions > b.info.reactions;
+            return a.info.score > b.info.score;
         });
     }
 
@@ -139,6 +144,7 @@ void cmd_stories(const std::vector<std::string> &subArgs) {
             { "timestamp", ev.at("created_at") },
             { "reactions", o.info.reactions },
             { "comments", o.info.comments },
+            { "score", o.info.score },
         });
 
         std::cout << tao::json::to_string(encoded) << "\n";
