@@ -23,6 +23,8 @@ RUN git submodule update --init
 # build golpe
 RUN make setup-golpe 
 
+RUN make clean
+
 # build strfry
 RUN make
 
