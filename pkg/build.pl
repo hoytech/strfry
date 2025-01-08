@@ -16,12 +16,11 @@ BuildLib::fpm({
     description => 'strfry',
     files => {
         'strfry' => '/usr/local/bin/strfry',
-        'strfry.conf' => '/etc/strfry.conf',
+        'strfry.conf' => '/etc/strfry.conf.sample',
     },
     dirs => {
     },
     config_files => [
-        '/etc/strfry.conf',
     ],
     #postinst => 'pkg/scripts/postinst',
     # ssl dev pkg so we don't hard-code openssl ABI version (works with multiple)
