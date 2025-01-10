@@ -1,6 +1,5 @@
 #pragma once
 
-#include<string.h>
 #include <hoytech/protected_queue.h>
 
 #include "golpe.h"
