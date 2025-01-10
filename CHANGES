@@ -1,3 +1,13 @@
+1.0.4
+  * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
+  * Default maxReqFilterSize was increased to 200
+  * Update nix build file (jb55)
+  * Reduces log spam by not dumping full invalid events (Kroese)
+  * In sync and stream commands, provide the connected URL to write policy
+    plugins (Kroese)
+  * Bugfix in router: The configured connection timeout was not applied on
+    the first connection, forcing a retry.
+
 1.0.3
   * Use negentropy error message format specified in NIP-77
 
