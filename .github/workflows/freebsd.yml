@@ -1,0 +1,55 @@
+name: freebsd
+
+on: [push, pull_request]
+
+jobs:
+  freebsd:
+    runs-on: ubuntu-latest
+    name: A job to build and run strfry in FreeBSD
+    steps:
+    - name: Checkout strfry
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build strfry
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: 13.2
+        usesh: true
+        prepare: |
+          pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng p5-Regexp-Grammars p5-Module-Install-Template p5-YAML wget
+
+        run: |
+          # ownership workaround
+          git config --global --add safe.directory /home/runner/work/strfry/strfry
+          git config --local --name-only --get-regexp core.sshCommand
+          git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+          git submodule update --init
+          git config --global --add safe.directory /home/runner/work/strfry/strfry/golpe
+          gmake setup-golpe
+
+          gmake
+
+          if ! [ -f ./strfry ]; then
+             echo "Strfry build failed."
+             exit 1
+          fi
+
+          freebsd/build-pkg.sh
+
+          # backgrounding does not return
+          ./strfry info 
+          freebsd-version
+
+    - name: Verify strfry copy back
+      run: |
+          pkgfilename=`ls *.pkg`
+          echo "pkgfilename=$pkgfilename" >> $GITHUB_ENV
+
+    - name: Upload strfry
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.pkgfilename }}
+        path: ${{ env.pkgfilename }}
+
