@@ -110,3 +110,7 @@ config:
   - name: relay__negentropy__maxSyncEvents
     desc: "Maximum records that sync will process before returning an error"
     default: 1000000
+
+  - name: relay__serviceUrl
+    desc: "Relay URL (beginning with wss://) that will be used to check NIP-42 AUTH"
+    default: ""
