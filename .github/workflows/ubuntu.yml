@@ -34,7 +34,7 @@ jobs:
           echo "filename=$filename" >> $GITHUB_ENV
 
       - name: Upload strfry deb
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.filename }}
           path: ${{ env.filename }}
