@@ -15,7 +15,7 @@ jobs:
       - name: Build strfry
         run: |
           sudo apt update && sudo apt install -y --no-install-recommends \
-          git g++ make pkg-config libtool ca-certificates \
+          build-essential git g++ make pkg-config libtool ca-certificates \
           libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
           git submodule update --init
           make setup-golpe
