@@ -148,6 +148,12 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_has
             }
             // otherwise we proceed to accept the event
         }
+        if (!foundProtected) {
+            // Reject non-protected events
+            LI << "Non-protected event rejected";
+            sendOKResponse(connId, to_hex(packed.id()), false, "blocked: only protected events accepted");
+            return;
+        }
     }
 
     {
