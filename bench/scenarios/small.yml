@@ -1,0 +1,40 @@
+name: small
+db:
+  events: 100000
+  kinds: "1, 30023"
+  avg_event_size: 600
+  keyword_inject_rate: 0.6
+  keywords:
+    - term: nostr
+      weight: 8
+    - term: bitcoin
+      weight: 5
+    - term: lightning
+      weight: 3
+    - term: federation
+      weight: 2
+    - term: "best nostr apps"
+      weight: 1
+server:
+  search_enabled: false
+  search_backend: lmdb
+  config_overrides:
+    relay__logging__dbScanPerf: true
+workload:
+  duration_s: 120
+  warmup_s: 15
+  connections: 100
+  subscriptions_per_conn: 3
+  writers_per_sec: 200
+  req_mix:
+    - type: read
+      filter:
+        kinds: [1]
+        limit: 200
+      weight: 3
+    - type: search
+      filter:
+        kinds: [1]
+        search: "best nostr apps"
+        limit: 100
+      weight: 1

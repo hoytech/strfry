@@ -56,6 +56,17 @@ void RelayServer::runCron() {
 
             txn.commit();
 
+            // Remove from search index
+            if (searchProvider && searchProvider->healthy()) {
+                for (uint64_t levId : expiredLevIds) {
+                    try {
+                        searchProvider->deleteEvent(levId);
+                    } catch (std::exception &e) {
+                        LE << "Failed to remove expired event from search index levId=" << levId << ": " << e.what();
+                    }
+                }
+            }
+
             if (numDeleted) LI << "Deleted " << numDeleted << " events (ephemeral=" << numEphemeral << " expired=" << numExpired << ")";
         }
     });

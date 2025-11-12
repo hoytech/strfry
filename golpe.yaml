@@ -82,6 +82,14 @@ tables:
       - name: filter
         type: string
 
+  ## Search index state tracking
+  SearchState:
+    fields:
+      - name: lastIndexedLevId
+        type: uint64
+      - name: indexVersion
+        type: uint64
+
 tablesRaw:
   ## Raw nostr event JSON, possibly compressed
   ## keys are levIds
@@ -89,6 +97,19 @@ tablesRaw:
   ##   0: no compression, payload follows
   ##   1: zstd compression. Followed by Dictionary ID (native endian uint32) then compressed payload
   EventPayload:
+    flags: 'MDB_INTEGERKEY'
+
+  ## NIP-50 Full-text search inverted index
+  ## keys are tokens (lowercase, normalized strings)
+  ## vals are postings: packed [levId:48 bits][tf:16 bits] as uint64 big-endian
+  ## DUPSORT allows multiple postings per token
+  SearchIndex:
+    flags: 'MDB_DUPSORT'
+
+  ## NIP-50 Document metadata for BM25 scoring
+  ## keys are levIds (uint64)
+  ## vals are packed [docLen:16][kind:16][reserved:32] as uint64
+  SearchDocMeta:
     flags: 'MDB_INTEGERKEY'
 
 config:

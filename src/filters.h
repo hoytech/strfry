@@ -111,6 +111,7 @@ struct NostrFilter {
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
     flat_hash_map<char, FilterSetBytes> tags;
+    std::optional<std::string> search;
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
@@ -157,6 +158,10 @@ struct NostrFilter {
                 until = v.get_unsigned();
             } else if (k == "limit") {
                 limit = v.get_unsigned();
+            } else if (k == "search") {
+                if (!v.is_string()) throw herr("search must be a string");
+                search.emplace(v.get_string());
+                // Note: search is not counted in numMajorFields to preserve indexOnlyScans heuristics
             } else {
                 throw herr("unrecognised filter item");
             }
@@ -203,6 +208,10 @@ struct NostrFilter {
 
     bool isFullDbQuery() {
         return !ids && !authors && !kinds && tags.size() == 0;
+    }
+
+    bool hasSearch() const {
+        return search.has_value() && !search->empty();
     }
 };
 
