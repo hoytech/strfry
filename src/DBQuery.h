@@ -120,22 +120,30 @@ struct DBScan : NonCopyable {
                     }
                 );
             }
-        } else if (f.tags.size()) {
+        } else if (f.tags.size() || f.tagsAnd.size()) {
             indexDbi = env.dbi_Event__tag;
             desc = "Tag";
 
             char tagName = '\0';
+            bool fromAnd = false;
             {
                 uint64_t numTags = MAX_U64;
-                for (const auto &[tn, filterSet] : f.tags) {
-                    if (filterSet.size() < numTags) {
-                        numTags = filterSet.size();
-                        tagName = tn;
+                auto consider = [&](const auto &map, bool isAnd){
+                    for (const auto &[tn, filterSet] : map) {
+                        if (filterSet.size() < numTags) {
+                            numTags = filterSet.size();
+                            tagName = tn;
+                            fromAnd = isAnd;
+                        }
                     }
-                }
+                };
+
+                consider(f.tags, false);
+                consider(f.tagsAnd, true);
             }
 
-            const auto &filterSet = f.tags.at(tagName);
+            const auto &filterSet = fromAnd ? f.tagsAnd.at(tagName) : f.tags.at(tagName);
+            if (fromAnd) indexOnly = false;
 
             cursors.reserve(filterSet.size());
             for (uint64_t i = 0; i < filterSet.size(); i++) {
