@@ -126,7 +126,15 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao:
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
     if (arr.get_array().size() > 2 + cfg().relay__maxReqFilterSize) throw herr("arr too big");
 
-    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), NostrFilterGroup(arr));
+    NostrFilterGroup filterGroup(arr);
+    
+    try {
+        filterGroup.validateFilters();
+    } catch (std::exception &e) {
+        throw herr("filter validation failed: ", e.what());
+    }
+
+    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), std::move(filterGroup));
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
 }
