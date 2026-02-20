@@ -18,6 +18,20 @@ static void checkConfig() {
     if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
         LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";
     }
+
+    if (cfg().relay__auth__enabled) {
+        if (cfg().relay__auth__relayUrl.empty()) {
+            LW << "relay.auth.enabled is true but relay.auth.relayUrl is empty. AUTH relay tag will not be verified.";
+        }
+        if (cfg().relay__auth__required) {
+            LI << "NIP-42 authentication is REQUIRED for all operations";
+        } else {
+            LI << "NIP-42 authentication is enabled but optional";
+        }
+        if (cfg().relay__auth__sessionTokenEnabled) {
+            LI << "Session tokens enabled (lifetime: " << cfg().relay__auth__sessionTokenLifetimeSeconds << "s)";
+        }
+    }
 }
 
 
@@ -33,6 +47,11 @@ void RelayServer::run() {
         sigaddset(&set, SIGUSR1);
         int s = pthread_sigmask(SIG_BLOCK, &set, NULL);
         if (s != 0) throw herr("Unable to set sigmask: ", strerror(errno));
+    }
+
+    if (cfg().relay__auth__enabled && cfg().relay__auth__sessionTokenEnabled) {
+        sessionSecret = SessionToken::generateSecret();
+        LI << "Generated session token secret (valid for this process lifetime)";
     }
 
     tpWebsocket.init("Websocket", 1, [this](auto &thr){

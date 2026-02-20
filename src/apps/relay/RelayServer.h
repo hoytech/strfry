@@ -18,6 +18,7 @@
 #include "filters.h"
 #include "jsonParseUtils.h"
 #include "Decompressor.h"
+#include "SessionToken.h"
 
 
 
@@ -53,11 +54,16 @@ struct MsgIngester : NonCopyable {
         std::string payload;
     };
 
+    struct OpenConn {
+        uint64_t connId;
+        std::string ipAddr;
+    };
+
     struct CloseConn {
         uint64_t connId;
     };
 
-    using Var = std::variant<ClientMessage, CloseConn>;
+    using Var = std::variant<ClientMessage, OpenConn, CloseConn>;
     Var msg;
     MsgIngester(Var &&msg_) : msg(std::move(msg_)) {}
 };
@@ -150,6 +156,7 @@ struct MsgNegentropy : NonCopyable {
 
 struct RelayServer {
     uS::Async *hubTrigger = nullptr;
+    std::string sessionSecret;
 
     // Thread Pools
 
@@ -227,5 +234,15 @@ struct RelayServer {
         auto reply = tao::json::value::array({ "OK", eventIdHex, written, message });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
         hubTrigger->send();
+    }
+
+    void sendAuthChallenge(uint64_t connId, const std::string &challenge) {
+        auto reply = tao::json::value::array({ "AUTH", challenge });
+        sendToConn(connId, tao::json::to_string(reply));
+    }
+
+    void sendSessionToken(uint64_t connId, const std::string &token, uint64_t expiresAt) {
+        auto reply = tao::json::value::array({ "SESSION", token, expiresAt });
+        sendToConn(connId, tao::json::to_string(reply));
     }
 };

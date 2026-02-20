@@ -4,7 +4,7 @@
 
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
-* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 70, 77
+* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 42, 70, 77
 * No external database required: All data is stored locally on the filesystem in LMDB
 * Hot reloading of config file: No server restart needed for many config param changes
 * Zero downtime restarts, for upgrading binary without impacting users
@@ -37,6 +37,11 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Zero Downtime Restarts](#zero-downtime-restarts)
     * [Plugins](#plugins)
     * [Router](#router)
+    * [Authentication (NIP-42)](#authentication-nip-42)
+        * [Configuration](#auth-configuration)
+        * [Session Tokens](#session-tokens)
+        * [HTTP Verification Endpoint](#http-verification-endpoint)
+        * [Authenticating Extensions and Clients](#authenticating-extensions-and-clients)
     * [Syncing](#syncing)
     * [Compression Dictionaries](#compression-dictionaries)
 * [Architecture](#architecture)
@@ -254,6 +259,187 @@ If you are building a "mesh" topology of routers, or mirroring events to neighbo
 
 `strfry router` handles many streams in one process, supports pre-filtering events using nostr filters and/or [plugins](#plugins), and more. See the [router documentation](https://github.com/hoytech/strfry/blob/master/docs/router.md) for more details.
 
+
+
+### Authentication (NIP-42)
+
+strfry supports [NIP-42](https://nips.nostr.com/42) client authentication with an optional session token extension. This allows clients to authenticate once via a standard NIP-42 challenge-response, then use a lightweight session token for subsequent reconnections and HTTP requests — eliminating redundant signing.
+
+When auth is enabled, every new WebSocket connection receives an `AUTH` challenge immediately upon connecting. Clients that don't need to authenticate can simply ignore it. When auth is **required**, all `EVENT` and `REQ` operations are gated behind authentication.
+
+#### Auth Configuration
+
+Add the following to your `strfry.conf` inside the `relay { }` block:
+
+```
+auth {
+    # Enable NIP-42 authentication support
+    enabled = true
+
+    # Require authentication for all operations (EVENT, REQ).
+    # If false, auth is available but optional.
+    required = false
+
+    # The relay URL clients use in AUTH events.
+    # e.g. "wss://relay.example.com"
+    # If empty, the relay tag in AUTH events will not be verified.
+    relayUrl = "wss://relay.example.com"
+
+    # Issue session tokens after successful NIP-42 auth
+    sessionTokenEnabled = true
+
+    # How long session tokens remain valid, in seconds (default 1 hour)
+    sessionTokenLifetimeSeconds = 3600
+}
+```
+
+When `enabled = true`, NIP-42 is advertised in the NIP-11 relay information document (supported NIPs list includes 42, and `limitation.auth_required` reflects the `required` setting).
+
+**Important:** Set `relayUrl` to your relay's canonical WebSocket URL. This is checked against the `relay` tag in NIP-42 auth events. If left empty, the relay tag is not verified (less secure but functional).
+
+#### Session Tokens
+
+After a successful NIP-42 authentication, the relay issues a session token via a new `SESSION` message:
+
+```json
+["SESSION", "<hex-token>", <expires_at_unix_timestamp>]
+```
+
+The token is an HMAC-SHA256 authenticated blob containing the client's pubkey, issue time, and expiry time. The HMAC secret is generated randomly on each relay startup, so tokens do not survive restarts (clients simply fall back to NIP-42).
+
+**On reconnection**, clients can skip the full NIP-42 challenge-response by sending:
+
+```json
+["SESSION", "<hex-token>"]
+```
+
+If valid and not expired, the relay authenticates the connection immediately and issues a fresh token (rolling refresh). If the token is invalid or expired, the relay responds with an error and re-sends an `AUTH` challenge so the client can fall back to standard NIP-42.
+
+#### HTTP Verification Endpoint
+
+When auth and session tokens are enabled, strfry exposes a `GET /auth/verify` HTTP endpoint. This allows HTTP services co-located with the relay to validate session tokens and identify the authenticated user.
+
+**Request:**
+
+```
+GET /auth/verify HTTP/1.1
+Authorization: Nostr-Session <hex-token>
+```
+
+**Success response (200):**
+
+```json
+{"pubkey": "<64-char-hex-pubkey>", "expires_at": 1700000000}
+```
+
+**Failure response (401):**
+
+```json
+{"error": "invalid or expired session token"}
+```
+
+This unifies WebSocket and HTTP authentication under a single token, so extensions and services behind the same domain can verify identity without requiring additional NIP-98 signatures.
+
+
+#### Authenticating Extensions and Clients
+
+Extensions, bots, and custom clients should authenticate with strfry using the following protocol:
+
+**Step 1: Connect and receive the challenge**
+
+Upon opening a WebSocket connection, the relay sends:
+
+```json
+["AUTH", "<challenge-string>"]
+```
+
+**Step 2: Sign and send a NIP-42 auth event**
+
+Construct a `kind:22242` event with the following structure:
+
+```json
+{
+  "kind": 22242,
+  "created_at": <current_unix_timestamp>,
+  "tags": [
+    ["relay", "wss://relay.example.com"],
+    ["challenge", "<challenge-string-from-step-1>"]
+  ],
+  "content": ""
+}
+```
+
+Sign this event with the extension's or user's private key (standard Nostr Schnorr signature), then send:
+
+```json
+["AUTH", <signed-event-json-object>]
+```
+
+**Step 3: Receive confirmation and session token**
+
+On success, the relay responds with:
+
+```json
+["OK", "<event-id>", true, ""]
+["SESSION", "<hex-token>", <expires_at>]
+```
+
+**Step 4: Store and reuse the session token**
+
+Save the session token. On subsequent reconnections, send it immediately after connecting:
+
+```json
+["SESSION", "<hex-token>"]
+```
+
+If accepted, the relay responds with a `NOTICE` and a fresh session token. If rejected (expired, relay restarted), fall back to Step 2 using the `AUTH` challenge that was sent on connection.
+
+**Step 5 (optional): Use the token for HTTP requests**
+
+For any HTTP endpoints served by the relay, include the token in the `Authorization` header:
+
+```
+Authorization: Nostr-Session <hex-token>
+```
+
+**Example flow (pseudocode):**
+
+```
+ws = connect("wss://relay.example.com")
+
+msg = ws.recv()  // ["AUTH", "<challenge>"]
+
+if has_saved_token():
+    ws.send(["SESSION", saved_token])
+    resp = ws.recv()
+    if resp is error:
+        // Token expired or invalid, fall back to NIP-42
+        auth_event = sign_event(kind=22242, tags=[
+            ["relay", "wss://relay.example.com"],
+            ["challenge", msg[1]]
+        ])
+        ws.send(["AUTH", auth_event])
+else:
+    auth_event = sign_event(kind=22242, tags=[
+        ["relay", "wss://relay.example.com"],
+        ["challenge", msg[1]]
+    ])
+    ws.send(["AUTH", auth_event])
+
+// After auth, listen for SESSION token
+msg = ws.recv()  // ["SESSION", "<token>", <expires_at>]
+save_token(msg[1], msg[2])
+
+// Now authenticated — proceed with EVENT, REQ, etc.
+```
+
+**Security notes for extension developers:**
+
+- Session tokens are bound to a specific pubkey and cannot be transferred between identities.
+- Tokens are time-limited (default 1 hour) and cryptographically signed by the relay. They cannot be forged.
+- Tokens are invalidated when the relay restarts. Always implement NIP-42 as a fallback.
+- Store tokens securely. Anyone possessing a valid token can authenticate as the associated pubkey for the token's remaining lifetime.
+- The `kind:22242` auth event is ephemeral — do **not** send it via `["EVENT", ...]`. Always use `["AUTH", ...]`. The relay will reject kind 22242 events sent via EVENT.
 
 
 ### Syncing
