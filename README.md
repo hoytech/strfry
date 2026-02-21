@@ -265,6 +265,8 @@ If you are building a "mesh" topology of routers, or mirroring events to neighbo
 
 strfry supports [NIP-42](https://nips.nostr.com/42) client authentication with an optional session token extension. This allows clients to authenticate once via a standard NIP-42 challenge-response, then use a lightweight session token for subsequent reconnections and HTTP requests — eliminating redundant signing.
 
+Session tokens support **client binding**: each token can be bound to a specific client identity (e.g., a browser origin), so a token obtained by one client app cannot be reused by another. This provides per-client isolation even when multiple Nostr apps share the same signing key.
+
 When auth is enabled, every new WebSocket connection receives an `AUTH` challenge immediately upon connecting. Clients that don't need to authenticate can simply ignore it. When auth is **required**, all `EVENT` and `REQ` operations are gated behind authentication.
 
 #### Auth Configuration
@@ -305,15 +307,18 @@ After a successful NIP-42 authentication, the relay issues a session token via a
 ["SESSION", "<hex-token>", <expires_at_unix_timestamp>]
 ```
 
-The token is an HMAC-SHA256 authenticated blob containing the client's pubkey, issue time, and expiry time. The HMAC secret is generated randomly on each relay startup, so tokens do not survive restarts (clients simply fall back to NIP-42).
+The token is an HMAC-SHA256 authenticated blob containing the client's pubkey, issue time, expiry time, and an optional client ID. The HMAC secret is generated randomly on each relay startup, so tokens do not survive restarts (clients simply fall back to NIP-42).
+
+**Client-bound tokens:** If the AUTH event includes a `["client", "<client_id>"]` tag (32 hex chars / 16 bytes), the session token is bound to that client ID. On reconnection, the client must present the same client ID alongside the token. Tokens without a client tag are "unbound" and work without a client ID (backward compatible).
 
 **On reconnection**, clients can skip the full NIP-42 challenge-response by sending:
 
 ```json
 ["SESSION", "<hex-token>"]
+["SESSION", "<hex-token>", "<client_id>"]   // for client-bound tokens
 ```
 
-If valid and not expired, the relay authenticates the connection immediately and issues a fresh token (rolling refresh). If the token is invalid or expired, the relay responds with an error and re-sends an `AUTH` challenge so the client can fall back to standard NIP-42.
+If valid and not expired (and client ID matches, if bound), the relay authenticates the connection immediately and issues a fresh token (rolling refresh, preserving client binding). If the token is invalid, expired, or the client ID doesn't match, the relay responds with an error and re-sends an `AUTH` challenge so the client can fall back to standard NIP-42.
 
 #### HTTP Verification Endpoint
 
@@ -324,18 +329,21 @@ When auth and session tokens are enabled, strfry exposes a `GET /auth/verify` HT
 ```
 GET /auth/verify HTTP/1.1
 Authorization: Nostr-Session <hex-token>
+Nostr-Client: <client_id>                    (optional, for client-bound tokens)
 ```
 
 **Success response (200):**
 
 ```json
-{"pubkey": "<64-char-hex-pubkey>", "expires_at": 1700000000}
+{"pubkey": "<64-char-hex-pubkey>", "expires_at": 1700000000, "client_id": "<hex>"}
 ```
+
+(The `client_id` field is only present if the token is client-bound.)
 
 **Failure response (401):**
 
 ```json
-{"error": "invalid or expired session token"}
+{"error": "invalid, expired, or client-mismatched session token"}
 ```
 
 This unifies WebSocket and HTTP authentication under a single token, so extensions and services behind the same domain can verify identity without requiring additional NIP-98 signatures.
@@ -363,11 +371,14 @@ Construct a `kind:22242` event with the following structure:
   "created_at": <current_unix_timestamp>,
   "tags": [
     ["relay", "wss://relay.example.com"],
-    ["challenge", "<challenge-string-from-step-1>"]
+    ["challenge", "<challenge-string-from-step-1>"],
+    ["client", "<32-hex-char-client-id>"]           // optional, for client binding
   ],
   "content": ""
 }
 ```
+
+The `client` tag is optional. If provided (32 hex characters = 16 random bytes), the resulting session token is bound to this client ID. Different clients (e.g., different web apps) should use different client IDs so their tokens cannot be cross-used.
 
 Sign this event with the extension's or user's private key (standard Nostr Schnorr signature), then send:
 
@@ -386,13 +397,14 @@ On success, the relay responds with:
 
 **Step 4: Store and reuse the session token**
 
-Save the session token. On subsequent reconnections, send it immediately after connecting:
+Save the session token along with the client ID you used (if any). On subsequent reconnections, send the token immediately after connecting:
 
 ```json
 ["SESSION", "<hex-token>"]
+["SESSION", "<hex-token>", "<client_id>"]   // if client-bound
 ```
 
-If accepted, the relay responds with a `NOTICE` and a fresh session token. If rejected (expired, relay restarted), fall back to Step 2 using the `AUTH` challenge that was sent on connection.
+If accepted, the relay responds with a `NOTICE` and a fresh token (preserving client binding). If rejected (expired, relay restarted, or wrong client ID), fall back to Step 2 using the `AUTH` challenge that was sent on connection.
 
 **Step 5 (optional): Use the token for HTTP requests**
 
@@ -409,26 +421,30 @@ ws = connect("wss://relay.example.com")
 
 msg = ws.recv()  // ["AUTH", "<challenge>"]
 
+client_id = get_or_generate_client_id()  // 32 hex chars, unique per app
+
 if has_saved_token():
-    ws.send(["SESSION", saved_token])
+    ws.send(["SESSION", saved_token, client_id])
     resp = ws.recv()
     if resp is error:
         // Token expired or invalid, fall back to NIP-42
         auth_event = sign_event(kind=22242, tags=[
             ["relay", "wss://relay.example.com"],
-            ["challenge", msg[1]]
+            ["challenge", msg[1]],
+            ["client", client_id]
         ])
         ws.send(["AUTH", auth_event])
 else:
     auth_event = sign_event(kind=22242, tags=[
         ["relay", "wss://relay.example.com"],
-        ["challenge", msg[1]]
+        ["challenge", msg[1]],
+        ["client", client_id]
     ])
     ws.send(["AUTH", auth_event])
 
 // After auth, listen for SESSION token
 msg = ws.recv()  // ["SESSION", "<token>", <expires_at>]
-save_token(msg[1], msg[2])
+save_token(msg[1], msg[2], client_id)
 
 // Now authenticated — proceed with EVENT, REQ, etc.
 ```
@@ -436,9 +452,11 @@ save_token(msg[1], msg[2])
 **Security notes for extension developers:**
 
 - Session tokens are bound to a specific pubkey and cannot be transferred between identities.
+- **Use client-bound tokens.** Always include a `["client", "<id>"]` tag in your AUTH event and present the same client ID with `["SESSION", token, clientId]`. This ensures a token stolen from one app cannot be reused by another.
+- Generate unique client IDs per application instance (e.g., per browser origin). The client ID should be 16 random bytes (32 hex chars), generated once and stored.
 - Tokens are time-limited (default 1 hour) and cryptographically signed by the relay. They cannot be forged.
 - Tokens are invalidated when the relay restarts. Always implement NIP-42 as a fallback.
-- Store tokens securely. Anyone possessing a valid token can authenticate as the associated pubkey for the token's remaining lifetime.
+- Store tokens securely with their client IDs. A client-bound token is useless without the matching client ID, providing defense-in-depth.
 - The `kind:22242` auth event is ephemeral — do **not** send it via `["EVENT", ...]`. Always use `["AUTH", ...]`. The relay will reject kind 22242 events sent via EVENT.
 
 

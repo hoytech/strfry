@@ -194,20 +194,25 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
         if (url == "/auth/verify" && cfg().relay__auth__enabled && cfg().relay__auth__sessionTokenEnabled) {
             std::string authHeader = req.getHeader("authorization").toString();
+            std::string clientIdHeader = req.getHeader("nostr-client").toString();
 
             if (authHeader.starts_with("Nostr-Session ")) {
                 auto tokenHex = authHeader.substr(14);
-                auto validated = SessionToken::validate(sessionSecret, tokenHex);
+                auto validated = SessionToken::validate(sessionSecret, tokenHex, clientIdHeader);
 
                 if (validated) {
-                    auto body = tao::json::to_string(tao::json::value({
+                    auto bodyObj = tao::json::value({
                         { "pubkey", validated->pubkeyHex },
                         { "expires_at", validated->expiresAt },
-                    }));
+                    });
+                    if (validated->clientIdHex.size()) {
+                        bodyObj["client_id"] = validated->clientIdHex;
+                    }
+                    auto body = tao::json::to_string(bodyObj);
                     auto resp = makeHttpResponse(200, "OK", "application/json", body);
                     res->write(resp.data(), resp.size());
                 } else {
-                    auto resp = makeHttpResponse(401, "Unauthorized", "application/json", "{\"error\":\"invalid or expired session token\"}");
+                    auto resp = makeHttpResponse(401, "Unauthorized", "application/json", "{\"error\":\"invalid, expired, or client-mismatched session token\"}");
                     res->write(resp.data(), resp.size());
                 }
             } else {

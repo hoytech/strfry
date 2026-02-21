@@ -117,7 +117,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 if (ts > now + 600 || ts < now - 600) throw herr("AUTH event created_at is too far from current time");
 
                                 // Extract and verify tags
-                                std::string challengeTag, relayTag;
+                                std::string challengeTag, relayTag, clientTag;
                                 auto &tags = authEvent.at("tags").get_array();
                                 for (auto &tag : tags) {
                                     auto &tagArr = tag.get_array();
@@ -126,6 +126,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                         auto &tagVal = tagArr[1].get_string();
                                         if (tagName == "challenge") challengeTag = tagVal;
                                         else if (tagName == "relay") relayTag = tagVal;
+                                        else if (tagName == "client") clientTag = tagVal;
                                     }
                                 }
 
@@ -158,10 +159,14 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 // Issue session token if enabled
                                 if (cfg().relay__auth__sessionTokenEnabled && sessionSecret.size()) {
                                     uint64_t lifetime = cfg().relay__auth__sessionTokenLifetimeSeconds;
-                                    auto token = SessionToken::generate(sessionSecret, pubkeyHex, lifetime);
+                                    auto token = SessionToken::generate(sessionSecret, pubkeyHex, lifetime, clientTag);
                                     uint64_t expiresAt = hoytech::curr_time_s() + lifetime;
                                     sendSessionToken(msg->connId, token, expiresAt);
-                                    LI << "[" << msg->connId << "] Issued session token, expires in " << lifetime << "s";
+                                    if (clientTag.size()) {
+                                        LI << "[" << msg->connId << "] Issued client-bound session token (client=" << clientTag << "), expires in " << lifetime << "s";
+                                    } else {
+                                        LI << "[" << msg->connId << "] Issued unbound session token, expires in " << lifetime << "s";
+                                    }
                                 }
 
                             } catch (std::exception &e) {
@@ -176,23 +181,34 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 if (arr.size() < 2) throw herr("SESSION message too short");
                                 auto &tokenStr = jsonGetString(arr[1], "SESSION token must be a string");
 
-                                auto validated = SessionToken::validate(sessionSecret, tokenStr);
-                                if (!validated) throw herr("invalid or expired session token");
+                                // Optional clientId: ["SESSION", "<token>", "<client_id>"]
+                                std::string clientId;
+                                if (arr.size() >= 3 && arr[2].is_string()) {
+                                    clientId = arr[2].get_string();
+                                }
+
+                                auto validated = SessionToken::validate(sessionSecret, tokenStr, clientId);
+                                if (!validated) throw herr("invalid, expired, or client-mismatched session token");
 
                                 auto &auth = connAuth[msg->connId];
                                 auth.authenticated = true;
                                 auth.authedPubkey = validated->pubkeyHex;
 
-                                LI << "[" << msg->connId << "] Session token accepted for " << validated->pubkeyHex
-                                   << " (expires at " << validated->expiresAt << ")";
+                                if (validated->clientIdHex.size()) {
+                                    LI << "[" << msg->connId << "] Client-bound session token accepted for " << validated->pubkeyHex
+                                       << " (client=" << validated->clientIdHex << ", expires at " << validated->expiresAt << ")";
+                                } else {
+                                    LI << "[" << msg->connId << "] Unbound session token accepted for " << validated->pubkeyHex
+                                       << " (expires at " << validated->expiresAt << ")";
+                                }
 
                                 sendToConn(msg->connId, tao::json::to_string(
                                     tao::json::value::array({ "NOTICE", "session token accepted" })
                                 ));
 
-                                // Issue a fresh token so the client always has a valid one
+                                // Issue a fresh token (preserving client binding) so the client always has a valid one
                                 uint64_t lifetime = cfg().relay__auth__sessionTokenLifetimeSeconds;
-                                auto newToken = SessionToken::generate(sessionSecret, validated->pubkeyHex, lifetime);
+                                auto newToken = SessionToken::generate(sessionSecret, validated->pubkeyHex, lifetime, clientId);
                                 uint64_t expiresAt = hoytech::curr_time_s() + lifetime;
                                 sendSessionToken(msg->connId, newToken, expiresAt);
 
