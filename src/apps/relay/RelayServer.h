@@ -175,7 +175,7 @@ struct RelayServer {
 
     void runIngester(ThreadPool<MsgIngester>::Thread &thr);
     void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
-    void ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson, const std::string &authedPubkey = "");
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
     void ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp, uint64_t connId, const tao::json::value &origJson);
 
@@ -244,5 +244,62 @@ struct RelayServer {
     void sendSessionToken(uint64_t connId, const std::string &token, uint64_t expiresAt) {
         auto reply = tao::json::value::array({ "SESSION", token, expiresAt });
         sendToConn(connId, tao::json::to_string(reply));
+    }
+
+    // Parse the sensitiveKinds config string (JSON array) into a set.
+    // Called once at startup or when config changes.
+    static flat_hash_set<uint64_t> parseSensitiveKinds(const std::string &configStr) {
+        flat_hash_set<uint64_t> kinds;
+        if (configStr.empty()) return kinds;
+        try {
+            auto arr = tao::json::from_string(configStr);
+            for (auto &v : arr.get_array()) {
+                kinds.insert(v.get_unsigned());
+            }
+        } catch (std::exception &e) {
+            LE << "Failed to parse sensitiveKinds config: " << e.what();
+        }
+        return kinds;
+    }
+
+    // Check if a sensitive event should be sent to a subscriber.
+    // Returns true if the event is allowed (not sensitive, or subscriber is sender/recipient).
+    // evJson is the raw JSON string of the event.
+    static bool isSensitiveEventAllowed(const flat_hash_set<uint64_t> &sensitiveKinds, std::string_view evJson, const std::string &subscriberPubkey) {
+        if (sensitiveKinds.empty()) return true;
+        if (subscriberPubkey.empty()) return true; // no auth = no filtering (unauthenticated mode)
+
+        try {
+            auto ev = tao::json::from_string(std::string(evJson));
+
+            uint64_t kind = 0;
+            if (ev.at("kind").is_unsigned()) kind = ev.at("kind").get_unsigned();
+            else if (ev.at("kind").is_signed()) kind = (uint64_t)ev.at("kind").get_signed();
+
+            if (!sensitiveKinds.contains(kind)) return true;
+
+            // Sensitive kind — check if subscriber is the author
+            auto &pubkey = ev.at("pubkey").get_string();
+            if (pubkey == subscriberPubkey) return true;
+
+            // Check p-tags for the subscriber
+            if (ev.find("tags")) {
+                auto &tags = ev.at("tags").get_array();
+                for (auto &tag : tags) {
+                    auto &tagArr = tag.get_array();
+                    if (tagArr.size() >= 2) {
+                        if (tagArr[0].get_string() == "p" && tagArr[1].get_string() == subscriberPubkey) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // Subscriber is neither author nor recipient — filter it out
+            return false;
+        } catch (...) {
+            // If we can't parse, allow it through (fail-open for non-sensitive)
+            return true;
+        }
     }
 };

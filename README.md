@@ -292,6 +292,19 @@ auth {
 
     # How long session tokens remain valid, in seconds (default 1 hour)
     sessionTokenLifetimeSeconds = 3600
+
+    # Anti-abuse: delay responses after N failed AUTH attempts per connection (0 = disabled)
+    tarpitThreshold = 10
+
+    # Seconds to delay after tarpit threshold is reached
+    tarpitDelaySeconds = 30
+
+    # JSON array of event kinds only returned to sender/recipient when auth is enabled.
+    # Example: "[4,1059,1060,24,25,26,27,35834]"
+    sensitiveKinds = ""
+
+    # Authorization plugin (see below). Empty = allow all authenticated users.
+    authorizationPlugin = ""
 }
 ```
 
@@ -458,6 +471,114 @@ save_token(msg[1], msg[2], client_id)
 - Tokens are invalidated when the relay restarts. Always implement NIP-42 as a fallback.
 - Store tokens securely with their client IDs. A client-bound token is useless without the matching client ID, providing defense-in-depth.
 - The `kind:22242` auth event is ephemeral — do **not** send it via `["EVENT", ...]`. Always use `["AUTH", ...]`. The relay will reject kind 22242 events sent via EVENT.
+
+#### Anti-Abuse Tarpit
+
+strfry includes a tarpit mechanism to slow down brute-force AUTH attempts. After a configurable number of failed AUTH attempts on a single connection, the relay introduces an artificial delay before responding to further messages on that connection.
+
+```
+tarpitThreshold = 10       # failures before tarpit activates (0 = disabled)
+tarpitDelaySeconds = 30    # delay per response after threshold
+```
+
+After 10 failed AUTH attempts, each subsequent message on that connection is delayed by 30 seconds. This makes automated credential-stuffing or challenge-replay attacks impractical without affecting legitimate clients (who typically succeed on the first attempt).
+
+#### Sensitive Event Filtering
+
+When `sensitiveKinds` is configured, strfry automatically filters events of those kinds so they are only returned to the event's author or a pubkey listed in a `p` tag. This protects DMs, gift wraps, and other private content from being read by unauthorized subscribers.
+
+```
+sensitiveKinds = "[4,1059,1060,24,25,26,27,35834]"
+```
+
+**How it works:**
+
+- When a REQ result or live subscription delivers an event whose kind is in the `sensitiveKinds` list, strfry checks the subscriber's authenticated pubkey against:
+  1. The event's `pubkey` field (author)
+  2. All `p` tags in the event (recipients)
+- If the subscriber matches neither, the event is silently dropped from the response.
+- If `sensitiveKinds` is empty (default), no filtering is applied.
+- If the subscriber is not authenticated (auth optional mode), sensitive filtering is skipped (they see everything, same as before).
+
+**Recommended sensitive kinds:**
+
+| Kind | Description |
+|------|-------------|
+| 4 | Encrypted Direct Messages (NIP-04) |
+| 1059 | Gift Wrap (NIP-59) |
+| 1060 | Sealed (NIP-59) |
+| 24 | Channel Message (NIP-28) |
+| 25 | Channel Hide Message |
+| 26 | Channel Mute User |
+| 27 | Channel Metadata |
+| 35834 | Private Zap |
+
+#### Authorization Plugin
+
+The authorization plugin allows relay operators to implement custom access control logic. After a successful NIP-42 or SESSION authentication, strfry calls the plugin to decide whether the pubkey is allowed to use the relay and at what access tier.
+
+```
+authorizationPlugin = "/path/to/check-access.sh"
+```
+
+**Protocol:** The plugin is a long-running process that communicates via stdin/stdout (one JSON object per line, same pattern as the existing `writePolicy` plugin).
+
+**Request (relay → plugin):**
+
+```json
+{"type":"auth","pubkey":"<64-char-hex-pubkey>"}
+```
+
+**Response (plugin → relay):**
+
+```json
+{"allowed": true, "tier": "full"}
+```
+
+**Fields:**
+
+- `allowed` (required): `true` to grant access, `false` to reject.
+- `tier` (optional, default `"full"`): Access tier for the authenticated user.
+  - `"full"` — Full access (EVENT + REQ)
+  - `"partial"` — Write-only access (EVENT allowed, REQ blocked). Useful for DM inbox relays where senders can write but only recipients can read.
+
+**If the plugin rejects a pubkey**, the relay responds with `["OK", "<id>", false, "restricted: pubkey not authorized on this relay"]` and does not authenticate the connection.
+
+**If the plugin crashes or returns an error**, the relay denies access (fail-closed) and logs the error.
+
+**Example plugin (bash whitelist):**
+
+```bash
+#!/bin/bash
+# Simple whitelist authorization plugin
+ALLOWED_PUBKEYS="/etc/strfry/allowed_pubkeys.txt"
+
+while IFS= read -r line; do
+    pubkey=$(echo "$line" | jq -r '.pubkey')
+    if grep -q "$pubkey" "$ALLOWED_PUBKEYS" 2>/dev/null; then
+        echo '{"allowed":true,"tier":"full"}'
+    else
+        echo '{"allowed":false}'
+    fi
+done
+```
+
+**Example plugin (tiered access):**
+
+```bash
+#!/bin/bash
+# Tiered access: full members get full access, others get partial (write-only)
+FULL_MEMBERS="/etc/strfry/full_members.txt"
+
+while IFS= read -r line; do
+    pubkey=$(echo "$line" | jq -r '.pubkey')
+    if grep -q "$pubkey" "$FULL_MEMBERS" 2>/dev/null; then
+        echo '{"allowed":true,"tier":"full"}'
+    else
+        echo '{"allowed":true,"tier":"partial"}'
+    fi
+done
+```
 
 
 ### Syncing

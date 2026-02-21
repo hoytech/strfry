@@ -126,3 +126,15 @@ config:
   - name: relay__auth__sessionTokenLifetimeSeconds
     desc: "How long session tokens remain valid, in seconds"
     default: 3600
+  - name: relay__auth__tarpitThreshold
+    desc: "Number of failed AUTH attempts before introducing a delay (0 = disabled)"
+    default: 10
+  - name: relay__auth__tarpitDelaySeconds
+    desc: "Seconds to delay responses after tarpit threshold is reached"
+    default: 30
+  - name: relay__auth__sensitiveKinds
+    desc: "JSON array of event kinds that should only be returned to sender/recipient when auth is enabled. Example: \"[4,1059,1060,24,25,26,27,35834]\""
+    default: ""
+  - name: relay__auth__authorizationPlugin
+    desc: "Path to an executable that decides whether an authenticated pubkey is authorized. Receives JSON on stdin, returns JSON on stdout. Empty = allow all authenticated users."
+    default: ""
