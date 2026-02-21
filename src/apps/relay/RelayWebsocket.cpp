@@ -50,6 +50,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     auto supportedNips = []{
         tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70, 77 });
+
+        if (cfg().relay__auth__enabled) {
+            output.get_array().emplace_back(42);
+        }
+
         if (cfg().relay__info__nips.size() == 0) return output;
 
         try {
@@ -72,6 +77,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                     { "max_message_length", cfg().relay__maxWebsocketPayloadSize },
                     { "max_subscriptions", cfg().relay__maxSubsPerConnection },
                     { "max_limit", cfg().relay__maxFilterLimit },
+                    { "auth_required", cfg().relay__auth__enabled && cfg().relay__auth__required },
                 }) },
             });
 
@@ -169,13 +175,51 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     if (cfg().relay__autoPingSeconds) hubGroup->startAutoPing(cfg().relay__autoPingSeconds * 1'000);
 
+    auto makeHttpResponse = [](int statusCode, const std::string &statusText, const std::string &contentType, const std::string &body) -> std::string {
+        std::string output = "HTTP/1.1 " + std::to_string(statusCode) + " " + statusText + "\r\n";
+        output += "Content-Type: " + contentType + "\r\n";
+        output += "Access-Control-Allow-Origin: *\r\n";
+        output += "Connection: keep-alive\r\n";
+        output += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+        output += "\r\n";
+        output += body;
+        return output;
+    };
+
     hubGroup->onHttpRequest([&](uWS::HttpResponse *res, uWS::HttpRequest req, char *data, size_t length, size_t remainingBytes){
         LI << "HTTP request for [" << req.getUrl().toString() << "]";
 
         std::string host = req.getHeader("host").toString();
         std::string url = req.getUrl().toString();
 
-        if (url == "/.well-known/nodeinfo") {
+        if (url == "/auth/verify" && cfg().relay__auth__enabled && cfg().relay__auth__sessionTokenEnabled) {
+            std::string authHeader = req.getHeader("authorization").toString();
+            std::string clientIdHeader = req.getHeader("nostr-client").toString();
+
+            if (authHeader.starts_with("Nostr-Session ")) {
+                auto tokenHex = authHeader.substr(14);
+                auto validated = SessionToken::validate(sessionSecret, tokenHex, clientIdHeader);
+
+                if (validated) {
+                    auto bodyObj = tao::json::value({
+                        { "pubkey", validated->pubkeyHex },
+                        { "expires_at", validated->expiresAt },
+                    });
+                    if (validated->clientIdHex.size()) {
+                        bodyObj["client_id"] = validated->clientIdHex;
+                    }
+                    auto body = tao::json::to_string(bodyObj);
+                    auto resp = makeHttpResponse(200, "OK", "application/json", body);
+                    res->write(resp.data(), resp.size());
+                } else {
+                    auto resp = makeHttpResponse(401, "Unauthorized", "application/json", "{\"error\":\"invalid, expired, or client-mismatched session token\"}");
+                    res->write(resp.data(), resp.size());
+                }
+            } else {
+                auto resp = makeHttpResponse(401, "Unauthorized", "application/json", "{\"error\":\"missing or invalid Authorization header, expected: Nostr-Session <token>\"}");
+                res->write(resp.data(), resp.size());
+            }
+        } else if (url == "/.well-known/nodeinfo") {
             auto nodeInfo = getNodeInfoHttpResponse(host);
             res->write(nodeInfo.data(), nodeInfo.size());
         } else if (url == "/nodeinfo/2.1") {
@@ -223,6 +267,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (setsockopt(ws->getFd(), SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))) {
                 LW << "Failed to enable TCP keepalive: " << strerror(errno);
             }
+        }
+
+        if (cfg().relay__auth__enabled) {
+            tpIngester.dispatch(connId, MsgIngester{MsgIngester::OpenConn{connId, c->ipAddr}});
         }
     });
 

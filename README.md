@@ -4,7 +4,7 @@
 
 strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nostr)
 
-* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 70, 77
+* Supports most applicable NIPs: 1, 2, 4, 9, 11, 22, 28, 40, 42, 70, 77
 * No external database required: All data is stored locally on the filesystem in LMDB
 * Hot reloading of config file: No server restart needed for many config param changes
 * Zero downtime restarts, for upgrading binary without impacting users
@@ -37,6 +37,11 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Zero Downtime Restarts](#zero-downtime-restarts)
     * [Plugins](#plugins)
     * [Router](#router)
+    * [Authentication (NIP-42)](#authentication-nip-42)
+        * [Configuration](#auth-configuration)
+        * [Session Tokens](#session-tokens)
+        * [HTTP Verification Endpoint](#http-verification-endpoint)
+        * [Authenticating Extensions and Clients](#authenticating-extensions-and-clients)
     * [Syncing](#syncing)
     * [Compression Dictionaries](#compression-dictionaries)
 * [Architecture](#architecture)
@@ -254,6 +259,326 @@ If you are building a "mesh" topology of routers, or mirroring events to neighbo
 
 `strfry router` handles many streams in one process, supports pre-filtering events using nostr filters and/or [plugins](#plugins), and more. See the [router documentation](https://github.com/hoytech/strfry/blob/master/docs/router.md) for more details.
 
+
+
+### Authentication (NIP-42)
+
+strfry supports [NIP-42](https://nips.nostr.com/42) client authentication with an optional session token extension. This allows clients to authenticate once via a standard NIP-42 challenge-response, then use a lightweight session token for subsequent reconnections and HTTP requests — eliminating redundant signing.
+
+Session tokens support **client binding**: each token can be bound to a specific client identity (e.g., a browser origin), so a token obtained by one client app cannot be reused by another. This provides per-client isolation even when multiple Nostr apps share the same signing key.
+
+When auth is enabled, every new WebSocket connection receives an `AUTH` challenge immediately upon connecting. Clients that don't need to authenticate can simply ignore it. When auth is **required**, all `EVENT` and `REQ` operations are gated behind authentication.
+
+#### Auth Configuration
+
+Add the following to your `strfry.conf` inside the `relay { }` block:
+
+```
+auth {
+    # Enable NIP-42 authentication support
+    enabled = true
+
+    # Require authentication for all operations (EVENT, REQ).
+    # If false, auth is available but optional.
+    required = false
+
+    # The relay URL clients use in AUTH events.
+    # e.g. "wss://relay.example.com"
+    # If empty, the relay tag in AUTH events will not be verified.
+    relayUrl = "wss://relay.example.com"
+
+    # Issue session tokens after successful NIP-42 auth
+    sessionTokenEnabled = true
+
+    # How long session tokens remain valid, in seconds (default 1 hour)
+    sessionTokenLifetimeSeconds = 3600
+
+    # Anti-abuse: delay responses after N failed AUTH attempts per connection (0 = disabled)
+    tarpitThreshold = 10
+
+    # Seconds to delay after tarpit threshold is reached
+    tarpitDelaySeconds = 30
+
+    # JSON array of event kinds only returned to sender/recipient when auth is enabled.
+    # Example: "[4,1059,1060,24,25,26,27,35834]"
+    sensitiveKinds = ""
+
+    # Authorization plugin (see below). Empty = allow all authenticated users.
+    authorizationPlugin = ""
+}
+```
+
+When `enabled = true`, NIP-42 is advertised in the NIP-11 relay information document (supported NIPs list includes 42, and `limitation.auth_required` reflects the `required` setting).
+
+**Important:** Set `relayUrl` to your relay's canonical WebSocket URL. This is checked against the `relay` tag in NIP-42 auth events. If left empty, the relay tag is not verified (less secure but functional).
+
+#### Session Tokens
+
+After a successful NIP-42 authentication, the relay issues a session token via a new `SESSION` message:
+
+```json
+["SESSION", "<hex-token>", <expires_at_unix_timestamp>]
+```
+
+The token is an HMAC-SHA256 authenticated blob containing the client's pubkey, issue time, expiry time, and an optional client ID. The HMAC secret is generated randomly on each relay startup, so tokens do not survive restarts (clients simply fall back to NIP-42).
+
+**Client-bound tokens:** If the AUTH event includes a `["client", "<client_id>"]` tag (32 hex chars / 16 bytes), the session token is bound to that client ID. On reconnection, the client must present the same client ID alongside the token. Tokens without a client tag are "unbound" and work without a client ID (backward compatible).
+
+**On reconnection**, clients can skip the full NIP-42 challenge-response by sending:
+
+```json
+["SESSION", "<hex-token>"]
+["SESSION", "<hex-token>", "<client_id>"]   // for client-bound tokens
+```
+
+If valid and not expired (and client ID matches, if bound), the relay authenticates the connection immediately and issues a fresh token (rolling refresh, preserving client binding). If the token is invalid, expired, or the client ID doesn't match, the relay responds with an error and re-sends an `AUTH` challenge so the client can fall back to standard NIP-42.
+
+#### HTTP Verification Endpoint
+
+When auth and session tokens are enabled, strfry exposes a `GET /auth/verify` HTTP endpoint. This allows HTTP services co-located with the relay to validate session tokens and identify the authenticated user.
+
+**Request:**
+
+```
+GET /auth/verify HTTP/1.1
+Authorization: Nostr-Session <hex-token>
+Nostr-Client: <client_id>                    (optional, for client-bound tokens)
+```
+
+**Success response (200):**
+
+```json
+{"pubkey": "<64-char-hex-pubkey>", "expires_at": 1700000000, "client_id": "<hex>"}
+```
+
+(The `client_id` field is only present if the token is client-bound.)
+
+**Failure response (401):**
+
+```json
+{"error": "invalid, expired, or client-mismatched session token"}
+```
+
+This unifies WebSocket and HTTP authentication under a single token, so extensions and services behind the same domain can verify identity without requiring additional NIP-98 signatures.
+
+
+#### Authenticating Extensions and Clients
+
+Extensions, bots, and custom clients should authenticate with strfry using the following protocol:
+
+**Step 1: Connect and receive the challenge**
+
+Upon opening a WebSocket connection, the relay sends:
+
+```json
+["AUTH", "<challenge-string>"]
+```
+
+**Step 2: Sign and send a NIP-42 auth event**
+
+Construct a `kind:22242` event with the following structure:
+
+```json
+{
+  "kind": 22242,
+  "created_at": <current_unix_timestamp>,
+  "tags": [
+    ["relay", "wss://relay.example.com"],
+    ["challenge", "<challenge-string-from-step-1>"],
+    ["client", "<32-hex-char-client-id>"]           // optional, for client binding
+  ],
+  "content": ""
+}
+```
+
+The `client` tag is optional. If provided (32 hex characters = 16 random bytes), the resulting session token is bound to this client ID. Different clients (e.g., different web apps) should use different client IDs so their tokens cannot be cross-used.
+
+Sign this event with the extension's or user's private key (standard Nostr Schnorr signature), then send:
+
+```json
+["AUTH", <signed-event-json-object>]
+```
+
+**Step 3: Receive confirmation and session token**
+
+On success, the relay responds with:
+
+```json
+["OK", "<event-id>", true, ""]
+["SESSION", "<hex-token>", <expires_at>]
+```
+
+**Step 4: Store and reuse the session token**
+
+Save the session token along with the client ID you used (if any). On subsequent reconnections, send the token immediately after connecting:
+
+```json
+["SESSION", "<hex-token>"]
+["SESSION", "<hex-token>", "<client_id>"]   // if client-bound
+```
+
+If accepted, the relay responds with a `NOTICE` and a fresh token (preserving client binding). If rejected (expired, relay restarted, or wrong client ID), fall back to Step 2 using the `AUTH` challenge that was sent on connection.
+
+**Step 5 (optional): Use the token for HTTP requests**
+
+For any HTTP endpoints served by the relay, include the token in the `Authorization` header:
+
+```
+Authorization: Nostr-Session <hex-token>
+```
+
+**Example flow (pseudocode):**
+
+```
+ws = connect("wss://relay.example.com")
+
+msg = ws.recv()  // ["AUTH", "<challenge>"]
+
+client_id = get_or_generate_client_id()  // 32 hex chars, unique per app
+
+if has_saved_token():
+    ws.send(["SESSION", saved_token, client_id])
+    resp = ws.recv()
+    if resp is error:
+        // Token expired or invalid, fall back to NIP-42
+        auth_event = sign_event(kind=22242, tags=[
+            ["relay", "wss://relay.example.com"],
+            ["challenge", msg[1]],
+            ["client", client_id]
+        ])
+        ws.send(["AUTH", auth_event])
+else:
+    auth_event = sign_event(kind=22242, tags=[
+        ["relay", "wss://relay.example.com"],
+        ["challenge", msg[1]],
+        ["client", client_id]
+    ])
+    ws.send(["AUTH", auth_event])
+
+// After auth, listen for SESSION token
+msg = ws.recv()  // ["SESSION", "<token>", <expires_at>]
+save_token(msg[1], msg[2], client_id)
+
+// Now authenticated — proceed with EVENT, REQ, etc.
+```
+
+**Security notes for extension developers:**
+
+- Session tokens are bound to a specific pubkey and cannot be transferred between identities.
+- **Use client-bound tokens.** Always include a `["client", "<id>"]` tag in your AUTH event and present the same client ID with `["SESSION", token, clientId]`. This ensures a token stolen from one app cannot be reused by another.
+- Generate unique client IDs per application instance (e.g., per browser origin). The client ID should be 16 random bytes (32 hex chars), generated once and stored.
+- Tokens are time-limited (default 1 hour) and cryptographically signed by the relay. They cannot be forged.
+- Tokens are invalidated when the relay restarts. Always implement NIP-42 as a fallback.
+- Store tokens securely with their client IDs. A client-bound token is useless without the matching client ID, providing defense-in-depth.
+- The `kind:22242` auth event is ephemeral — do **not** send it via `["EVENT", ...]`. Always use `["AUTH", ...]`. The relay will reject kind 22242 events sent via EVENT.
+
+#### Anti-Abuse Tarpit
+
+strfry includes a tarpit mechanism to slow down brute-force AUTH attempts. After a configurable number of failed AUTH attempts on a single connection, the relay introduces an artificial delay before responding to further messages on that connection.
+
+```
+tarpitThreshold = 10       # failures before tarpit activates (0 = disabled)
+tarpitDelaySeconds = 30    # delay per response after threshold
+```
+
+After 10 failed AUTH attempts, each subsequent message on that connection is delayed by 30 seconds. This makes automated credential-stuffing or challenge-replay attacks impractical without affecting legitimate clients (who typically succeed on the first attempt).
+
+#### Sensitive Event Filtering
+
+When `sensitiveKinds` is configured, strfry automatically filters events of those kinds so they are only returned to the event's author or a pubkey listed in a `p` tag. This protects DMs, gift wraps, and other private content from being read by unauthorized subscribers.
+
+```
+sensitiveKinds = "[4,1059,1060,24,25,26,27,35834]"
+```
+
+**How it works:**
+
+- When a REQ result or live subscription delivers an event whose kind is in the `sensitiveKinds` list, strfry checks the subscriber's authenticated pubkey against:
+  1. The event's `pubkey` field (author)
+  2. All `p` tags in the event (recipients)
+- If the subscriber matches neither, the event is silently dropped from the response.
+- If `sensitiveKinds` is empty (default), no filtering is applied.
+- If the subscriber is not authenticated (auth optional mode), sensitive filtering is skipped (they see everything, same as before).
+
+**Recommended sensitive kinds:**
+
+| Kind | Description |
+|------|-------------|
+| 4 | Encrypted Direct Messages (NIP-04) |
+| 1059 | Gift Wrap (NIP-59) |
+| 1060 | Sealed (NIP-59) |
+| 24 | Channel Message (NIP-28) |
+| 25 | Channel Hide Message |
+| 26 | Channel Mute User |
+| 27 | Channel Metadata |
+| 35834 | Private Zap |
+
+#### Authorization Plugin
+
+The authorization plugin allows relay operators to implement custom access control logic. After a successful NIP-42 or SESSION authentication, strfry calls the plugin to decide whether the pubkey is allowed to use the relay and at what access tier.
+
+```
+authorizationPlugin = "/path/to/check-access.sh"
+```
+
+**Protocol:** The plugin is a long-running process that communicates via stdin/stdout (one JSON object per line, same pattern as the existing `writePolicy` plugin).
+
+**Request (relay → plugin):**
+
+```json
+{"type":"auth","pubkey":"<64-char-hex-pubkey>"}
+```
+
+**Response (plugin → relay):**
+
+```json
+{"allowed": true, "tier": "full"}
+```
+
+**Fields:**
+
+- `allowed` (required): `true` to grant access, `false` to reject.
+- `tier` (optional, default `"full"`): Access tier for the authenticated user.
+  - `"full"` — Full access (EVENT + REQ)
+  - `"partial"` — Write-only access (EVENT allowed, REQ blocked). Useful for DM inbox relays where senders can write but only recipients can read.
+
+**If the plugin rejects a pubkey**, the relay responds with `["OK", "<id>", false, "restricted: pubkey not authorized on this relay"]` and does not authenticate the connection.
+
+**If the plugin crashes or returns an error**, the relay denies access (fail-closed) and logs the error.
+
+**Example plugin (bash whitelist):**
+
+```bash
+#!/bin/bash
+# Simple whitelist authorization plugin
+ALLOWED_PUBKEYS="/etc/strfry/allowed_pubkeys.txt"
+
+while IFS= read -r line; do
+    pubkey=$(echo "$line" | jq -r '.pubkey')
+    if grep -q "$pubkey" "$ALLOWED_PUBKEYS" 2>/dev/null; then
+        echo '{"allowed":true,"tier":"full"}'
+    else
+        echo '{"allowed":false}'
+    fi
+done
+```
+
+**Example plugin (tiered access):**
+
+```bash
+#!/bin/bash
+# Tiered access: full members get full access, others get partial (write-only)
+FULL_MEMBERS="/etc/strfry/full_members.txt"
+
+while IFS= read -r line; do
+    pubkey=$(echo "$line" | jq -r '.pubkey')
+    if grep -q "$pubkey" "$FULL_MEMBERS" 2>/dev/null; then
+        echo '{"allowed":true,"tier":"full"}'
+    else
+        echo '{"allowed":true,"tier":"partial"}'
+    fi
+done
+```
 
 
 ### Syncing

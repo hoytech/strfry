@@ -5,9 +5,12 @@
 void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     Decompressor decomp;
     QueryScheduler queries;
+    auto sensitiveKinds = parseSensitiveKinds(cfg().relay__auth__sensitiveKinds);
 
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
-        sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
+        auto evJson = decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr);
+        if (!isSensitiveEventAllowed(sensitiveKinds, evJson, sub.authedPubkey)) return;
+        sendEvent(sub.connId, sub.subId, evJson);
     };
 
     queries.onComplete = [&](lmdb::txn &, Subscription &sub){

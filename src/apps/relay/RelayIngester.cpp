@@ -1,9 +1,153 @@
 #include "RelayServer.h"
+#include "PluginEventSifter.h"
+
+
+struct ConnectionAuth {
+    std::string challenge;
+    bool authenticated = false;
+    std::string authedPubkey; // hex
+    std::string authTier; // "full", "partial", or empty (default = full)
+    uint32_t authFailCount = 0;
+};
+
+// Authorization plugin: called after successful NIP-42 or SESSION auth.
+// Returns {"allowed": bool, "tier": "full"|"partial"}
+// If no plugin is configured, all authenticated users get full access.
+struct AuthorizationPlugin {
+    struct RunningPlugin {
+        pid_t pid;
+        std::string currPluginCmd;
+        FILE *r;
+        FILE *w;
+
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string cmd) : pid(pid), currPluginCmd(cmd) {
+            r = fdopen(rfd, "r");
+            w = fdopen(wfd, "w");
+            setlinebuf(w);
+        }
+
+        ~RunningPlugin() {
+            fclose(r);
+            fclose(w);
+            kill(pid, SIGTERM);
+            waitpid(pid, nullptr, 0);
+        }
+    };
+
+    std::unique_ptr<RunningPlugin> running;
+
+    struct AuthzResult {
+        bool allowed = true;
+        std::string tier = "full";
+    };
+
+    AuthzResult checkAuthorization(const std::string &pluginCmd, const std::string &pubkeyHex) {
+        if (pluginCmd.empty()) return { true, "full" };
+
+        try {
+            if (running && pluginCmd != running->currPluginCmd) running.reset();
+            if (!running) setupPlugin(pluginCmd);
+
+            auto request = tao::json::value({
+                { "type", "auth" },
+                { "pubkey", pubkeyHex },
+            });
+
+            std::string output = tao::json::to_string(request) + "\n";
+            if (::fwrite(output.data(), 1, output.size(), running->w) != output.size()) throw herr("error writing to authz plugin");
+
+            char buf[4096];
+            if (!fgets(buf, sizeof(buf), running->r)) throw herr("authz plugin pipe closed");
+
+            auto response = tao::json::from_string(buf);
+            bool allowed = response.at("allowed").get_boolean();
+            std::string tier = response.optional<std::string>("tier").value_or("full");
+            return { allowed, tier };
+        } catch (std::exception &e) {
+            LE << "Authorization plugin error: " << e.what();
+            running.reset();
+            return { false, "" };
+        }
+    }
+
+private:
+    void setupPlugin(const std::string &pluginCmd) {
+        LI << "Setting up authorization plugin: " << pluginCmd;
+
+        int outPipe[2], inPipe[2];
+        if (::pipe(outPipe) || ::pipe(inPipe)) throw herr("pipe failed");
+
+        pid_t pid;
+        const char * const argv[] = { "/bin/sh", "-c", pluginCmd.c_str(), nullptr };
+
+        posix_spawn_file_actions_t file_actions;
+        posix_spawn_file_actions_init(&file_actions);
+        posix_spawn_file_actions_adddup2(&file_actions, outPipe[0], 0);
+        posix_spawn_file_actions_adddup2(&file_actions, inPipe[1], 1);
+        posix_spawn_file_actions_addclose(&file_actions, outPipe[0]);
+        posix_spawn_file_actions_addclose(&file_actions, outPipe[1]);
+        posix_spawn_file_actions_addclose(&file_actions, inPipe[0]);
+        posix_spawn_file_actions_addclose(&file_actions, inPipe[1]);
+
+        auto ret = posix_spawnp(&pid, "sh", &file_actions, nullptr, (char* const*)(&argv[0]), environ);
+        if (ret) throw herr("posix_spawn failed: ", strerror(errno));
+
+        ::close(outPipe[0]);
+        ::close(inPipe[1]);
+        running = std::make_unique<RunningPlugin>(pid, inPipe[0], outPipe[1], pluginCmd);
+    }
+};
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     Decompressor decomp;
+
+    flat_hash_map<uint64_t, ConnectionAuth> connAuth;
+    AuthorizationPlugin authzPlugin;
+
+    auto isAuthenticated = [&](uint64_t connId) -> bool {
+        if (!cfg().relay__auth__enabled) return true;
+        if (!cfg().relay__auth__required) return true;
+        auto it = connAuth.find(connId);
+        return it != connAuth.end() && it->second.authenticated;
+    };
+
+    auto getAuthedPubkey = [&](uint64_t connId) -> std::string {
+        auto it = connAuth.find(connId);
+        if (it != connAuth.end() && it->second.authenticated) return it->second.authedPubkey;
+        return "";
+    };
+
+    auto getAuthTier = [&](uint64_t connId) -> std::string {
+        auto it = connAuth.find(connId);
+        if (it != connAuth.end() && it->second.authenticated) return it->second.authTier;
+        return "";
+    };
+
+    // Run authorization plugin after successful auth, returns true if authorized
+    auto runAuthzCheck = [&](uint64_t connId, const std::string &pubkeyHex) -> bool {
+        auto result = authzPlugin.checkAuthorization(cfg().relay__auth__authorizationPlugin, pubkeyHex);
+        if (!result.allowed) {
+            LI << "[" << connId << "] Authorization denied for " << pubkeyHex;
+            return false;
+        }
+        auto &auth = connAuth[connId];
+        auth.authTier = result.tier;
+        if (result.tier != "full") {
+            LI << "[" << connId << "] Authorized with tier '" << result.tier << "' for " << pubkeyHex;
+        }
+        return true;
+    };
+
+    auto sendRestricted = [&](uint64_t connId, const std::string &reason) {
+        auto it = connAuth.find(connId);
+        if (it != connAuth.end() && it->second.challenge.size()) {
+            sendAuthChallenge(connId, it->second.challenge);
+        }
+        auto reply = tao::json::value::array({ "NOTICE", std::string("restricted: ") + reason });
+        sendToConn(connId, tao::json::to_string(reply));
+    };
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -13,7 +157,13 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
         std::vector<MsgWriter> writerMsgs;
 
         for (auto &newMsg : newMsgs) {
-            if (auto msg = std::get_if<MsgIngester::ClientMessage>(&newMsg.msg)) {
+            if (auto msg = std::get_if<MsgIngester::OpenConn>(&newMsg.msg)) {
+                auto &auth = connAuth[msg->connId];
+                auth.challenge = SessionToken::generateChallenge();
+                LI << "[" << msg->connId << "] Sending AUTH challenge";
+                sendAuthChallenge(msg->connId, auth.challenge);
+
+            } else if (auto msg = std::get_if<MsgIngester::ClientMessage>(&newMsg.msg)) {
                 try {
                     if (msg->payload.starts_with('[')) {
                         auto payload = tao::json::from_string(msg->payload);
@@ -28,6 +178,12 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         if (cmd == "EVENT") {
                             if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
 
+                            if (!isAuthenticated(msg->connId)) {
+                                auto eventId = arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?";
+                                sendOKResponse(msg->connId, eventId, false, "restricted: authentication required to publish events");
+                                continue;
+                            }
+
                             try {
                                 ingesterProcessEvent(txn, msg->connId, msg->ipAddr, secpCtx, arr[1], writerMsgs);
                             } catch (std::exception &e) {
@@ -38,8 +194,22 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         } else if (cmd == "REQ") {
                             if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
 
+                            if (!isAuthenticated(msg->connId)) {
+                                sendRestricted(msg->connId, "authentication required to request events");
+                                continue;
+                            }
+
+                            // Partial-access users cannot perform REQs
+                            if (getAuthTier(msg->connId) == "partial") {
+                                auto subId = arr.get_array().size() >= 2 && arr[1].is_string() ? arr[1].get_string() : "?";
+                                sendToConn(msg->connId, tao::json::to_string(
+                                    tao::json::value::array({ "CLOSED", subId, "restricted: partial access does not allow subscriptions" })
+                                ));
+                                continue;
+                            }
+
                             try {
-                                ingesterProcessReq(txn, msg->connId, arr);
+                                ingesterProcessReq(txn, msg->connId, arr, getAuthedPubkey(msg->connId));
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
                             }
@@ -50,6 +220,157 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 ingesterProcessClose(txn, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
+                            }
+                        } else if (cmd == "AUTH") {
+                            if (!cfg().relay__auth__enabled) throw herr("auth not enabled on this relay");
+
+                            try {
+                                if (arr.size() < 2) throw herr("AUTH message too short");
+
+                                if (!arr[1].is_object()) throw herr("AUTH message second element must be a signed event object");
+
+                                auto &authEvent = arr[1];
+
+                                // Parse and verify the auth event signature
+                                std::string packedStr, jsonStr;
+                                parseAndVerifyEvent(authEvent, secpCtx, true, false, packedStr, jsonStr);
+                                PackedEventView packed(packedStr);
+
+                                // Verify kind == 22242
+                                if (packed.kind() != 22242) throw herr("AUTH event must be kind 22242");
+
+                                // Verify created_at is within ~10 minutes
+                                auto now = hoytech::curr_time_s();
+                                auto ts = packed.created_at();
+                                if (ts > now + 600 || ts < now - 600) throw herr("AUTH event created_at is too far from current time");
+
+                                // Extract and verify tags
+                                std::string challengeTag, relayTag, clientTag;
+                                auto &tags = authEvent.at("tags").get_array();
+                                for (auto &tag : tags) {
+                                    auto &tagArr = tag.get_array();
+                                    if (tagArr.size() >= 2) {
+                                        auto &tagName = tagArr[0].get_string();
+                                        auto &tagVal = tagArr[1].get_string();
+                                        if (tagName == "challenge") challengeTag = tagVal;
+                                        else if (tagName == "relay") relayTag = tagVal;
+                                        else if (tagName == "client") clientTag = tagVal;
+                                    }
+                                }
+
+                                if (challengeTag.empty()) throw herr("AUTH event missing challenge tag");
+                                if (relayTag.empty()) throw herr("AUTH event missing relay tag");
+
+                                // Verify challenge matches
+                                auto authIt = connAuth.find(msg->connId);
+                                if (authIt == connAuth.end()) throw herr("no AUTH challenge pending for this connection");
+                                if (authIt->second.challenge != challengeTag) throw herr("AUTH challenge mismatch");
+
+                                // Verify relay URL if configured
+                                if (cfg().relay__auth__relayUrl.size()) {
+                                    if (relayTag != cfg().relay__auth__relayUrl) {
+                                        LI << "[" << msg->connId << "] AUTH relay tag mismatch: got '" << relayTag << "' expected '" << cfg().relay__auth__relayUrl << "'";
+                                        throw herr("AUTH relay URL mismatch");
+                                    }
+                                }
+
+                                // Auth successful — run authorization plugin
+                                auto pubkeyHex = to_hex(packed.pubkey());
+
+                                if (!runAuthzCheck(msg->connId, pubkeyHex)) {
+                                    auto eventIdHex = to_hex(packed.id());
+                                    sendOKResponse(msg->connId, eventIdHex, false, "restricted: pubkey not authorized on this relay");
+                                    throw std::runtime_error("authorization denied");
+                                }
+
+                                authIt->second.authenticated = true;
+                                authIt->second.authedPubkey = pubkeyHex;
+
+                                LI << "[" << msg->connId << "] Authenticated as " << pubkeyHex;
+
+                                auto eventIdHex = to_hex(packed.id());
+                                sendOKResponse(msg->connId, eventIdHex, true, "");
+
+                                // Issue session token if enabled
+                                if (cfg().relay__auth__sessionTokenEnabled && sessionSecret.size()) {
+                                    uint64_t lifetime = cfg().relay__auth__sessionTokenLifetimeSeconds;
+                                    auto token = SessionToken::generate(sessionSecret, pubkeyHex, lifetime, clientTag);
+                                    uint64_t expiresAt = hoytech::curr_time_s() + lifetime;
+                                    sendSessionToken(msg->connId, token, expiresAt);
+                                    if (clientTag.size()) {
+                                        LI << "[" << msg->connId << "] Issued client-bound session token (client=" << clientTag << "), expires in " << lifetime << "s";
+                                    } else {
+                                        LI << "[" << msg->connId << "] Issued unbound session token, expires in " << lifetime << "s";
+                                    }
+                                }
+
+                            } catch (std::exception &e) {
+                                LI << "[" << msg->connId << "] AUTH failed: " << e.what();
+                                sendOKResponse(msg->connId, "?", false, std::string("auth-required: ") + e.what());
+
+                                // Tarpit: track failures and delay after threshold
+                                auto tarpitIt = connAuth.find(msg->connId);
+                                if (tarpitIt != connAuth.end()) {
+                                    tarpitIt->second.authFailCount++;
+                                    uint32_t threshold = cfg().relay__auth__tarpitThreshold;
+                                    if (threshold > 0 && tarpitIt->second.authFailCount >= threshold) {
+                                        uint64_t delay = cfg().relay__auth__tarpitDelaySeconds;
+                                        LI << "[" << msg->connId << "] Tarpit: " << tarpitIt->second.authFailCount << " failures, delaying " << delay << "s";
+                                        std::this_thread::sleep_for(std::chrono::seconds(delay));
+                                    }
+                                }
+                            }
+                        } else if (cmd == "SESSION") {
+                            if (!cfg().relay__auth__enabled) throw herr("auth not enabled on this relay");
+                            if (!cfg().relay__auth__sessionTokenEnabled) throw herr("session tokens not enabled on this relay");
+
+                            try {
+                                if (arr.size() < 2) throw herr("SESSION message too short");
+                                auto &tokenStr = jsonGetString(arr[1], "SESSION token must be a string");
+
+                                // Optional clientId: ["SESSION", "<token>", "<client_id>"]
+                                std::string clientId;
+                                if (arr.size() >= 3 && arr[2].is_string()) {
+                                    clientId = arr[2].get_string();
+                                }
+
+                                auto validated = SessionToken::validate(sessionSecret, tokenStr, clientId);
+                                if (!validated) throw herr("invalid, expired, or client-mismatched session token");
+
+                                // Run authorization plugin for session token auth too
+                                if (!runAuthzCheck(msg->connId, validated->pubkeyHex)) {
+                                    throw herr("pubkey not authorized on this relay");
+                                }
+
+                                auto &auth = connAuth[msg->connId];
+                                auth.authenticated = true;
+                                auth.authedPubkey = validated->pubkeyHex;
+
+                                if (validated->clientIdHex.size()) {
+                                    LI << "[" << msg->connId << "] Client-bound session token accepted for " << validated->pubkeyHex
+                                       << " (client=" << validated->clientIdHex << ", expires at " << validated->expiresAt << ")";
+                                } else {
+                                    LI << "[" << msg->connId << "] Unbound session token accepted for " << validated->pubkeyHex
+                                       << " (expires at " << validated->expiresAt << ")";
+                                }
+
+                                sendToConn(msg->connId, tao::json::to_string(
+                                    tao::json::value::array({ "NOTICE", "session token accepted" })
+                                ));
+
+                                // Issue a fresh token (preserving client binding) so the client always has a valid one
+                                uint64_t lifetime = cfg().relay__auth__sessionTokenLifetimeSeconds;
+                                auto newToken = SessionToken::generate(sessionSecret, validated->pubkeyHex, lifetime, clientId);
+                                uint64_t expiresAt = hoytech::curr_time_s() + lifetime;
+                                sendSessionToken(msg->connId, newToken, expiresAt);
+
+                            } catch (std::exception &e) {
+                                LI << "[" << msg->connId << "] SESSION failed: " << e.what();
+                                sendNoticeError(msg->connId, std::string("session error: ") + e.what());
+                                // Fall back: send an AUTH challenge so client can do NIP-42
+                                if (connAuth.count(msg->connId)) {
+                                    sendAuthChallenge(msg->connId, connAuth[msg->connId].challenge);
+                                }
                             }
                         } else if (cmd.starts_with("NEG-")) {
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
@@ -73,6 +394,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                 }
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
+                connAuth.erase(connId);
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
                 tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::CloseConn{connId}});
@@ -91,6 +413,11 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     parseAndVerifyEvent(origJson, secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
+
+    if (packed.kind() == 22242) {
+        sendOKResponse(connId, to_hex(packed.id()), false, "blocked: kind 22242 events should be sent via AUTH, not EVENT");
+        return;
+    }
 
     {
         bool foundProtected = false;
@@ -122,11 +449,11 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
 }
 
-void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr, const std::string &authedPubkey) {
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
     if (arr.get_array().size() > 2 + cfg().relay__maxReqFilterSize) throw herr("arr too big");
 
-    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), NostrFilterGroup(arr));
+    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), NostrFilterGroup(arr), authedPubkey);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
 }

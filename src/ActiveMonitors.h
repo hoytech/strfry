@@ -85,6 +85,12 @@ struct ActiveMonitors : NonCopyable {
         conns.erase(connId);
     }
 
+    std::string getSubAuthedPubkey(uint64_t connId, const SubId &subId) {
+        auto *mon = findMonitor(connId, subId);
+        if (mon) return mon->sub.authedPubkey;
+        return "";
+    }
+
     void process(lmdb::txn &txn, defaultDb::environment::View_Event &ev, const std::function<void(RecipientList &&, uint64_t)> &cb) {
         RecipientList recipients;
 

@@ -47,13 +47,14 @@ namespace std {
 
 
 struct Subscription : NonCopyable {
-    Subscription(uint64_t connId_, std::string subId_, NostrFilterGroup filterGroup_) : connId(connId_), subId(subId_), filterGroup(filterGroup_) {}
+    Subscription(uint64_t connId_, std::string subId_, NostrFilterGroup filterGroup_, std::string authedPubkey_ = "") : connId(connId_), subId(subId_), filterGroup(filterGroup_), authedPubkey(authedPubkey_) {}
 
     // Params
 
     uint64_t connId;
     SubId subId;
     NostrFilterGroup filterGroup;
+    std::string authedPubkey; // hex pubkey of authenticated user (empty if unauthenticated)
 
     // State
 

@@ -110,3 +110,31 @@ config:
   - name: relay__negentropy__maxSyncEvents
     desc: "Maximum records that sync will process before returning an error"
     default: 1000000
+
+  - name: relay__auth__enabled
+    desc: "Enable NIP-42 authentication support"
+    default: false
+  - name: relay__auth__required
+    desc: "Require authentication for all operations (EVENT, REQ). If false, auth is available but optional."
+    default: false
+  - name: relay__auth__relayUrl
+    desc: "The relay URL clients use in AUTH events (e.g. wss://relay.example.com). Required if auth is enabled."
+    default: ""
+  - name: relay__auth__sessionTokenEnabled
+    desc: "Issue session tokens after successful NIP-42 auth, allowing reconnection without re-signing"
+    default: true
+  - name: relay__auth__sessionTokenLifetimeSeconds
+    desc: "How long session tokens remain valid, in seconds"
+    default: 3600
+  - name: relay__auth__tarpitThreshold
+    desc: "Number of failed AUTH attempts before introducing a delay (0 = disabled)"
+    default: 10
+  - name: relay__auth__tarpitDelaySeconds
+    desc: "Seconds to delay responses after tarpit threshold is reached"
+    default: 30
+  - name: relay__auth__sensitiveKinds
+    desc: "JSON array of event kinds that should only be returned to sender/recipient when auth is enabled. Example: \"[4,1059,1060,24,25,26,27,35834]\""
+    default: ""
+  - name: relay__auth__authorizationPlugin
+    desc: "Path to an executable that decides whether an authenticated pubkey is authorized. Receives JSON on stdin, returns JSON on stdout. Empty = allow all authenticated users."
+    default: ""
