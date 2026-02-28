@@ -1,8 +1,27 @@
 #include <openssl/sha.h>
 #include <negentropy.h>
+#include <cstdlib>
+#include <algorithm>
 
 #include "events.h"
 #include "jsonParseUtils.h"
+
+
+static int getPayloadZstdLevel() {
+    static int level = []() {
+        const char *s = std::getenv("STRFRY_EVENT_PAYLOAD_ZSTD_LEVEL");
+        if (!s) return 0;
+
+        try {
+            int v = std::stoi(s);
+            return std::max(0, std::min(v, 22));
+        } catch (...) {
+            return 0;
+        }
+    }();
+
+    return level;
+}
 
 
 std::string nostrJsonToPackedEvent(const tao::json::value &v) {
@@ -212,6 +231,23 @@ std::string_view decodeEventPayload(lmdb::txn &txn, Decompressor &decomp, std::s
         if (outDictId) *outDictId = dictId;
         if (outCompressedSize) *outCompressedSize = raw.size();
         return buf;
+    } else if (raw[0] == '\x02') {
+        raw = raw.substr(1);
+
+        size_t frameSize = ZSTD_getFrameContentSize(raw.data(), raw.size());
+        if (frameSize == ZSTD_CONTENTSIZE_ERROR) throw herr("EventPayload zstd frame invalid");
+
+        size_t outSize = cfg().events__maxEventSize;
+        if (frameSize != ZSTD_CONTENTSIZE_UNKNOWN) outSize = std::min<size_t>(frameSize, cfg().events__maxEventSize);
+
+        decomp.reserve(outSize);
+
+        auto ret = ZSTD_decompress(decomp.buffer.data(), decomp.buffer.size(), raw.data(), raw.size());
+        if (ZSTD_isError(ret)) throw herr("zstd decompression failed: ", ZSTD_getErrorName(ret));
+
+        if (outDictId) *outDictId = 0;
+        if (outCompressedSize) *outCompressedSize = raw.size();
+        return std::string_view(decomp.buffer.data(), ret);
     } else {
         throw herr("Unexpected first byte in EventPayload");
     }
@@ -328,8 +364,27 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 ev.levId = env.insert_Event(txn, ev.packedStr);
 
                 tmpBuf.clear();
-                tmpBuf += '\x00';
-                tmpBuf += ev.jsonStr;
+
+                int zstdLevel = getPayloadZstdLevel();
+                if (zstdLevel > 0 && ev.jsonStr.size() > 64) {
+                    std::string compressed;
+                    compressed.resize(ZSTD_compressBound(ev.jsonStr.size()));
+
+                    auto ret = ZSTD_compress(compressed.data(), compressed.size(), ev.jsonStr.data(), ev.jsonStr.size(), zstdLevel);
+
+                    if (!ZSTD_isError(ret) && (ret + 1) < ev.jsonStr.size()) {
+                        compressed.resize(ret);
+                        tmpBuf += '\x02';
+                        tmpBuf += compressed;
+                    } else {
+                        tmpBuf += '\x00';
+                        tmpBuf += ev.jsonStr;
+                    }
+                } else {
+                    tmpBuf += '\x00';
+                    tmpBuf += ev.jsonStr;
+                }
+
                 env.dbi_EventPayload.put(txn, lmdb::to_sv<uint64_t>(ev.levId), tmpBuf);
 
                 updateNegentropy(PackedEventView(ev.packedStr), true);
