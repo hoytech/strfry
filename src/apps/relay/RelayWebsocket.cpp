@@ -53,9 +53,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (cfg().relay__info__nips.size() == 0) return output;
 
         try {
-            output = tao::json::from_string(cfg().relay__info__nips);
+            auto parsed = tao::json::from_string(cfg().relay__info__nips);
+            if (!parsed.is_array()) throw herr("not an array");
+            output = parsed;
         } catch (std::exception &e) {
-            LE << "Unable to parse config param relay.info.nips: " << e.what();
+            LE << "Unable to parse config param relay.info.nips, using default: " << e.what();
         }
 
         return output;
