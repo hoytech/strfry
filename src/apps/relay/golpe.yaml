@@ -66,6 +66,9 @@ config:
   - name: relay__maxFilterLimit
     desc: "Maximum records that can be returned per filter"
     default: 500
+  - name: relay__maxFilterLimitCount
+    desc: "Maximum records that can be counted by a COUNT request (set 0 to disable COUNT)"
+    default: 1000000
   - name: relay__maxSubsPerConnection
     desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
     default: 20
