@@ -52,7 +52,7 @@ config:
     noReload: true
   - name: relay__maxReqFilterSize
     desc: "Maximum number of filters allowed in a REQ"
-    default: 200
+    default: 20
   - name: relay__autoPingSeconds
     desc: "Websocket-level PING message frequency (should be less than any reverse proxy idle timeouts)"
     default: 55
@@ -71,7 +71,7 @@ config:
     default: 1000000
   - name: relay__maxSubsPerConnection
     desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
-    default: 20
+    default: 200
 
   - name: relay__writePolicy__plugin
     desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
