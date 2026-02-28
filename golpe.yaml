@@ -3,6 +3,7 @@ features:
     ssl: true
     config: true
     onAppStartup: true
+    onPreStartup: true
     db: true
     customLMDBSetup: true
     websockets: true
