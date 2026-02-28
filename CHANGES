@@ -1,4 +1,7 @@
 NEXT
+  * Support for the COUNT command, NIP-45. Note that this is not yet complete
+    support for NIP-45 since it doesn't implement HyperLogLog. COUNT can
+    be disabled by setting relay.maxFilterLimitCount to 0.
   * New `/metrics/` endpoint for Prometheus monitoring (alexgleason)
   * Limit subId length to 64, as per new NIP-01 clarification (alltheseas)
   * Add missing NIP-11 fields such as banner, privacy_policy, etc (1-leo)
@@ -9,6 +12,7 @@ NEXT
     platform build workflows (l0rinc)
   * Improvement to config file inline docs (n7ekb)
   * Added a new deployment script: `scripts/idempotent-vps-deploy.sh` (chr15m)
+  * Better error reporting/handling when strfry.conf is malformed.
 
 1.0.4
   * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
