@@ -176,14 +176,19 @@ struct ActiveMonitors : NonCopyable {
                     auto res = allAuthors.try_emplace(Bytes32(f.authors->at(i)));
                     res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                 }
-            } else if (f.tags.size()) {
-                for (const auto &[tagName, filterSet] : f.tags) {
-                    for (size_t i = 0; i < filterSet.size(); i++) {
-                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
-                        auto res = allTags.try_emplace(tagSpec);
-                        res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
+            } else if (f.tags.size() || f.tagsAnd.size()) {
+                auto addTags = [&](const auto &map){
+                    for (const auto &[tagName, filterSet] : map) {
+                        for (size_t i = 0; i < filterSet.size(); i++) {
+                            auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
+                            auto res = allTags.try_emplace(tagSpec);
+                            res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
+                        }
                     }
-                }
+                };
+
+                addTags(f.tags);
+                addTags(f.tagsAnd);
             } else if (f.kinds) {
                 for (size_t i = 0; i < f.kinds->size(); i++) {
                     auto res = allKinds.try_emplace(f.kinds->at(i));
@@ -211,15 +216,20 @@ struct ActiveMonitors : NonCopyable {
                     monSet.erase(&f);
                     if (monSet.empty()) allAuthors.erase(author);
                 }
-            } else if (f.tags.size()) {
-                for (const auto &[tagName, filterSet] : f.tags) {
-                    for (size_t i = 0; i < filterSet.size(); i++) {
-                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
-                        auto &monSet = allTags.at(tagSpec);
-                        monSet.erase(&f);
-                        if (monSet.empty()) allTags.erase(tagSpec);
+            } else if (f.tags.size() || f.tagsAnd.size()) {
+                auto removeTags = [&](const auto &map){
+                    for (const auto &[tagName, filterSet] : map) {
+                        for (size_t i = 0; i < filterSet.size(); i++) {
+                            auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
+                            auto &monSet = allTags.at(tagSpec);
+                            monSet.erase(&f);
+                            if (monSet.empty()) allTags.erase(tagSpec);
+                        }
                     }
-                }
+                };
+
+                removeTags(f.tags);
+                removeTags(f.tagsAnd);
             } else if (f.kinds) {
                 for (size_t i = 0; i < f.kinds->size(); i++) {
                     uint64_t kind = f.kinds->at(i);

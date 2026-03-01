@@ -39,6 +39,25 @@ struct FilterSetBytes {
         if (buf.size() > 65535) throw herr("total filter items too large");
     }
 
+    // Direct constructor from already-decoded values
+    FilterSetBytes(const std::vector<std::string> &arrBytes, size_t minSize, size_t maxSize) {
+        if (maxSize > MAX_INDEXED_TAG_VAL_SIZE) throw herr("maxSize bigger than max indexed tag size");
+
+        std::vector<std::string> arr = arrBytes;
+        std::sort(arr.begin(), arr.end());
+
+        for (size_t i = 0; i < arr.size(); i++) {
+            const auto &item = arr[i];
+            if (item.size() < minSize) throw herr("filter item too small");
+            if (item.size() > maxSize) throw herr("filter item too large");
+            if (i > 0 && item == arr[i - 1]) continue; // remove duplicates
+            items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), (uint8_t)item[0] });
+            buf += item;
+        }
+
+        if (buf.size() > 65535) throw herr("total filter items too large");
+    }
+
     std::string at(size_t n) const {
         if (n >= items.size()) throw herr("FilterSetBytes access out of bounds");
         auto &item = items[n];
@@ -111,6 +130,7 @@ struct NostrFilter {
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
     flat_hash_map<char, FilterSetBytes> tags;
+    flat_hash_map<char, FilterSetBytes> tagsAnd;
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
@@ -119,7 +139,10 @@ struct NostrFilter {
     bool indexOnlyScans = false;
 
     explicit NostrFilter(const tao::json::value &filterObj, uint64_t maxFilterLimit) {
-        uint64_t numMajorFields = 0;
+        uint64_t numMajorFieldsNonTag = 0;
+        flat_hash_set<char> tagKeySet;
+        flat_hash_map<char, std::vector<std::string>> rawTagsOr;
+        flat_hash_map<char, std::vector<std::string>> rawTagsAnd;
 
         if (!filterObj.is_object()) throw herr("provided filter is not an object");
 
@@ -131,25 +154,27 @@ struct NostrFilter {
 
             if (k == "ids") {
                 ids.emplace(v, true, 32, 32);
-                numMajorFields++;
+                numMajorFieldsNonTag++;
             } else if (k == "authors") {
                 authors.emplace(v, true, 32, 32);
-                numMajorFields++;
+                numMajorFieldsNonTag++;
             } else if (k == "kinds") {
                 kinds.emplace(v);
-                numMajorFields++;
-            } else if (k.starts_with('#')) {
-                numMajorFields++;
-                if (k.size() == 2) {
-                    char tag = k[1];
+                numMajorFieldsNonTag++;
+            } else if (k.starts_with('#') || k.starts_with('&')) {
+                bool isAnd = k.starts_with('&');
+                if (k.size() != 2) throw herr(isAnd ? "unindexed AND tag filter" : "unindexed tag filter");
 
+                char tag = k[1];
+                tagKeySet.insert(tag);
+
+                auto &vec = isAnd ? rawTagsAnd[tag] : rawTagsOr[tag];
+                for (const auto &elem : v.get_array()) {
                     if (tag == 'p' || tag == 'e') {
-                        tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
+                        vec.emplace_back(from_hex(elem.get_string(), false));
                     } else {
-                        tags.emplace(tag, FilterSetBytes(v, false, 0, MAX_INDEXED_TAG_VAL_SIZE));
+                        vec.emplace_back(elem.get_string());
                     }
-                } else {
-                    throw herr("unindexed tag filter");
                 }
             } else if (k == "since") {
                 since = v.get_unsigned();
@@ -162,11 +187,49 @@ struct NostrFilter {
             }
         }
 
-        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
+        // Build AND sets first
+        for (const auto &[tagName, vals] : rawTagsAnd) {
+            if (tagName == 'p' || tagName == 'e') {
+                tagsAnd.emplace(tagName, FilterSetBytes(vals, 32, 32));
+            } else {
+                tagsAnd.emplace(tagName, FilterSetBytes(vals, 0, MAX_INDEXED_TAG_VAL_SIZE));
+            }
+        }
+
+        // Build OR sets, skipping any values present in AND for the same tag
+        for (const auto &[tagName, vals] : rawTagsOr) {
+            const auto andIt = tagsAnd.find(tagName);
+            std::vector<std::string> filtered;
+            filtered.reserve(vals.size());
+
+            for (const auto &v : vals) {
+                if (andIt != tagsAnd.end() && andIt->second.doesMatch(v)) continue;
+                filtered.emplace_back(v);
+            }
+
+            if (filtered.empty()) continue;
+
+            if (tagName == 'p' || tagName == 'e') {
+                tags.emplace(tagName, FilterSetBytes(filtered, 32, 32));
+            } else {
+                tags.emplace(tagName, FilterSetBytes(filtered, 0, MAX_INDEXED_TAG_VAL_SIZE));
+            }
+        }
+
+        size_t tagKeyCount = 0;
+        {
+            // tagKeySet already contains the union of keys seen in # and &
+            tagKeyCount = tagKeySet.size();
+        }
+
+        if (tagKeyCount > 3) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 
+        uint64_t numMajorFields = numMajorFieldsNonTag + tagKeyCount;
+
         indexOnlyScans = (numMajorFields <= 1) || (numMajorFields == 2 && authors && kinds);
+        if (tagsAnd.size()) indexOnlyScans = false; // AND semantics require reading full events
     }
 
     bool doesMatchTimes(uint64_t created) const {
@@ -183,6 +246,24 @@ struct NostrFilter {
         if (ids && !ids->doesMatch(ev.id())) return false;
         if (authors && !authors->doesMatch(ev.pubkey())) return false;
         if (kinds && !kinds->doesMatch(ev.kind())) return false;
+
+        // AND tags: every value in tagsAnd[tag] must be present in the event
+        for (const auto &[tag, filt] : tagsAnd) {
+            for (size_t i = 0; i < filt.size(); i++) {
+                auto requiredVal = filt.at(i);
+                bool foundMatch = false;
+
+                ev.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == tag && tagVal == requiredVal) {
+                        foundMatch = true;
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (!foundMatch) return false;
+            }
+        }
 
         for (const auto &[tag, filt] : tags) {
             bool foundMatch = false;

@@ -151,6 +151,27 @@ sub genRandomFilterGroup {
                     push @{$f->{'#t'}}, $topics->[int(rand() * @$topics)];
                 }
             }
+
+            if (rand() < .12) {
+                $f->{'&t'} = [];
+                for (1..(rand()*3)+1) {
+                    push @{$f->{'&t'}}, $topics->[int(rand() * @$topics)];
+                }
+            }
+
+            if (rand() < .08) {
+                $f->{'&e'} = [];
+                for (1..(rand()*4)+1) {
+                    push @{$f->{'&e'}}, $ids->[int(rand() * @$ids)];
+                }
+            }
+
+            if (rand() < .08) {
+                $f->{'&p'} = [];
+                for (1..(rand()*3)+1) {
+                    push @{$f->{'&p'}}, $pubkeys->[int(rand() * @$pubkeys)];
+                }
+            }
         }
 
         if (rand() < .2) {

@@ -120,28 +120,52 @@ struct DBScan : NonCopyable {
                     }
                 );
             }
-        } else if (f.tags.size()) {
+        } else if (f.tags.size() || f.tagsAnd.size()) {
             indexDbi = env.dbi_Event__tag;
             desc = "Tag";
 
             char tagName = '\0';
+            bool fromAnd = false;
             {
                 uint64_t numTags = MAX_U64;
-                for (const auto &[tn, filterSet] : f.tags) {
-                    if (filterSet.size() < numTags) {
-                        numTags = filterSet.size();
-                        tagName = tn;
+                auto consider = [&](const auto &map, bool isAnd){
+                    for (const auto &[tn, filterSet] : map) {
+                        size_t filterSize = filterSet.size();
+                        if (filterSize == 0) continue;
+                        uint64_t cost = isAnd ? 1 : filterSize;
+                        if (cost < numTags || (cost == numTags && isAnd && !fromAnd)) {
+                            numTags = cost;
+                            tagName = tn;
+                            fromAnd = isAnd;
+                        }
                     }
+                };
+
+                consider(f.tags, false);
+                consider(f.tagsAnd, true);
+            }
+
+            const auto &filterSet = fromAnd ? f.tagsAnd.at(tagName) : f.tags.at(tagName);
+            if (fromAnd) indexOnly = false;
+
+            std::vector<std::string> searchVals;
+            if (fromAnd) {
+                // For AND filters, matching any single required value implies the event also contains
+                // every other AND value (otherwise it will be rejected later), so only scan using one
+                // value to avoid redundant cursor work.
+                searchVals.emplace_back(filterSet.at(0));
+            } else {
+                searchVals.reserve(filterSet.size());
+                for (uint64_t i = 0; i < filterSet.size(); i++) {
+                    searchVals.emplace_back(filterSet.at(i));
                 }
             }
 
-            const auto &filterSet = f.tags.at(tagName);
-
-            cursors.reserve(filterSet.size());
-            for (uint64_t i = 0; i < filterSet.size(); i++) {
+            cursors.reserve(searchVals.size());
+            for (const auto &val : searchVals) {
                 std::string search;
                 search += tagName;
-                search += filterSet.at(i);
+                search += val;
 
                 cursors.emplace_back(
                     search + std::string(8, '\xFF'),
