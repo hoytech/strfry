@@ -344,23 +344,21 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
 
                             if (otherTimestamp < thisTimestamp ||
                                 (otherTimestamp == thisTimestamp && packed.id() < otherPacked.id())) {
-                                // New event is newer - normally we'd delete the old one
+                                // New event is newer - delete the old one (unless audit mode)
                                 if (shouldRetainReplacedEvents()) {
-                                    // Audit mode: keep both versions, just log
-                                    if (logLevel >= 1) LI << "Retaining replaced event (audit mode). id=" << to_hex(otherPacked.id());
+                                    // Audit mode: keep old event in storage for historical queries.
+                                    // The replace index will be updated to point to the new event,
+                                    // so NIP-01 queries return only the latest version.
+                                    // Old event remains queryable by ID for audit purposes.
+                                    if (logLevel >= 1) LI << "Retaining replaced event in storage (audit mode). id=" << to_hex(otherPacked.id());
                                 } else {
                                     if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
                                     levIdsToDelete.push_back(otherEv.primaryKeyId);
                                 }
                             } else {
-                                // New event is older - normally we'd reject it
-                                if (shouldRetainReplacedEvents()) {
-                                    // Audit mode: keep both versions, store the older one too
-                                    if (logLevel >= 1) LI << "Storing older replaceable event (audit mode). id=" << to_hex(packed.id());
-                                    // Don't set Replaced status - let it be stored
-                                } else {
-                                    ev.status = EventWriteStatus::Replaced;
-                                }
+                                // New event is older - reject it (even in audit mode, to avoid index corruption).
+                                // The JSONL audit log in the ingestion layer captures these anyway.
+                                ev.status = EventWriteStatus::Replaced;
                             }
                         }
 
