@@ -89,6 +89,7 @@ tablesRaw:
   ## vals are prefixed with a type byte:
   ##   0: no compression, payload follows
   ##   1: zstd compression. Followed by Dictionary ID (native endian uint32) then compressed payload
+  ##   2: zstd compression (no dictionary), compressed payload follows
   EventPayload:
     flags: 'MDB_INTEGERKEY'
 
