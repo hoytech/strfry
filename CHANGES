@@ -11,6 +11,9 @@ NEXT
   * Added a relay.writePolicy.timeoutSeconds config setting. This controls how
     long strfry will wait for a write policy plugin's response before killing
     and re-spawning the plugin.
+  * Bugfix: No longer attempt to print a stacktrace when we are killed. This
+    relied on non-signal safe behaviour in the loguru library, which could cause
+    deadlocks when attempting to kill a busy strfry process. (reported by jb55)
   * Updated Dockerfile to clean artifacts before build, to help with cross
     platform build workflows (l0rinc)
   * Improvement to config file inline docs (n7ekb)
