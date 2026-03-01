@@ -13,6 +13,8 @@ NEXT
   * Improvement to config file inline docs (n7ekb)
   * Added a new deployment script: `scripts/idempotent-vps-deploy.sh` (chr15m)
   * Better error reporting/handling when strfry.conf is malformed.
+  * Print ANSI strfry logo when strfry is run with no arguments.
+    Artwork thanks to Zen GT.
 
 1.0.4
   * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
