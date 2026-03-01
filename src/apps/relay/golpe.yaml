@@ -61,6 +61,9 @@ config:
   - name: relay__writePolicy__plugin
     desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"
     default: ""
+  - name: relay__writePolicy__timeoutSeconds
+    desc: "Number of seconds to wait for a plugin to respond"
+    default: 10
 
   - name: relay__compression__enabled
     desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"

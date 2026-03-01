@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <poll.h>
 
 #include <memory>
 
@@ -98,8 +99,10 @@ struct PluginEventSifter {
             tao::json::value response;
 
             while (1) {
+                waitUntilReadable(running->r, output);
+
                 char buf[8192];
-                if (!fgets(buf, sizeof(buf), running->r)) throw herr("pipe to plugin was closed (plugin crashed?)");
+                if (!::fgets(buf, sizeof(buf), running->r)) throw herr("pipe to plugin was closed (plugin crashed?)");
 
                 try {
                     response = tao::json::from_string(buf);
@@ -121,10 +124,22 @@ struct PluginEventSifter {
             else if (action == "shadowReject") return PluginEventSifterResult::ShadowReject;
             else throw herr("unknown action: ", action);
         } catch (std::exception &e) {
-            LE << "Couldn't setup plugin: " << e.what();
+            LE << "Plugin error: " << e.what();
             running.reset();
             okMsg = "error: internal error";
             return PluginEventSifterResult::Reject;
+        }
+    }
+
+    void waitUntilReadable(FILE *r, const std::string &req) {
+        struct pollfd pfd{};
+        pfd.fd = fileno(r);
+        pfd.events = POLLIN;
+
+        int ret = poll(&pfd, 1, cfg().relay__writePolicy__timeoutSeconds * 1000);
+
+        if (ret == 0) {
+            throw herr("Timed out reading response from plugin. Request: ", req);
         }
     }
 
