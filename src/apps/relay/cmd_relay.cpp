@@ -76,8 +76,12 @@ void RelayServer::run() {
     configFileChangeWatcher.setDebounce(100);
 
     configFileChangeWatcher.run([&](){
-        loadConfig(configFile);
-        checkConfig();
+        try {
+            loadConfig(configFile);
+            checkConfig();
+        } catch (std::exception &e) {
+            LE << "Error parsing config file, continuing with previous config: " << e.what();
+        }
     });
 
 
