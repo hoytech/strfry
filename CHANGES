@@ -4,10 +4,13 @@ NEXT
     be disabled by setting relay.maxFilterLimitCount to 0.
   * New `/metrics/` endpoint for Prometheus monitoring (alexgleason)
   * Limit subId length to 64, as per new NIP-01 clarification (alltheseas)
-  * Add missing NIP-11 fields such as banner, privacy_policy, etc (1-leo)
+  * Added missing NIP-11 fields such as banner, privacy_policy, etc (1-leo)
   * When a REQ is invalid, respond with the CLOSED message instead of a NOTICE.
     This message contains the subscription ID so clients can determine which
     request caused the error and release resources (suggested by alexgleason)
+  * Added a relay.writePolicy.timeoutSeconds config setting. This controls how
+    long strfry will wait for a write policy plugin's response before killing
+    and re-spawning the plugin.
   * Updated Dockerfile to clean artifacts before build, to help with cross
     platform build workflows (l0rinc)
   * Improvement to config file inline docs (n7ekb)
