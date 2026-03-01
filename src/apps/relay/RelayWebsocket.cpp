@@ -2,16 +2,18 @@
 
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
+#include "Favicon.h"
 
 
 
-static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content) {
+static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content, const std::string &extraHeaders = "") {
     std::string output = "HTTP/1.1 200 OK\r\n";
     output += std::string("Content-Type: ") + contentType + "\r\n";
     output += "Access-Control-Allow-Origin: *\r\n";
     output += "Connection: keep-alive\r\n";
     output += "Server: strfry\r\n";
     output += std::string("Content-Length: ") + std::to_string(content.size()) + "\r\n";
+    output += extraHeaders;
     output += "\r\n";
     output += content;
     return output;
@@ -163,6 +165,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
+    std::string faviconResponse = preGenerateHttpResponse("image/x-icon", favicon(), "Cache-Control: public, max-age=31536000\r\n");
+
 
     {
         int extensionOptions = 0;
@@ -191,6 +195,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         } else if (url == "/nodeinfo/2.1") {
             auto nodeInfo = getNodeInfo21HttpResponse();
             res->write(nodeInfo.data(), nodeInfo.size());
+        } else if (url == "/favicon.ico") {
+            res->write(faviconResponse.data(), faviconResponse.size());
         } else if (req.getHeader("accept").toStringView() == "application/nostr+json") {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
