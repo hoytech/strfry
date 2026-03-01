@@ -23,6 +23,16 @@ static int getPayloadZstdLevel() {
     return level;
 }
 
+static bool shouldRetainReplacedEvents() {
+    static bool retain = []() {
+        const char *s = std::getenv("STRFRY_RETAIN_REPLACED_EVENTS");
+        if (!s) return false;
+        return std::string(s) == "1" || std::string(s) == "true";
+    }();
+
+    return retain;
+}
+
 
 std::string nostrJsonToPackedEvent(const tao::json::value &v) {
     PackedEventTagBuilder tagBuilder;
@@ -334,10 +344,23 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
 
                             if (otherTimestamp < thisTimestamp ||
                                 (otherTimestamp == thisTimestamp && packed.id() < otherPacked.id())) {
-                                if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
-                                levIdsToDelete.push_back(otherEv.primaryKeyId);
+                                // New event is newer - normally we'd delete the old one
+                                if (shouldRetainReplacedEvents()) {
+                                    // Audit mode: keep both versions, just log
+                                    if (logLevel >= 1) LI << "Retaining replaced event (audit mode). id=" << to_hex(otherPacked.id());
+                                } else {
+                                    if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                                    levIdsToDelete.push_back(otherEv.primaryKeyId);
+                                }
                             } else {
-                                ev.status = EventWriteStatus::Replaced;
+                                // New event is older - normally we'd reject it
+                                if (shouldRetainReplacedEvents()) {
+                                    // Audit mode: keep both versions, store the older one too
+                                    if (logLevel >= 1) LI << "Storing older replaceable event (audit mode). id=" << to_hex(packed.id());
+                                    // Don't set Replaced status - let it be stored
+                                } else {
+                                    ev.status = EventWriteStatus::Replaced;
+                                }
                             }
                         }
 
