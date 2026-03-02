@@ -3,6 +3,7 @@
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
 #include "Favicon.h"
+#include "Bech32Utils.h"
 
 
 
@@ -117,13 +118,24 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 return templarInternal::htmlEscape(inp, false);
             };
 
+            auto maybeNpub = [](std::string_view inp){
+                try {
+                    if (inp.size() != 64) throw herr("invalid length for pubkey");
+                    return encodeBech32Simple("npub", hoytech::from_hex(inp));
+                } catch(...) {
+                }
+
+                return std::string(inp);
+            };
+
             struct {
                 std::string supportedNips;
                 std::string version;
                 uint64_t negentropy;
                 std::function<std::string(std::string_view)> maybeUrl;
+                std::function<std::string(std::string_view)> maybeNpub;
                 uint64_t uptime;
-            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60, maybeUrl, (uint64_t)::time(nullptr) - serverStart };
+            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60, maybeUrl, maybeNpub, (uint64_t)::time(nullptr) - serverStart };
 
             rendered = preGenerateHttpResponse("text/html", ::strfrytmpl::landing(ctx).str);
             ver = cfg().version();

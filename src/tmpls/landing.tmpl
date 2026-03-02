@@ -129,12 +129,12 @@
 
             <tr> ?(cfg().relay__info__pubkey.size())
                 <td>Pubkey</td>
-                <td>$(cfg().relay__info__pubkey)</td>
+                <td>$(ctx.maybeNpub(cfg().relay__info__pubkey))</td>
             </tr>
 
             <tr> ?(cfg().relay__info__self.size())
                 <td>Self (relay's own pubkey)</td>
-                <td>$(cfg().relay__info__self)</td>
+                <td>$(ctx.maybeNpub(cfg().relay__info__self))</td>
             </tr>
 
             <tr> ?(cfg().relay__info__contact.size())
