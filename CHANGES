@@ -11,6 +11,9 @@ NEXT
   * Added a relay.writePolicy.timeoutSeconds config setting. This controls how
     long strfry will wait for a write policy plugin's response before killing
     and re-spawning the plugin.
+  * Added REQ filter validation. This allows you to restrict the filters that
+    can be provided to REQ/COUNT. You can restrict the number of filters, the
+    allowed kinds to query, and/or require authors/p/e tags. (frnandu)
   * Bugfix: No longer attempt to print a stacktrace when we are killed. This
     relied on non-signal safe behaviour in the loguru library, which could cause
     deadlocks when attempting to kill a busy strfry process. (reported by jb55)
