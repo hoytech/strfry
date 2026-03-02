@@ -141,7 +141,6 @@ doTest({
     verify => [ 0, 1, ],
 });
 
-
 doTest({
     desc => "Deletion prevents re-adding same event",
     events => [
@@ -152,6 +151,108 @@ doTest({
     verify => [ 1, ],
 });
 
+doTest({
+    desc => "Delete a deletion",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 -e EV_0 },
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 7000 -e EV_1 },
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 }, ## can add again
+    ],
+    verify => [ 3, 2 ],
+});
+
+
+
+doTest({
+    desc => "Deletion by a-tag",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "blah"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "whatever"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30001 --created-at 5000 --tag d "whatever"},
+        qq{--sec $ids->[1]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "whatever"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello" --tag a "30000:$ids->[0]->{pub}:whatever" --tag a "30000:$ids->[0]->{pub}:stuff"},
+    ],
+    verify => [ 1, 3, 4, 5, ],
+});
+
+doTest({
+    desc => "Deletion by a-tag, can re-add later event",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5500 --tag d "hello"}, ## before deletion: can't add
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 6500 --tag d "hello"}, ## after deletion: can add
+    ],
+    verify => [ 1, 3, ],
+});
+
+doTest({
+    desc => "Deletion by a-tag, multiple deletes, mixed",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 7000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 8000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 9000 --tag d "hello"},
+    ],
+    verify => [ 1, 3, 4 ],
+});
+
+doTest({
+    desc => "Deletion by a-tag, multiple deletes first",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 8000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 7000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 9000 --tag d "hello"},
+    ],
+    verify => [ 1, 0, 4 ],
+});
+
+doTest({
+    desc => "Deletion by a-tag, multiple deletes last",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 7000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 30000 --created-at 9000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 8000 --tag a "30000:$ids->[0]->{pub}:hello"},
+    ],
+    verify => [ 3, 4, 2 ],
+});
+
+doTest({
+    desc => "Deletion by a-tag, can't delete somebody else's",
+    events => [
+        qq{--sec $ids->[1]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "30000:$ids->[0]->{pub}:hello"},
+    ],
+    verify => [ ],
+});
+
+doTest({
+    desc => "Deletion by a-tag: only affects param. replaceable events",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 20000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 50000 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "20000:$ids->[0]->{pub}:hello" --tag a "50000:$ids->[0]->{pub}:whatever"},
+    ],
+    verify => [ 0, 1, 2, ],
+});
+
+doTest({
+    desc => "Delete an a-tag deletion",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 39999 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag a "39999:$ids->[0]->{pub}:hello"},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 39999 --created-at 5000 --tag d "hello"},
+        qq{--sec $ids->[0]->{sec} --content "blah" --kind 5 --created-at 6000 --tag e EV_1},
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 39999 --created-at 5000 --tag d "hello"}, ## can now re-add since a-tag deletion is gone
+    ],
+    verify => [ 4, 3, ],
+});
 
 
 

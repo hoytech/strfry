@@ -11,6 +11,7 @@ features:
 
 includes: |
     #include "PackedEvent.h"
+    #include "EventUtils.h"
 
 tables:
   ## DB meta-data. Single entry, with id = 1
@@ -62,8 +63,21 @@ tables:
 
             if (tagName == 'd' && replace.size() == 0) {
                 replace.push_back(makeKey_StringUint64(std::string(packed.pubkey()) + std::string(tagVal), packed.kind()));
-            } else if (tagName == 'e' && packed.kind() == 5) {
-                deletion.push_back(std::string(tagVal) + std::string(packed.pubkey()));
+            } else if (tagName == 'e') {
+                if (packed.kind() == 5) {
+                    deletion.push_back(std::string(tagVal) + std::string(packed.pubkey()));
+                }
+            } else if (tagName == 'a') {
+                if (packed.kind() == 5) {
+                    try {
+                        auto [kind, pubkey, dTag] = parseATag(tagVal);
+
+                        if (isParamReplaceableKind(kind) && pubkey == packed.pubkey()) {
+                            replace.push_back(makeKey_StringUint64(pubkey + dTag, kind));
+                        }
+                    } catch(...) {
+                    }
+                }
             }
 
             return true;

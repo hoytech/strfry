@@ -35,21 +35,24 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
         auto tagName = jsonGetString(tag.at(0), "tag name was not a string");
         auto tagVal = tag.size() >= 2 ? jsonGetString(tag.at(1), "tag val was not a string") : "";
 
-        if (tagName == "e" || tagName == "p") {
-            if (tagVal.size() != 64) throw herr("unexpected size for fixed-size tag: ", tagName);
-            tagVal = from_hex(tagVal, false);
+        if (tagName.size() == 1) {
+            if (tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too large: ", tagVal.size());
 
-            tagBuilder.add(tagName[0], tagVal);
+            if (tagName == "e" || tagName == "p") {
+                if (tagVal.size() != 64) throw herr("unexpected size for fixed-size tag: ", tagName);
+                tagVal = from_hex(tagVal, false);
+            } else if (tagName == "a" && kind == 5) {
+                auto [tagKind, tagPubkey, tagDTag] = parseATag(tagVal);
+                if (tagPubkey != pubkey) throw herr("can't delete other user's events");
+            }
+
+            if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
+                tagBuilder.add(tagName[0], tagVal);
+            }
         } else if (tagName == "expiration") {
             if (expiration == 0) {
                 expiration = parseUint64(tagVal);
                 if (expiration < 100) throw herr("invalid expiration");
-            }
-        } else if (tagName.size() == 1) {
-            if (tagVal.size() > cfg().events__maxTagValSize) throw herr("tag val too large: ", tagVal.size());
-
-            if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
-                tagBuilder.add(tagName[0], tagVal);
             }
         }
     }
@@ -244,6 +247,11 @@ bool deleteEventBasic(lmdb::txn &txn, uint64_t levId) {
 }
 
 
+static bool isEventABeforeEventB(const PackedEventView &a, const PackedEventView &b) {
+    // If timestamps are equal, then according to NIP-01, the one with the *greatest* lexical id is considered "earlier" (ie, discarded).
+    return a.created_at() < b.created_at() || (a.created_at() == b.created_at() && a.id() > b.id());
+}
+
 
 void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel) {
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
@@ -288,25 +296,36 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                     auto searchKey = makeKey_StringUint64(searchStr, packed.kind());
 
                     env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
-                        ParsedKey_StringUint64 parsedKey(k);
-                        if (parsedKey.s == searchStr && parsedKey.n == packed.kind()) {
-                            auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                        if (k != searchKey) return false;
 
-                            auto thisTimestamp = packed.created_at();
-                            auto otherPacked = PackedEventView(otherEv.buf);
-                            auto otherTimestamp = otherPacked.created_at();
+                        auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                        auto otherPacked = PackedEventView(otherEv.buf);
 
-                            if (otherTimestamp < thisTimestamp ||
-                                (otherTimestamp == thisTimestamp && packed.id() < otherPacked.id())) {
-                                if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
-                                levIdsToDelete.push_back(otherEv.primaryKeyId);
-                            } else {
-                                ev.status = EventWriteStatus::Replaced;
-                            }
+                        if (isEventABeforeEventB(packed, otherPacked)) {
+                            ev.status = otherPacked.kind() == 5 ? EventWriteStatus::Deleted : EventWriteStatus::Replaced;
+                            return false; // found more recent replacement event, no need to scan more
                         }
 
-                        return false;
+                        return true;
                     }, true);
+
+                    // If event is accepted (pending write), then do a second pass to remove/unindex outdated events
+
+                    if (ev.status == EventWriteStatus::Pending) {
+                        env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
+                            if (k != searchKey) return false;
+
+                            auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                            auto otherPacked = PackedEventView(otherEv.buf);
+
+                            if (otherPacked.kind() != 5) {
+                                if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                                levIdsToDelete.push_back(otherEv.primaryKeyId);
+                            }
+
+                            return true;
+                        }, true);
+                    }
                 }
             }
 
@@ -319,7 +338,33 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                             if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(tagVal);
                             levIdsToDelete.push_back(otherEv->primaryKeyId);
                         }
+                    } else if (tagName == 'a') {
+                        try { // parsing a-tag can fail
+                            auto [kind, pubkey, dTag] = parseATag(tagVal);
+
+                            if (isParamReplaceableKind(kind) && pubkey == packed.pubkey()) {
+                                auto searchKey = makeKey_StringUint64(pubkey + dTag, kind);
+
+                                env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
+                                    if (k != searchKey) return false;
+
+                                    auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
+                                    auto otherPacked = PackedEventView(otherEv.buf);
+
+                                    if (isEventABeforeEventB(otherPacked, packed)) {
+                                        if (otherPacked.kind() != 5) {
+                                            if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(tagVal);
+                                            levIdsToDelete.push_back(lmdb::from_sv<uint64_t>(v));
+                                        }
+                                    }
+
+                                    return true;
+                                }, true);
+                            }
+                        } catch(...) {
+                        }
                     }
+
                     return true;
                 });
             }
