@@ -4,6 +4,7 @@
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     Decompressor decomp;
+    FilterValidator filterValidator;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -43,7 +44,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             std::string subIdStr;
 
                             try {
-                                ingesterProcessReq(txn, msg->connId, arr, cmd == "COUNT", subIdStr);
+                                ingesterProcessReq(txn, filterValidator, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
                                 if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
                                 else sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
@@ -132,7 +133,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
 }
 
-void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {
+void RelayServer::ingesterProcessReq(lmdb::txn &txn, FilterValidator &filterValidator, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
     outSubIdStr = jsonGetString(arr[1], "subscription id was not a string");
     if (arr.get_array().size() > 2 + cfg().relay__maxReqFilterSize) throw herr("arr too big");
@@ -150,7 +151,7 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao:
     NostrFilterGroup filterGroup(arr, maxFilterLimit);
 
     try {
-        filterGroup.validateFilters();
+        filterValidator.validate(filterGroup);
     } catch (std::exception &e) {
         throw herr("filter validation failed: ", e.what());
     }

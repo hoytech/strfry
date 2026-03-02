@@ -222,83 +222,6 @@ struct NostrFilterGroup {
         }
     }
 
-    void validateFilters(const std::string &ipAddr = "") const {
-        if (!cfg().relay__filterValidation__enabled) return;
-
-        size_t numFilters = filters.size();
-        if (numFilters < cfg().relay__filterValidation__minFiltersPerReq || 
-            numFilters > cfg().relay__filterValidation__maxFiltersPerReq) {
-            throw herr("invalid number of filters: ", numFilters);
-        }
-
-        std::vector<uint64_t> allowedKinds;
-        std::string allowedKindsStr = cfg().relay__filterValidation__allowedKinds;
-        if (!allowedKindsStr.empty()) {
-            size_t pos = 0;
-            while (pos < allowedKindsStr.size()) {
-                size_t nextComma = allowedKindsStr.find(',', pos);
-                if (nextComma == std::string::npos) nextComma = allowedKindsStr.size();
-                
-                std::string kindStr = allowedKindsStr.substr(pos, nextComma - pos);
-                size_t start = kindStr.find_first_not_of(" \t");
-                size_t end = kindStr.find_last_not_of(" \t");
-                if (start != std::string::npos && end != std::string::npos) {
-                    kindStr = kindStr.substr(start, end - start + 1);
-                    if (!kindStr.empty()) {
-                        allowedKinds.push_back(std::stoull(kindStr));
-                    }
-                }
-                
-                pos = nextComma + 1;
-            }
-        }
-
-        for (const auto &filter : filters) {
-            if (filter.kinds) {
-                size_t numKinds = filter.kinds->size();
-                if (numKinds > cfg().relay__filterValidation__maxKindsPerFilter) {
-                    throw herr("too many kinds in filter: ", numKinds);
-                }
-
-                if (!allowedKinds.empty()) {
-                    for (size_t i = 0; i < numKinds; i++) {
-                        uint64_t kind = filter.kinds->at(i);
-                        bool found = false;
-                        for (auto allowedKind : allowedKinds) {
-                            if (kind == allowedKind) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            throw herr("kind not allowed: ", kind);
-                        }
-                    }
-                }
-            }
-
-            if (cfg().relay__filterValidation__requireAuthorOrTag) {
-                bool hasValidAuthor = filter.authors && filter.authors->size() == 1;
-                bool hasValidPTag = false;
-                bool hasValidETag = false;
-
-                auto pTagIt = filter.tags.find('p');
-                if (pTagIt != filter.tags.end()) {
-                    hasValidPTag = pTagIt->second.size() == 1;
-                }
-
-                auto eTagIt = filter.tags.find('e');
-                if (eTagIt != filter.tags.end()) {
-                    hasValidETag = eTagIt->second.size() == 1;
-                }
-
-                if (!hasValidAuthor && !hasValidPTag && !hasValidETag) {
-                    throw herr("filter must have exactly one author, p tag, or e tag");
-                }
-            }
-        }
-    }
-
     // FIXME refactor: Make unwrapped the default constructor
     static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
@@ -328,5 +251,82 @@ struct NostrFilterGroup {
 
     bool isFullDbQuery() {
         return size() == 1 && filters[0].isFullDbQuery();
+    }
+};
+
+struct FilterValidator {
+    uint64_t configVer = 0;
+    flat_hash_set<uint64_t> allowedKinds;
+
+    void setupValidator() {
+        allowedKinds.clear();
+
+        std::string allowedKindsStr = cfg().relay__filterValidation__allowedKinds;
+
+        if (!allowedKindsStr.empty()) {
+            size_t pos = 0;
+            while (pos < allowedKindsStr.size()) {
+                size_t nextComma = allowedKindsStr.find(',', pos);
+                if (nextComma == std::string::npos) nextComma = allowedKindsStr.size();
+
+                std::string kindStr = allowedKindsStr.substr(pos, nextComma - pos);
+                size_t start = kindStr.find_first_not_of(" \t");
+                size_t end = kindStr.find_last_not_of(" \t");
+                if (start != std::string::npos && end != std::string::npos) {
+                    kindStr = kindStr.substr(start, end - start + 1);
+                    if (!kindStr.empty()) allowedKinds.insert(std::stoull(kindStr));
+                }
+
+                pos = nextComma + 1;
+            }
+        }
+    }
+
+    void validate(const NostrFilterGroup &fg) {
+        if (!cfg().relay__filterValidation__enabled) return;
+
+        if (configVer != cfg().version()) setupValidator();
+
+        size_t numFilters = fg.filters.size();
+        if (numFilters < cfg().relay__filterValidation__minFiltersPerReq ||
+            numFilters > cfg().relay__filterValidation__maxFiltersPerReq) {
+            throw herr("invalid number of filters: ", numFilters);
+        }
+
+        for (const auto &filter : fg.filters) {
+            if (filter.kinds) {
+                size_t numKinds = filter.kinds->size();
+                if (numKinds > cfg().relay__filterValidation__maxKindsPerFilter) {
+                    throw herr("too many kinds in filter: ", numKinds);
+                }
+
+                if (!allowedKinds.empty()) {
+                    for (size_t i = 0; i < numKinds; i++) {
+                        uint64_t kind = filter.kinds->at(i);
+                        if (!allowedKinds.contains(kind)) throw herr("kind not allowed: ", kind);
+                    }
+                }
+            }
+
+            if (cfg().relay__filterValidation__requireAuthorOrTag) {
+                bool hasValidAuthor = filter.authors && filter.authors->size() == 1;
+                bool hasValidPTag = false;
+                bool hasValidETag = false;
+
+                auto pTagIt = filter.tags.find('p');
+                if (pTagIt != filter.tags.end()) {
+                    hasValidPTag = pTagIt->second.size() == 1;
+                }
+
+                auto eTagIt = filter.tags.find('e');
+                if (eTagIt != filter.tags.end()) {
+                    hasValidETag = eTagIt->second.size() == 1;
+                }
+
+                if (!hasValidAuthor && !hasValidPTag && !hasValidETag) {
+                    throw herr("filter must have exactly one author, p tag, or e tag");
+                }
+            }
+        }
     }
 };
