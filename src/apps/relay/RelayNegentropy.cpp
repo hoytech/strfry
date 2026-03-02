@@ -101,6 +101,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         } catch (std::exception &e) {
             LI << "[" << connId << "] Error parsing negentropy message: " << e.what();
 
+            PROM_INC_RELAY_MSG("NEG-ERR");
             sendToConn(connId, tao::json::to_string(tao::json::value::array({
                 "NEG-ERR",
                 subId.str(),
@@ -111,6 +112,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             return;
         }
 
+        PROM_INC_RELAY_MSG("NEG-MSG");
         sendToConn(connId, tao::json::to_string(tao::json::value::array({
             "NEG-MSG",
             subId.str(),
@@ -133,7 +135,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         }
     };
 
-    queries.onComplete = [&](lmdb::txn &txn, Subscription &sub){
+    queries.onComplete = [&](lmdb::txn &txn, Subscription &sub, uint64_t){
         auto *userView = views.findView(sub.connId, sub.subId);
         if (!userView) return;
 
@@ -146,6 +148,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         if (view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
             LI << "[" << sub.connId << "] Negentropy query size exceeded " << cfg().relay__negentropy__maxSyncEvents;
 
+            PROM_INC_RELAY_MSG("NEG-ERR");
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
                 "NEG-ERR",
                 sub.subId.str(),
@@ -225,6 +228,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgNegentropy::NegMsg>(&newMsg.msg)) {
                 auto *userView = views.findView(msg->connId, msg->subId);
                 if (!userView) {
+                    PROM_INC_RELAY_MSG("NEG-ERR");
                     sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
                         "NEG-ERR",
                         msg->subId.str(),

@@ -10,12 +10,31 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     queries.searchProvider = searchProvider.get();
 
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
+        if (sub.countOnly) return;
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
     };
 
-    queries.onComplete = [&](lmdb::txn &, Subscription &sub){
-        sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "EOSE", sub.subId.str() })));
-        tpReqMonitor.dispatch(sub.connId, MsgReqMonitor{MsgReqMonitor::NewSub{std::move(sub)}});
+    queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total){
+        if (sub.countOnly) {
+            bool limited = false;
+
+            if (total > cfg().relay__maxFilterLimitCount) {
+                total = cfg().relay__maxFilterLimitCount;
+                limited = true;
+            }
+
+            tao::json::value countBody = tao::json::value({
+                { "count", total },
+            });
+
+            if (limited) countBody["limited"] = true;
+
+            sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "COUNT", sub.subId.str(), countBody })));
+        } else {
+            PROM_INC_RELAY_MSG("EOSE");
+            sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "EOSE", sub.subId.str() })));
+            tpReqMonitor.dispatch(sub.connId, MsgReqMonitor{MsgReqMonitor::NewSub{std::move(sub)}});
+        }
     };
 
     while(1) {

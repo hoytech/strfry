@@ -6,12 +6,11 @@
 
 
 struct SubId {
-    char buf[72];
+    char buf[MAX_SUBID_SIZE + 1];
 
     SubId(std::string_view val) {
-        static_assert(MAX_SUBID_SIZE == 71, "MAX_SUBID_SIZE mismatch");
-        if (val.size() > 71) throw herr("subscription id too long");
-        if (val.size() == 0) throw herr("subscription id too short");
+        static_assert(MAX_SUBID_SIZE <= 255, "MAX_SUBID_SIZE must fit in a byte");
+        if (val.empty() || val.size() > MAX_SUBID_SIZE) throw herr("invalid subscription id length");
 
         auto badChar = [](char c){
             return c < 0x20 || c == '\\' || c == '"' || c >= 0x7F;
@@ -47,13 +46,15 @@ namespace std {
 
 
 struct Subscription : NonCopyable {
-    Subscription(uint64_t connId_, std::string subId_, NostrFilterGroup filterGroup_) : connId(connId_), subId(subId_), filterGroup(filterGroup_) {}
+    Subscription(uint64_t connId_, const std::string &subId_, NostrFilterGroup filterGroup_, bool countOnly_ = false)
+        : connId(connId_), subId(subId_), filterGroup(filterGroup_), countOnly(countOnly_) {}
 
     // Params
 
     uint64_t connId;
     SubId subId;
     NostrFilterGroup filterGroup;
+    bool countOnly;
 
     // State
 

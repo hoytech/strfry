@@ -11,3 +11,10 @@ build/StrfryTemplates.h: $(shell find src/tmpls/ -type f -name '*.tmpl')
 	PERL5LIB=golpe/vendor/ perl golpe/external/templar/templar.pl src/tmpls/ strfrytmpl $@
 
 src/apps/relay/RelayWebsocket.o: build/StrfryTemplates.h
+
+.PHONY: test-subid
+test-subid: build/subid_tests
+	build/subid_tests
+
+build/subid_tests: test/SubIdTests.cpp build/golpe.h
+	$(CXX) $(CXXFLAGS) $(INCS) $< -o $@
