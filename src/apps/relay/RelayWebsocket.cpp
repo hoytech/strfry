@@ -51,7 +51,13 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
 
     auto supportedNips = []{
-        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 45, 70, 77 });
+        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70 });
+
+        if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
+        if (cfg().relay__negentropy__enabled) output.push_back(77);
+
+        std::sort(output.get_array().begin(), output.get_array().end());
+
         if (cfg().relay__info__nips.size() == 0) return output;
 
         try {
