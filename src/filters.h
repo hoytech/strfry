@@ -2,6 +2,8 @@
 
 #include "golpe.h"
 
+#include "jsonParseUtils.h"
+
 
 struct FilterSetBytes {
     struct Item {
@@ -124,45 +126,84 @@ struct NostrFilter {
         if (!filterObj.is_object()) throw herr("provided filter is not an object");
 
         for (const auto &[k, v] : filterObj.get_object()) {
-            if (v.is_array() && v.get_array().size() == 0) {
-                neverMatch = true;
-                continue;
-            }
+            auto checkArray = [&]{
+                if (!v.is_array()) throw herr(k, " not an array");
+            };
 
             if (k == "ids") {
-                ids.emplace(v, true, 32, 32);
+                checkArray();
+                if (v.get_array().size() == 0) {
+                    neverMatch = true;
+                    continue;
+                }
                 numMajorFields++;
-            } else if (k == "authors") {
-                authors.emplace(v, true, 32, 32);
-                numMajorFields++;
-            } else if (k == "kinds") {
-                kinds.emplace(v);
-                numMajorFields++;
-            } else if (k.starts_with('#')) {
-                numMajorFields++;
-                if (k.size() == 2) {
-                    char tag = k[1];
 
-                    if (tag == 'p' || tag == 'e') {
-                        tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
+                try {
+                    ids.emplace(v, true, 32, 32);
+                } catch (std::exception &e) {
+                    throw herr("error parsing ids: ", e.what());
+                }
+            } else if (k == "authors") {
+                checkArray();
+                if (v.get_array().size() == 0) {
+                    neverMatch = true;
+                    continue;
+                }
+                numMajorFields++;
+
+                try {
+                    authors.emplace(v, true, 32, 32);
+                } catch (std::exception &e) {
+                    throw herr("error parsing authors: ", e.what());
+                }
+            } else if (k == "kinds") {
+                checkArray();
+                if (v.get_array().size() == 0) {
+                    neverMatch = true;
+                    continue;
+                }
+                numMajorFields++;
+
+                try {
+                    kinds.emplace(v);
+                } catch (std::exception &e) {
+                    throw herr("error parsing kinds: ", e.what());
+                }
+            } else if (k.starts_with('#')) {
+                checkArray();
+                if (v.get_array().size() == 0) {
+                    neverMatch = true;
+                    continue;
+                }
+                numMajorFields++;
+
+                try {
+                    if (k.size() == 2) {
+                        char tag = k[1];
+
+                        if (tag == 'p' || tag == 'e') {
+                            tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
+                        } else {
+                            tags.emplace(tag, FilterSetBytes(v, false, 0, MAX_INDEXED_TAG_VAL_SIZE));
+                        }
                     } else {
-                        tags.emplace(tag, FilterSetBytes(v, false, 0, MAX_INDEXED_TAG_VAL_SIZE));
+                        throw herr("unindexed tag filter");
                     }
-                } else {
-                    throw herr("unindexed tag filter");
+                } catch (std::exception &e) {
+                    throw herr("error parsing ", k, ": ", e.what());
                 }
             } else if (k == "since") {
-                since = v.get_unsigned();
+                since = jsonGetUnsigned(v, "error parsing since");
             } else if (k == "until") {
-                until = v.get_unsigned();
+                until = jsonGetUnsigned(v, "error parsing until");
             } else if (k == "limit") {
-                limit = v.get_unsigned();
+                limit = jsonGetUnsigned(v, "error parsing limit");
             } else {
-                throw herr("unrecognised filter item");
+                throw herr("unrecognised filter item: ", k);
             }
         }
 
-        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, just prohibit it
+        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, so prevent it from being too large
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 
