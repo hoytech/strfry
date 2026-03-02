@@ -8,31 +8,7 @@
 #include "PackedEvent.h"
 #include "NegentropyFilterCache.h"
 #include "Decompressor.h"
-
-
-
-
-inline bool isReplaceableKind(uint64_t kind) {
-    return (
-        kind == 0 ||
-        kind == 3 ||
-        kind == 41 ||
-        (kind >= 10'000 && kind < 20'000)
-    );
-}
-
-inline bool isParamReplaceableKind(uint64_t kind) {
-    return (
-        (kind >= 30'000 && kind < 40'000)
-    );
-}
-
-inline bool isEphemeralKind(uint64_t kind) {
-    return (
-        (kind >= 20'000 && kind < 30'000)
-    );
-}
-
+#include "EventUtils.h"
 
 
 
