@@ -45,6 +45,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     flat_hash_map<uint64_t, Connection*> connIdToConnection;
     uint64_t nextConnectionId = 1;
     bool gracefulShutdown = false;
+    uint64_t serverStart = ::time(nullptr);
 
     std::string tempBuf;
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
@@ -102,8 +103,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
-    auto getLandingPageHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
-        if (ver != cfg().version()) {
+    auto getLandingPageHttpResponse = [&supportedNips, &serverStart, ver = uint64_t(0), lastUpdate = uint64_t(0), rendered = std::string("")]() mutable {
+        if (ver != cfg().version() || (uint64_t)::time(nullptr) - lastUpdate > 3600) {
             auto maybeUrl = [](std::string_view inp){
                 if (inp.starts_with("http://") || inp.starts_with("https://")) {
                     std::string output = "<a href=\"";
@@ -121,10 +122,12 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 std::string version;
                 uint64_t negentropy;
                 std::function<std::string(std::string_view)> maybeUrl;
-            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60, maybeUrl };
+                uint64_t uptime;
+            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60, maybeUrl, (uint64_t)::time(nullptr) - serverStart };
 
             rendered = preGenerateHttpResponse("text/html", ::strfrytmpl::landing(ctx).str);
             ver = cfg().version();
+            lastUpdate = ::time(nullptr);
         }
 
         return std::string_view(rendered); // memory only valid until next call
