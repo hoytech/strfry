@@ -128,3 +128,22 @@ config:
   - name: relay__negentropy__maxSyncEvents
     desc: "Maximum records that sync will process before returning an error"
     default: 1000000
+
+  - name: relay__filterValidation__enabled
+    desc: "Enable strict filter validation for REQ messages"
+    default: false
+  - name: relay__filterValidation__maxFiltersPerReq
+    desc: "Maximum number of filters allowed per REQ (when validation enabled)"
+    default: 3
+  - name: relay__filterValidation__minFiltersPerReq
+    desc: "Minimum number of filters required per REQ (when validation enabled)"
+    default: 1
+  - name: relay__filterValidation__maxKindsPerFilter
+    desc: "Maximum number of kinds allowed per filter (when validation enabled)"
+    default: 3
+  - name: relay__filterValidation__allowedKinds
+    desc: "Comma-separated list of allowed kinds (empty = all allowed)"
+    default: ""
+  - name: relay__filterValidation__requireAuthorOrTag
+    desc: "Require at least one author, p tag, or e tag in each filter"
+    default: false

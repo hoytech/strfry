@@ -147,7 +147,15 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao:
         maxFilterLimit = cfg().relay__maxFilterLimit;
     }
 
-    Subscription sub(connId, outSubIdStr, NostrFilterGroup(arr, maxFilterLimit), countOnly);
+    NostrFilterGroup filterGroup(arr, maxFilterLimit);
+
+    try {
+        filterGroup.validateFilters();
+    } catch (std::exception &e) {
+        throw herr("filter validation failed: ", e.what());
+    }
+
+    Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
 }
