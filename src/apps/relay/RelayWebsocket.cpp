@@ -104,11 +104,24 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     auto getLandingPageHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
+            auto maybeUrl = [](std::string_view inp){
+                if (inp.starts_with("http://") || inp.starts_with("https://")) {
+                    std::string output = "<a href=\"";
+                    output += templarInternal::htmlEscape(inp, true);
+                    output += "\">";
+                    output += templarInternal::htmlEscape(inp, false);
+                    output += "</a>";
+                    return output;
+                }
+                return templarInternal::htmlEscape(inp, false);
+            };
+
             struct {
                 std::string supportedNips;
                 std::string version;
                 uint64_t negentropy;
-            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60 };
+                std::function<std::string(std::string_view)> maybeUrl;
+            } ctx = { tao::json::to_string(supportedNips()), APP_GIT_VERSION, negentropy::PROTOCOL_VERSION - 0x60, maybeUrl };
 
             rendered = preGenerateHttpResponse("text/html", ::strfrytmpl::landing(ctx).str);
             ver = cfg().version();

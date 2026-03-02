@@ -1,5 +1,6 @@
 <html>
     <head>
+        <title>strfry: a nostr relay</title>
         <style>
             /* CSS Reset */
 
@@ -116,24 +117,49 @@
                 <th colspan="2">Relay</th>
             </tr>
 
-            <tr>
+            <tr> ?(cfg().relay__info__name.size())
                 <td>Name</td>
                 <td>$(cfg().relay__info__name)</td>
             </tr>
 
-            <tr>
+            <tr> ?(cfg().relay__info__description.size())
                 <td>Description</td>
                 <td>$(cfg().relay__info__description)</td>
             </tr>
 
-            <tr>
+            <tr> ?(cfg().relay__info__pubkey.size())
                 <td>Pubkey</td>
                 <td>$(cfg().relay__info__pubkey)</td>
             </tr>
 
-            <tr>
+            <tr> ?(cfg().relay__info__self.size())
+                <td>Self (relay's own pubkey)</td>
+                <td>$(cfg().relay__info__self)</td>
+            </tr>
+
+            <tr> ?(cfg().relay__info__contact.size())
                 <td>Contact</td>
-                <td>$(cfg().relay__info__contact)</td>
+                <td>$!(ctx.maybeUrl(cfg().relay__info__contact))</td>
+            </tr>
+
+            <tr> ?(cfg().relay__info__icon.size())
+                <td>Icon</td>
+                <td>$!(ctx.maybeUrl(cfg().relay__info__icon))</td>
+            </tr>
+
+            <tr> ?(cfg().relay__info__banner.size())
+                <td>Banner</td>
+                <td>$!(ctx.maybeUrl(cfg().relay__info__banner))</td>
+            </tr>
+
+            <tr> ?(cfg().relay__info__privacy.size())
+                <td>Privacy</td>
+                <td>$!(ctx.maybeUrl(cfg().relay__info__privacy))</td>
+            </tr>
+
+            <tr> ?(cfg().relay__info__terms.size())
+                <td>Terms</td>
+                <td>$!(ctx.maybeUrl(cfg().relay__info__terms))</td>
             </tr>
         </table>
 
