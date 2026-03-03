@@ -27,7 +27,9 @@ NEXT
   * Better error reporting/handling when strfry.conf is malformed.
   * Print ANSI strfry logo when strfry is run with no arguments.
     Artwork thanks to Zen GT.
-  * Serve a strfry logo for /favicon.ico
+  * HTML landing page improvements: Only show relay info fields that have
+    configured values, make URLs actual links, render pubkeys as npubs instead
+    of 32-byte hex, show relay uptime in days, add a favicon.ico.
 
 1.0.4
   * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
