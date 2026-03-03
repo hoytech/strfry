@@ -12,7 +12,7 @@ R"(
     Display LMDB stats for the search index tables.
 
     Usage:
-      search-index-stats
+      search_index_stats
 )";
 
 static std::string humanSize(uint64_t bytes) {

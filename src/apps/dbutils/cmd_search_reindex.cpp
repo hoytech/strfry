@@ -14,7 +14,7 @@ R"(
     Drops existing search index and re-indexes all events from EventPayload.
 
     Usage:
-      search-reindex [--batch-size=<n>] [--restart]
+      search_reindex [--batch-size=<n>] [--restart]
 
     Options:
       --batch-size=<n>  Number of events to index per batch [default: 1000]

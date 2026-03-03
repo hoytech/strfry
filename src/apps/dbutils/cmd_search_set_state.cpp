@@ -10,7 +10,7 @@ R"(
     Manually set the search index progress record.
 
     Usage:
-      search-set-state --lev-id=<n> [--index-version=<n>] [--allow-lower] [--in-progress]
+      search_set_state --lev-id=<n> [--index-version=<n>] [--allow-lower] [--in-progress]
 
     Options:
       --lev-id=<n>         LevId to record as last indexed (required)
