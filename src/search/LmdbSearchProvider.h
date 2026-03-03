@@ -11,6 +11,7 @@
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <functional>
 
 
 // Pack posting: [levId:48][tf:16] as host-endian uint64
@@ -135,7 +136,24 @@ private:
         return score;
     }
 
+    void persistSearchState(lmdb::txn &txn, uint64_t lastIndexedLevId, uint64_t indexVersion) const {
+        auto stateView = env.lookup_SearchState(txn, 1);
+        if (!stateView) {
+            env.insert_SearchState(txn, lastIndexedLevId, indexVersion);
+            return;
+        }
+
+        defaultDb::environment::Updates_SearchState upd;
+        upd.lastIndexedLevId = lastIndexedLevId;
+        if (stateView->indexVersion() != indexVersion) {
+            upd.indexVersion = indexVersion;
+        }
+        env.update_SearchState(txn, *stateView, upd);
+    }
+
 public:
+    static constexpr uint64_t kIndexVersion = 1;
+
     bool healthy() const override {
         if (!cfg().relay__search__enabled) return false;
         if (cfg().relay__search__backend != "lmdb") return false;
@@ -168,69 +186,80 @@ public:
         }
     }
 
-    void indexEvent(uint64_t levId, std::string_view json, uint64_t kind, uint64_t created_at) override {
-        if (!shouldIndexKind(kind)) return;
+    bool indexEventWithTxnHook(uint64_t levId, std::string_view json, uint64_t kind, uint64_t created_at,
+                               const std::function<void(lmdb::txn &)> &txnHook = {}) {
+        if (!shouldIndexKind(kind)) return false;
 
-        try {
-            auto eventJson = tao::json::from_string(json);
+        auto eventJson = tao::json::from_string(json);
 
-            std::string text = Tokenizer::extractText(eventJson);
-            if (text.empty()) return;
+        std::string text = Tokenizer::extractText(eventJson);
+        if (text.empty()) return false;
 
-            auto tokens = Tokenizer::tokenize(text);
-            if (tokens.empty()) return;
+        auto tokens = Tokenizer::tokenize(text);
+        if (tokens.empty()) return false;
 
-            uint16_t docLen = 0;
-            for (const auto &token : tokens) {
-                docLen += token.tf;
+        uint16_t docLen = 0;
+        for (const auto &token : tokens) {
+            docLen += token.tf;
+        }
+        if (docLen > 65535) docLen = 65535; // Clamp to uint16 max
+
+        auto txn = lmdb::txn::begin(env.lmdb_env);
+
+        // Skip if already indexed (on-write path may have indexed while catch-up is behind)
+        std::string_view existingMeta;
+        if (env.dbi_SearchDocMeta.get(txn, lmdb::to_sv<uint64_t>(levId), existingMeta)) {
+            if (txnHook) txnHook(txn);
+            txn.commit();
+            return true;
+        }
+
+        uint64_t docMetaPacked = packDocMeta(docLen, static_cast<uint16_t>(kind));
+        env.dbi_SearchDocMeta.put(txn, lmdb::to_sv<uint64_t>(levId),
+                                  std::string_view(reinterpret_cast<const char*>(&docMetaPacked), sizeof(docMetaPacked)));
+
+        uint64_t maxPostings = cfg().relay__search__maxPostingsPerToken;
+        auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
+
+        for (const auto &token : tokens) {
+            uint64_t posting = packPosting(levId, token.tf);
+            std::string_view postingView(reinterpret_cast<const char*>(&posting), sizeof(posting));
+
+            env.dbi_SearchIndex.put(txn, token.text, postingView, MDB_APPENDDUP);
+
+            uint64_t count = 0;
+            std::string_view key = token.text;
+            std::string_view val;
+
+            if (cursor.get(key, val, MDB_SET)) {
+                do {
+                    count++;
+                } while (cursor.get(key, val, MDB_NEXT_DUP));
             }
-            if (docLen > 65535) docLen = 65535; // Clamp to uint16 max
 
-            auto txn = lmdb::txn::begin(env.lmdb_env);
+            // If over limit, delete (count - maxPostings) oldest entries
+            if (count > maxPostings) {
+                uint64_t toDelete = count - maxPostings;
 
-            uint64_t docMetaPacked = packDocMeta(docLen, static_cast<uint16_t>(kind));
-            env.dbi_SearchDocMeta.put(txn, lmdb::to_sv<uint64_t>(levId),
-                                      std::string_view(reinterpret_cast<const char*>(&docMetaPacked), sizeof(docMetaPacked)));
-
-            uint64_t maxPostings = cfg().relay__search__maxPostingsPerToken;
-            auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
-
-            for (const auto &token : tokens) {
-                uint64_t posting = packPosting(levId, token.tf);
-                std::string_view postingView(reinterpret_cast<const char*>(&posting), sizeof(posting));
-
-                env.dbi_SearchIndex.put(txn, token.text, postingView, MDB_APPENDDUP);
-
-                uint64_t count = 0;
-                std::string_view key = token.text;
-                std::string_view val;
-
+                // Re-position cursor to first duplicate and delete oldest
+                key = token.text; // Reset key for MDB_SET
                 if (cursor.get(key, val, MDB_SET)) {
-                    do {
-                        count++;
-                    } while (cursor.get(key, val, MDB_NEXT_DUP));
-                }
-
-                // If over limit, delete (count - maxPostings) oldest entries
-                if (count > maxPostings) {
-                    uint64_t toDelete = count - maxPostings;
-
-                    // Re-position cursor to first duplicate and delete oldest
-                    key = token.text; // Reset key for MDB_SET
-                    if (cursor.get(key, val, MDB_SET)) {
-                        for (uint64_t i = 0; i < toDelete; i++) {
-                            cursor.del(); // Delete current (oldest by levId due to APPENDDUP ordering)
-                            if (i + 1 < toDelete && !cursor.get(key, val, MDB_NEXT_DUP)) break;
-                        }
+                    for (uint64_t i = 0; i < toDelete; i++) {
+                        cursor.del(); // Delete current (oldest by levId due to APPENDDUP ordering)
+                        if (i + 1 < toDelete && !cursor.get(key, val, MDB_NEXT_DUP)) break;
                     }
                 }
             }
-
-            txn.commit();
-
-        } catch (std::exception &e) {
-            LE << "Failed to index event levId=" << levId << ": " << e.what();
         }
+
+        if (txnHook) txnHook(txn);
+
+        txn.commit();
+        return true;
+    }
+
+    void indexEvent(uint64_t levId, std::string_view json, uint64_t kind, uint64_t created_at) override {
+        indexEventWithTxnHook(levId, json, kind, created_at, nullptr);
     }
 
     void deleteEvent(uint64_t levId) override {
@@ -540,13 +569,19 @@ public:
 
                 // Index batch
                 uint64_t indexed = 0;
+                uint64_t skipped = 0;
+                uint64_t lastProcessedLevId = lastIndexedLevId;
+
                 for (uint64_t levId = startLevId; levId <= endLevId && running; levId++) {
+                    lastProcessedLevId = levId; // always track progress
                     try {
                         // Read and decode event from EventPayload
                         auto rtxn = lmdb::txn::begin(env.lmdb_env, nullptr, MDB_RDONLY);
                         std::string_view eventPayload;
                         if (!env.dbi_EventPayload.get(rtxn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
-                            continue; // Event doesn't exist
+                            rtxn.commit();
+                            skipped++;
+                            continue; // Event doesn't exist — lastProcessedLevId already advanced
                         }
 
                         // Decode event payload (handles compression)
@@ -558,36 +593,33 @@ public:
                         uint64_t kind = eventJson.at("kind").get_unsigned();
                         uint64_t created_at = eventJson.at("created_at").get_unsigned();
 
-                        // Index the event
-                        indexEvent(levId, json, kind, created_at);
-                        indexed++;
+                        // Index the event and persist progress inside the same transaction when data was written
+                        bool wrote = indexEventWithTxnHook(levId, json, kind, created_at, [this, levId](lmdb::txn &txn) {
+                            persistSearchState(txn, levId, kIndexVersion);
+                        });
 
+                        if (wrote) {
+                            indexed++;
+                        } else {
+                            skipped++;
+                        }
                     } catch (std::exception &e) {
                         LE << "Failed to index event during catch-up levId=" << levId << ": " << e.what();
+                        skipped++;
                     }
                 }
 
-                // Update SearchState with new lastIndexedLevId
-                try {
+                // Single batch-end persist covers all skipped/missing trailing events
+                if (lastProcessedLevId > lastIndexedLevId) {
                     auto wtxn = lmdb::txn::begin(env.lmdb_env);
-                    auto stateView = env.lookup_SearchState(wtxn, 1);
-                    if (!stateView) {
-                        // Create initial state (lastIndexedLevId, indexVersion)
-                        env.insert_SearchState(wtxn, endLevId, 1);
-                    } else {
-                        // Update existing state
-                        defaultDb::environment::Updates_SearchState upd;
-                        upd.lastIndexedLevId = endLevId;
-                        env.update_SearchState(wtxn, *stateView, upd);
-                    }
+                    persistSearchState(wtxn, lastProcessedLevId, kIndexVersion);
                     wtxn.commit();
-
-                    if (indexed > 0) {
-                        LI << "Search indexer: indexed " << indexed << " events, now at levId " << endLevId;
-                    }
-                } catch (std::exception &e) {
-                    LE << "Failed to update SearchState: " << e.what();
                 }
+
+                // Always log progress so it doesn't appear stuck
+                LI << "Search indexer: indexed=" << indexed << " skipped=" << skipped
+                   << " range=[" << startLevId << ".." << lastProcessedLevId << "]"
+                   << " head=" << mostRecentLevId;
 
                 // Small sleep to avoid busy loop
                 if (endLevId >= mostRecentLevId) {
