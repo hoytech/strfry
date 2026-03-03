@@ -206,6 +206,14 @@ public:
 
         auto txn = lmdb::txn::begin(env.lmdb_env);
 
+        // Skip if already indexed (on-write path may have indexed while catch-up is behind)
+        std::string_view existingMeta;
+        if (env.dbi_SearchDocMeta.get(txn, lmdb::to_sv<uint64_t>(levId), existingMeta)) {
+            if (txnHook) txnHook(txn);
+            txn.commit();
+            return true;
+        }
+
         uint64_t docMetaPacked = packDocMeta(docLen, static_cast<uint16_t>(kind));
         env.dbi_SearchDocMeta.put(txn, lmdb::to_sv<uint64_t>(levId),
                                   std::string_view(reinterpret_cast<const char*>(&docMetaPacked), sizeof(docMetaPacked)));
@@ -561,13 +569,19 @@ public:
 
                 // Index batch
                 uint64_t indexed = 0;
+                uint64_t skipped = 0;
+                uint64_t lastProcessedLevId = lastIndexedLevId;
+
                 for (uint64_t levId = startLevId; levId <= endLevId && running; levId++) {
+                    lastProcessedLevId = levId; // always track progress
                     try {
                         // Read and decode event from EventPayload
                         auto rtxn = lmdb::txn::begin(env.lmdb_env, nullptr, MDB_RDONLY);
                         std::string_view eventPayload;
                         if (!env.dbi_EventPayload.get(rtxn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
-                            continue; // Event doesn't exist
+                            rtxn.commit();
+                            skipped++;
+                            continue; // Event doesn't exist — lastProcessedLevId already advanced
                         }
 
                         // Decode event payload (handles compression)
@@ -587,22 +601,25 @@ public:
                         if (wrote) {
                             indexed++;
                         } else {
-                            auto wtxn = lmdb::txn::begin(env.lmdb_env);
-                            persistSearchState(wtxn, levId, kIndexVersion);
-                            wtxn.commit();
+                            skipped++;
                         }
                     } catch (std::exception &e) {
                         LE << "Failed to index event during catch-up levId=" << levId << ": " << e.what();
-
-                        auto wtxn = lmdb::txn::begin(env.lmdb_env);
-                        persistSearchState(wtxn, levId, kIndexVersion);
-                        wtxn.commit();
+                        skipped++;
                     }
                 }
 
-                if (indexed > 0) {
-                    LI << "Search indexer: indexed " << indexed << " events, now at levId " << endLevId;
+                // Single batch-end persist covers all skipped/missing trailing events
+                if (lastProcessedLevId > lastIndexedLevId) {
+                    auto wtxn = lmdb::txn::begin(env.lmdb_env);
+                    persistSearchState(wtxn, lastProcessedLevId, kIndexVersion);
+                    wtxn.commit();
                 }
+
+                // Always log progress so it doesn't appear stuck
+                LI << "Search indexer: indexed=" << indexed << " skipped=" << skipped
+                   << " range=[" << startLevId << ".." << lastProcessedLevId << "]"
+                   << " head=" << mostRecentLevId;
 
                 // Small sleep to avoid busy loop
                 if (endLevId >= mostRecentLevId) {
