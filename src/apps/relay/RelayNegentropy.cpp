@@ -112,6 +112,8 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             return;
         }
 
+        LI << "[" << connId << "] negentropy SEND session=" << subId.sv() << " bytesOut=" << msg.size();
+
         PROM_INC_RELAY_MSG("NEG-MSG");
         sendToConn(connId, tao::json::to_string(tao::json::value::array({
             "NEG-MSG",
@@ -142,11 +144,11 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         auto *view = std::get_if<NegentropyViews::MemoryView>(userView);
         if (!view) throw herr("bad variant, expected memory view");
 
-        LI << "[" << sub.connId << "] Negentropy query matched " << view->levIds.size() << " events in "
+        LI << "[" << sub.connId << "] negentropy QUERY matched " << view->levIds.size() << " events in "
            << (hoytech::curr_time_us() - view->startTime) << "us";
 
         if (view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
-            LI << "[" << sub.connId << "] Negentropy query size exceeded " << cfg().relay__negentropy__maxSyncEvents;
+            LI << "[" << sub.connId << "] negentropy QUERY size exceeded " << cfg().relay__negentropy__maxSyncEvents;
 
             PROM_INC_RELAY_MSG("NEG-ERR");
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
@@ -202,6 +204,8 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     return true;
                 });
 
+                LI << "[" << connId << "] negentropy NEW session=" << subId.sv() << " bytesIn=" << msg->negPayload.size() << " tree=" << (treeId ? std::to_string(*treeId) : "NONE");
+
                 if (treeId) {
                     negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, *treeId);
 
@@ -238,6 +242,8 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     continue;
                 }
 
+                LI << "[" << msg->connId << "] negentropy RECV session=" << msg->subId.sv() << " bytesIn=" << msg->negPayload.size();
+
                 if (auto *view = std::get_if<NegentropyViews::MemoryView>(userView)) {
                     if (!view->storageVector.sealed) {
                         sendNoticeError(msg->connId, "negentropy error: got NEG-MSG before NEG-OPEN complete");
@@ -253,6 +259,8 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     handleReconcile(msg->connId, msg->subId, subStorage, msg->negPayload);
                 }
             } else if (auto msg = std::get_if<MsgNegentropy::NegClose>(&newMsg.msg)) {
+                LI << "[" << msg->connId << "] negentropy CLOSE session=" << msg->subId.sv();
+
                 queries.removeSub(msg->connId, msg->subId);
                 views.removeView(msg->connId, msg->subId);
             } else if (auto msg = std::get_if<MsgNegentropy::CloseConn>(&newMsg.msg)) {
