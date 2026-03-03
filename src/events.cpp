@@ -353,8 +353,8 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
 
                                     if (isEventABeforeEventB(otherPacked, packed)) {
                                         if (otherPacked.kind() != 5) {
-                                            if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(tagVal);
-                                            levIdsToDelete.push_back(lmdb::from_sv<uint64_t>(v));
+                                            if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(otherPacked.id());
+                                            levIdsToDelete.push_back(otherEv.primaryKeyId);
                                         }
                                     }
 
