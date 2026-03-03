@@ -6,6 +6,8 @@ Tests should be run from the *root* of the project.
 
     perl test/writeTest.pl
 
+Note that this script relies on [`nostril`](https://github.com/jb55/nostril) being installed in your path.
+
 ## Fuzz tests
 
 Note that these tests need a well populated DB. For best coverage, use the [wellordered 500k](https://wiki.wellorder.net/wiki/nostr-datasets/) data-set:

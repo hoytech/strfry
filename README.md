@@ -12,6 +12,7 @@ strfry is a relay for the [nostr protocol](https://github.com/nostr-protocol/nos
 * Durable writes: The relay never returns an `OK` until an event has been confirmed as committed to the DB
 * Built-in support for real-time streaming (up/down/both) events from remote relays, and bulk import/export of events from/to jsonl files
 * [negentropy](https://github.com/hoytech/negentropy)-based set reconcilliation for efficient syncing with clients or between relays, accurate counting of events between relays, and more
+* Prometheus metrics endpoint for monitoring relay activity (client/relay messages by verb, events by kind)
 
 If you are using strfry, please [join our telegram chat](https://t.me/strfry_users). Hopefully soon we'll migrate this to nostr.
 
@@ -31,6 +32,8 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
         * [Fried Exports](#fried-exports)
     * [Stream](#stream)
     * [Sync](#sync)
+* [Monitoring](#monitoring)
+    * [Prometheus Metrics](#prometheus-metrics)
 * [Advanced](#advanced)
     * [DB Upgrade](#db-upgrade)
     * [DB Compaction](#db-compaction)
@@ -182,6 +185,34 @@ Instead of a "full DB" sync, you can also sync the result of a nostr filter (or 
 Warning: Syncing can consume a lot of memory and bandwidth if the DBs are highly divergent (for example if your local DB is empty and your filter matches many events).
 
 By default strfry keeps a precomputed BTree to speed up full-DB syncs. You can also cache BTrees for arbitrary filters, see the [syncing](#syncing) section for more details.
+
+
+
+## Monitoring
+
+### Prometheus Metrics
+
+strfry includes built-in Prometheus metrics support for monitoring relay activity. Metrics are exposed via HTTP at the `/metrics` endpoint on the same port as the relay WebSocket server.
+
+For example, if your relay is running on `localhost:7777`, you can access metrics at `http://localhost:7777/metrics`
+
+The following metrics are available:
+
+* **`nostr_client_messages_total{verb}`** - Total number of messages received from clients, broken down by verb (EVENT, REQ, CLOSE, NEG-OPEN, NEG-MSG, NEG-CLOSE)
+* **`nostr_relay_messages_total{verb}`** - Total number of messages sent to clients, broken down by verb (EVENT, OK, EOSE, NOTICE, NEG-MSG, NEG-ERR)
+* **`nostr_events_total{kind}`** - Total number of events processed, broken down by event kind (0, 1, 3, 4, etc.)
+
+To scrape these metrics with Prometheus, add a job to your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'strfry'
+    static_configs:
+      - targets: ['localhost:7777']
+    metrics_path: '/metrics'
+```
+
+See the [Prometheus metrics documentation](docs/prometheus-metrics.md) for detailed information and example Grafana queries.
 
 
 

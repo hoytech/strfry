@@ -2,16 +2,18 @@
 
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
+#include "Favicon.h"
 
 
 
-static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content) {
+static std::string preGenerateHttpResponse(const std::string &contentType, const std::string &content, const std::string &extraHeaders = "") {
     std::string output = "HTTP/1.1 200 OK\r\n";
     output += std::string("Content-Type: ") + contentType + "\r\n";
     output += "Access-Control-Allow-Origin: *\r\n";
     output += "Connection: keep-alive\r\n";
     output += "Server: strfry\r\n";
     output += std::string("Content-Length: ") + std::to_string(content.size()) + "\r\n";
+    output += extraHeaders;
     output += "\r\n";
     output += content;
     return output;
@@ -48,23 +50,22 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
 
 
-    auto supportedNips = [this]{
-        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70, 77 });
+    auto supportedNips = []{
+        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70 });
 
-        // Add NIP-50 (search) if provider is healthy
-        // healthy() checks: enabled, backend configured, and index caught up (within 1000 events of head)
-        if (searchProvider && searchProvider->healthy()) {
-            auto &arr = output.get_array();
-            arr.push_back(50);
-            std::sort(arr.begin(), arr.end());
-        }
+        if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
+        if (cfg().relay__negentropy__enabled) output.push_back(77);
+        if (searchProvider && searchProvider->healthy()) output.push_back(50);
 
+        std::sort(output.get_array().begin(), output.get_array().end());
         if (cfg().relay__info__nips.size() == 0) return output;
 
         try {
-            output = tao::json::from_string(cfg().relay__info__nips);
+            auto parsed = tao::json::from_string(cfg().relay__info__nips);
+            if (!parsed.is_array()) throw herr("not an array");
+            output = parsed;
         } catch (std::exception &e) {
-            LE << "Unable to parse config param relay.info.nips: " << e.what();
+            LE << "Unable to parse config param relay.info.nips, using default: " << e.what();
         }
 
         return output;
@@ -89,6 +90,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (cfg().relay__info__contact.size()) nip11["contact"] = cfg().relay__info__contact;
             if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = cfg().relay__info__pubkey;
             if (cfg().relay__info__icon.size()) nip11["icon"] = cfg().relay__info__icon;
+            if (cfg().relay__info__banner.size()) nip11["banner"] = cfg().relay__info__banner;
+            if (cfg().relay__info__self.size()) nip11["self"] = cfg().relay__info__self;
+            if (cfg().relay__info__privacy.size()) nip11["privacy_policy"] = cfg().relay__info__privacy;
+            if (cfg().relay__info__terms.size()) nip11["terms_of_service"] = cfg().relay__info__terms;
 
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nip11));
             ver = cfg().version();
@@ -166,6 +171,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
+    std::string faviconResponse = preGenerateHttpResponse("image/x-icon", favicon(), "Cache-Control: public, max-age=31536000\r\n");
+
 
     {
         int extensionOptions = 0;
@@ -184,12 +191,18 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         std::string host = req.getHeader("host").toString();
         std::string url = req.getUrl().toString();
 
-        if (url == "/.well-known/nodeinfo") {
+        if (url == "/metrics") {
+            auto metrics = PrometheusMetrics::getInstance().render();
+            auto response = preGenerateHttpResponse("text/plain; version=0.0.4", metrics);
+            res->write(response.data(), response.size());
+        } else if (url == "/.well-known/nodeinfo") {
             auto nodeInfo = getNodeInfoHttpResponse(host);
             res->write(nodeInfo.data(), nodeInfo.size());
         } else if (url == "/nodeinfo/2.1") {
             auto nodeInfo = getNodeInfo21HttpResponse();
             res->write(nodeInfo.data(), nodeInfo.size());
+        } else if (url == "/favicon.ico") {
+            res->write(faviconResponse.data(), faviconResponse.size());
         } else if (req.getHeader("accept").toStringView() == "application/nostr+json") {
             auto info = getServerInfoHttpResponse();
             res->write(info.data(), info.size());
@@ -300,6 +313,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 tempBuf += "]";
 
                 for (auto &item : msg->list) {
+                    PROM_INC_RELAY_MSG("EVENT");
                     auto subIdSv = item.subId.sv();
                     auto *p = tempBuf.data() + MAX_SUBID_SIZE - subIdSv.size();
                     memcpy(p, "[\"EVENT\",\"", 10);

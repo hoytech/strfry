@@ -2,11 +2,39 @@
 #include <sys/resource.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+
+#include <iostream>
 
 #include "golpe.h"
 
 #include <negentropy/storage/BTreeLMDB.h>
 
+#include "AnsiLogo.h"
+#include "app_git_version.h"
+
+
+
+void onPreStartup(int argc, char **argv) {
+    if (argc > 1) return;
+
+    if (isatty(fileno(stdout))) {
+        std::cout << strfryAnsiLogo() << "\x1b[!p";
+    }
+
+    std::cout << "strfry is a relay for the nostr protocol\n\n";
+
+    std::cout << "  Website: https://github.com/hoytech/strfry\n";
+    std::cout << "  Version: " << APP_GIT_VERSION << "\n";
+
+    std::cout << "\n";
+
+    std::cout << "To see sub-commands, run: strfry --help\n";
+
+    std::cout << "\n";
+
+    ::exit(1);
+}
 
 static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
     auto dbTooOld = [&](uint64_t ver) {

@@ -4,6 +4,7 @@
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     Decompressor decomp;
+    FilterValidator filterValidator;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -26,6 +27,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         auto &cmd = jsonGetString(arr[0], "first element not a command like REQ");
 
                         if (cmd == "EVENT") {
+                            PROM_INC_CLIENT_MSG(cmd);
                             if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
 
                             try {
@@ -35,15 +37,20 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                                false, std::string("invalid: ") + e.what());
                                 if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
                             }
-                        } else if (cmd == "REQ") {
+                        } else if (cmd == "REQ" || cmd == "COUNT") {
+                            PROM_INC_CLIENT_MSG(cmd);
                             if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
 
+                            std::string subIdStr;
+
                             try {
-                                ingesterProcessReq(txn, msg->connId, arr);
+                                ingesterProcessReq(txn, filterValidator, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
-                                sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
+                                if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
+                                else sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
                             }
                         } else if (cmd == "CLOSE") {
+                            PROM_INC_CLIENT_MSG(cmd);
                             if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
 
                             try {
@@ -52,6 +59,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
                             }
                         } else if (cmd.starts_with("NEG-")) {
+                            PROM_INC_CLIENT_MSG(cmd);
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
                             try {
@@ -91,6 +99,9 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     parseAndVerifyEvent(origJson, secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
+    
+    // Track event kind metrics
+    PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
 
     {
         bool foundProtected = false;
@@ -122,11 +133,30 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
     output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
 }
 
-void RelayServer::ingesterProcessReq(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessReq(lmdb::txn &txn, FilterValidator &filterValidator, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
+    outSubIdStr = jsonGetString(arr[1], "subscription id was not a string");
     if (arr.get_array().size() > 2 + cfg().relay__maxReqFilterSize) throw herr("arr too big");
 
-    Subscription sub(connId, jsonGetString(arr[1], "REQ subscription id was not a string"), NostrFilterGroup(arr));
+    uint64_t maxFilterLimit;
+
+    if (countOnly) {
+        // + 1 so we can distinguish exact count versus limit exceeded
+        maxFilterLimit = cfg().relay__maxFilterLimitCount + 1;
+        if (maxFilterLimit == 1) throw herr("COUNT disabled");
+    } else {
+        maxFilterLimit = cfg().relay__maxFilterLimit;
+    }
+
+    NostrFilterGroup filterGroup(arr, maxFilterLimit);
+
+    try {
+        filterValidator.validate(filterGroup);
+    } catch (std::exception &e) {
+        throw herr("filter validation failed: ", e.what());
+    }
+
+    Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
 }
