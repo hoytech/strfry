@@ -17,6 +17,7 @@ NEXT
   * Implement deletion of parameterised replaceable events using a-tags in
     kind 5 events, as described in NIP-09.
   * Better error messages for incorrectly formed REQ filters.
+  * Improve relay's logging of negentropy activity.
   * Bugfix: No longer attempt to print a stacktrace when we are killed. This
     relied on non-signal safe behaviour in the loguru library, which could cause
     deadlocks when attempting to kill a busy strfry process. (reported by jb55)
