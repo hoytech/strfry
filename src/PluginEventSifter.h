@@ -12,6 +12,8 @@
 
 #include <memory>
 
+#include "hoytech/stream.h"
+
 #include "golpe.h"
 
 #include "events.h"
@@ -32,15 +34,13 @@ enum class PluginEventSifterResult {
 struct PluginEventSifter {
     struct RunningPlugin {
         pid_t pid;
-        int rfd;
-        int wfd;
+        hoytech::StreamReader streamReader;
+        hoytech::StreamWriter streamWriter;
         std::string currPluginCmd;
         struct timespec lastModTime;
-        std::string readBuf;
 
-        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginCmd) : pid(pid), rfd(rfd), wfd(wfd), currPluginCmd(currPluginCmd) {
-            setNonBlocking(rfd);
-            setNonBlocking(wfd);
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginCmd) : pid(pid), streamReader(rfd), streamWriter(wfd), currPluginCmd(currPluginCmd) {
+            streamReader.setMaxRecordSize(8192);
 
             if (currPluginCmd.find(' ') == std::string::npos) {
                 struct stat statbuf;
@@ -50,8 +50,6 @@ struct PluginEventSifter {
         }
 
         ~RunningPlugin() {
-            ::close(rfd);
-            ::close(wfd);
             ::kill(pid, SIGTERM);
             ::waitpid(pid, nullptr, 0);
         }
@@ -94,7 +92,7 @@ struct PluginEventSifter {
             output += "\n";
 
             try {
-                writeWithTimeout(running->wfd, output, cfg().relay__writePolicy__timeoutSeconds * 1'000);
+                running->streamWriter.write(output, cfg().relay__writePolicy__timeoutSeconds * 1'000);
             } catch (std::exception &e) {
                 throw herr("Failed to write event: ", e.what(), ". Request was: ", output);
             }
@@ -105,7 +103,7 @@ struct PluginEventSifter {
                 std::string line;
 
                 try {
-                    line = readLineWithTimeout(running->readBuf, running->rfd, cfg().relay__writePolicy__timeoutSeconds * 1'000, 8192);
+                    line = running->streamReader.read(cfg().relay__writePolicy__timeoutSeconds * 1'000);
                 } catch (std::exception &e) {
                     throw herr("Failed to read response: ", e.what(), ". Request was: ", output);
                 }
@@ -155,7 +153,7 @@ struct PluginEventSifter {
             if (fds[1] != -1) ::close(fds[1]);
         }
 
-        int saveFd(int offset) {
+        int extractFd(int offset) {
             int fd = fds[offset];
             fds[offset] = -1;
             return fd;
@@ -187,6 +185,6 @@ struct PluginEventSifter {
         auto ret = posix_spawnp(&pid, "sh", &file_actions, nullptr, (char* const*)(&argv[0]), environ);
         if (ret) throw herr("posix_spawn failed to invoke '", pluginCmd, "': ", strerror(errno));
 
-        running = make_unique<RunningPlugin>(pid, inPipe.saveFd(0), outPipe.saveFd(1), pluginCmd);
+        running = make_unique<RunningPlugin>(pid, inPipe.extractFd(0), outPipe.extractFd(1), pluginCmd);
     }
 };
