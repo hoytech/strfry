@@ -18,5 +18,8 @@ uint64_t parseUint64(const std::string &s);
 std::string parseIP(const std::string &ip);
 uint64_t getDBVersion(lmdb::txn &txn);
 void exitOnSigPipe();
+void setNonBlocking(int fd);
+void writeWithTimeout(int fd, std::string_view buf, uint64_t timeoutMilliseconds);
+std::string readLineWithTimeout(std::string &buf, int fd, uint64_t timeoutMilliseconds, size_t maxLineSize);
 
 extern lmdb::dbi negentropyDbi;

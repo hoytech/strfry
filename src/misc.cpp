@@ -5,6 +5,7 @@
 #endif
 #include <stdio.h>
 #include <signal.h>
+#include <poll.h>
 
 #include <algorithm>
 #include <string>
@@ -126,4 +127,81 @@ void exitOnSigPipe() {
     memset(&act, 0, sizeof act);
     act.sa_sigaction = [](int, siginfo_t*, void*){ ::exit(1); };
     if (sigaction(SIGPIPE, &act, nullptr)) throw herr("couldn't run sigaction(): ", strerror(errno));
+}
+
+
+
+void setNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) throw herr("couldn't fcntl: ", strerror(errno));
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) throw herr("couldn't set descriptor non-blocking: ", strerror(errno));
+}
+
+void writeWithTimeout(int fd, std::string_view buf, uint64_t timeoutMilliseconds) {
+    uint64_t deadline = hoytech::curr_time_ms() + timeoutMilliseconds;
+
+    while (buf.size() > 0) {
+        uint64_t now = hoytech::curr_time_ms();
+        if (now >= deadline) throw herr("timed out");
+
+        {
+            struct pollfd pollData{fd, POLLOUT, 0};
+            int ret = ::poll(&pollData, 1, deadline - now);
+            if (ret < 0) {
+                if (errno == EINTR) continue;
+                throw herr("poll failure: ", strerror(errno));
+            }
+            if (ret == 0) throw herr("timed out");
+        }
+
+        ssize_t ret = ::write(fd, buf.data(), buf.size());
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            throw herr("write failure: ", strerror(errno));
+        }
+
+        buf = buf.substr(ret);
+    }
+}
+
+std::string readLineWithTimeout(std::string &buf, int fd, uint64_t timeoutMilliseconds, size_t maxLineSize) {
+    uint64_t deadline = hoytech::curr_time_ms() + timeoutMilliseconds;
+
+    while (1) {
+        if (buf.size()) {
+            auto pos = buf.find('\n');
+            if (pos != std::string::npos) {
+                std::string output = buf.substr(0, pos);
+                if (output.size() > maxLineSize) throw herr("maxLineSize exceeded");
+
+                buf = buf.substr(pos + 1);
+                return output;
+            }
+
+            if (buf.size() > maxLineSize) throw herr("maxLineSize exceeded");
+        }
+
+        uint64_t now = hoytech::curr_time_ms();
+        if (now >= deadline) throw herr("timed out");
+
+        {
+            struct pollfd pollData{fd, POLLIN, 0};
+            int ret = ::poll(&pollData, 1, deadline - now);
+            if (ret < 0) {
+                if (errno == EINTR) continue;
+                throw herr("poll failure: ", strerror(errno));
+            }
+            if (ret == 0) throw herr("timed out");
+        }
+
+        char tmp[8192];
+        ssize_t ret = ::read(fd, tmp, sizeof(tmp));
+        if (ret == 0) throw herr("read failure: pipe closed");
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            throw herr("read failure: ", strerror(errno));
+        }
+
+        buf.append(tmp, tmp + ret);
+    }
 }

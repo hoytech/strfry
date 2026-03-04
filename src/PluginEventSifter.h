@@ -4,13 +4,11 @@
 #include <errno.h>
 #include <spawn.h>
 #include <unistd.h>
-#include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
-#include <poll.h>
 
 #include <memory>
 
@@ -34,15 +32,16 @@ enum class PluginEventSifterResult {
 struct PluginEventSifter {
     struct RunningPlugin {
         pid_t pid;
+        int rfd;
+        int wfd;
         std::string currPluginCmd;
         struct timespec lastModTime;
-        FILE *r;
-        FILE *w;
+        std::string readBuf;
 
-        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginCmd) : pid(pid), currPluginCmd(currPluginCmd) {
-            r = fdopen(rfd, "r");
-            w = fdopen(wfd, "w");
-            setlinebuf(w);
+        RunningPlugin(pid_t pid, int rfd, int wfd, std::string currPluginCmd) : pid(pid), rfd(rfd), wfd(wfd), currPluginCmd(currPluginCmd) {
+            setNonBlocking(rfd);
+            setNonBlocking(wfd);
+
             if (currPluginCmd.find(' ') == std::string::npos) {
                 struct stat statbuf;
                 if (stat(currPluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", currPluginCmd);
@@ -51,10 +50,10 @@ struct PluginEventSifter {
         }
 
         ~RunningPlugin() {
-            fclose(r);
-            fclose(w);
-            kill(pid, SIGTERM);
-            waitpid(pid, nullptr, 0);
+            ::close(rfd);
+            ::close(wfd);
+            ::kill(pid, SIGTERM);
+            ::waitpid(pid, nullptr, 0);
         }
     };
 
@@ -94,20 +93,27 @@ struct PluginEventSifter {
             std::string output = tao::json::to_string(request);
             output += "\n";
 
-            if (::fwrite(output.data(), 1, output.size(), running->w) != output.size()) throw herr("error writing to plugin");
+            try {
+                writeWithTimeout(running->wfd, output, cfg().relay__writePolicy__timeoutSeconds * 1'000);
+            } catch (std::exception &e) {
+                throw herr("Failed to write event: ", e.what(), ". Request was: ", output);
+            }
 
             tao::json::value response;
 
             while (1) {
-                waitUntilReadable(running->r, output);
-
-                char buf[8192];
-                if (!::fgets(buf, sizeof(buf), running->r)) throw herr("pipe to plugin was closed (plugin crashed?)");
+                std::string line;
 
                 try {
-                    response = tao::json::from_string(buf);
+                    line = readLineWithTimeout(running->readBuf, running->rfd, cfg().relay__writePolicy__timeoutSeconds * 1'000, 8192);
                 } catch (std::exception &e) {
-                    LW << "Got unparseable line from write policy plugin: " << buf;
+                    throw herr("Failed to read response: ", e.what(), ". Request was: ", output);
+                }
+
+                try {
+                    response = tao::json::from_string(line);
+                } catch (std::exception &e) {
+                    LW << "Got unparseable line from write policy plugin: " << line;
                     continue;
                 }
 
@@ -130,19 +136,6 @@ struct PluginEventSifter {
             return PluginEventSifterResult::Reject;
         }
     }
-
-    void waitUntilReadable(FILE *r, const std::string &req) {
-        struct pollfd pfd{};
-        pfd.fd = fileno(r);
-        pfd.events = POLLIN;
-
-        int ret = poll(&pfd, 1, cfg().relay__writePolicy__timeoutSeconds * 1000);
-
-        if (ret == 0) {
-            throw herr("Timed out reading response from plugin. Request: ", req);
-        }
-    }
-
 
 
     struct Pipe : NonCopyable {
