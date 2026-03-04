@@ -151,6 +151,14 @@ sub genRandomFilterGroup {
                     push @{$f->{'#t'}}, $topics->[int(rand() * @$topics)];
                 }
             }
+
+            # NIP-91: AND tag filter
+            if (rand() < .15) {
+                $f->{'&t'} = [];
+                for (1..(rand()*3)+1) {
+                    push @{$f->{'&t'}}, $topics->[int(rand() * @$topics)];
+                }
+            }
         }
 
         if (rand() < .2) {

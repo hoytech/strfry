@@ -176,8 +176,15 @@ struct ActiveMonitors : NonCopyable {
                     auto res = allAuthors.try_emplace(Bytes32(f.authors->at(i)));
                     res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
                 }
-            } else if (f.tags.size()) {
+            } else if (f.tags.size() || f.andTags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
+                    for (size_t i = 0; i < filterSet.size(); i++) {
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
+                        auto res = allTags.try_emplace(tagSpec);
+                        res.first->second.try_emplace(&f, MonitorItem{m, currEventId});
+                    }
+                }
+                for (const auto &[tagName, filterSet] : f.andTags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
                         auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto res = allTags.try_emplace(tagSpec);
@@ -211,8 +218,16 @@ struct ActiveMonitors : NonCopyable {
                     monSet.erase(&f);
                     if (monSet.empty()) allAuthors.erase(author);
                 }
-            } else if (f.tags.size()) {
+            } else if (f.tags.size() || f.andTags.size()) {
                 for (const auto &[tagName, filterSet] : f.tags) {
+                    for (size_t i = 0; i < filterSet.size(); i++) {
+                        auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
+                        auto &monSet = allTags.at(tagSpec);
+                        monSet.erase(&f);
+                        if (monSet.empty()) allTags.erase(tagSpec);
+                    }
+                }
+                for (const auto &[tagName, filterSet] : f.andTags) {
                     for (size_t i = 0; i < filterSet.size(); i++) {
                         auto &tagSpec = getTagSpec(tagName, filterSet.at(i));
                         auto &monSet = allTags.at(tagSpec);

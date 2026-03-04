@@ -113,6 +113,7 @@ struct NostrFilter {
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
     flat_hash_map<char, FilterSetBytes> tags;
+    flat_hash_map<char, FilterSetBytes> andTags; // NIP-91: AND tag filters
 
     uint64_t since = 0;
     uint64_t until = MAX_U64;
@@ -192,6 +193,29 @@ struct NostrFilter {
                 } catch (std::exception &e) {
                     throw herr("error parsing ", k, ": ", e.what());
                 }
+            } else if (k.starts_with('&')) {
+                checkArray();
+                if (v.get_array().size() == 0) {
+                    neverMatch = true;
+                    continue;
+                }
+                numMajorFields++;
+
+                try {
+                    if (k.size() == 2) {
+                        char tag = k[1];
+
+                        if (tag == 'p' || tag == 'e') {
+                            andTags.emplace(tag, FilterSetBytes(v, true, 32, 32));
+                        } else {
+                            andTags.emplace(tag, FilterSetBytes(v, false, 0, MAX_INDEXED_TAG_VAL_SIZE));
+                        }
+                    } else {
+                        throw herr("unindexed tag filter");
+                    }
+                } catch (std::exception &e) {
+                    throw herr("error parsing ", k, ": ", e.what());
+                }
             } else if (k == "since") {
                 since = jsonGetUnsigned(v, "error parsing since");
             } else if (k == "until") {
@@ -203,11 +227,11 @@ struct NostrFilter {
             }
         }
 
-        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, so prevent it from being too large
+        if (tags.size() + andTags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, so prevent it from being too large
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 
-        indexOnlyScans = (numMajorFields <= 1) || (numMajorFields == 2 && authors && kinds);
+        indexOnlyScans = andTags.size() == 0 && ((numMajorFields <= 1) || (numMajorFields == 2 && authors && kinds));
     }
 
     bool doesMatchTimes(uint64_t created) const {
@@ -239,11 +263,29 @@ struct NostrFilter {
             if (!foundMatch) return false;
         }
 
+        // NIP-91: AND tag filters — ALL values must be present
+        for (const auto &[tag, filt] : andTags) {
+            for (size_t i = 0; i < filt.size(); i++) {
+                std::string val = filt.at(i);
+                bool found = false;
+
+                ev.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == tag && tagVal == val) {
+                        found = true;
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (!found) return false;
+            }
+        }
+
         return true;
     }
 
     bool isFullDbQuery() {
-        return !ids && !authors && !kinds && tags.size() == 0;
+        return !ids && !authors && !kinds && tags.size() == 0 && andTags.size() == 0;
     }
 };
 

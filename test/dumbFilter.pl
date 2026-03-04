@@ -115,5 +115,21 @@ sub doesMatchSingle {
         return 0 if !$found;
     }
 
+    # NIP-91: AND tag filters — ALL values must be present
+    foreach my $key (keys %$filter) {
+        next unless $key =~ /^&(.)$/;
+        my $tagName = $1;
+        foreach my $search (@{ $filter->{$key} }) {
+            my $found;
+            foreach my $tag (@{ $ev->{tags} }) {
+                if ($tag->[0] eq $tagName && $tag->[1] eq $search) {
+                    $found = 1;
+                    last;
+                }
+            }
+            return 0 if !$found;
+        }
+    }
+
     return 1;
 }
