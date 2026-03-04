@@ -1,12 +1,16 @@
+! fix CI
+! update docs
+
+PRs
+  ? NIP-42 AUTH
+  ? NIP-91 AND filters
+  ? fiatjaf's PR about nested protected events
+
 features
-  NIP-42 AUTH
-  archival mode (no deleting of events)
   asynchronous plugins (multiple in flight at once)
   slow-websocket connection detection and back-pressure
   in sync/stream, log bytes up/down and compression ratios
-  ? NIP-45 COUNT
-  ? less verbose default logging
-  ? kill plugin if it times out
+  ? archival mode (no deleting of events)
 
 rate limits (maybe not needed now that we have plugins?)
   event writes per second per ip
