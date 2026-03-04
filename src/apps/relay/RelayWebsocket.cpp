@@ -53,7 +53,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
 
     auto supportedNips = []{
-        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70 });
+        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 28, 40, 70 });
 
         if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
         if (cfg().relay__negentropy__enabled) output.push_back(77);
