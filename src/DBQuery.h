@@ -120,28 +120,37 @@ struct DBScan : NonCopyable {
                     }
                 );
             }
-        } else if (f.tags.size()) {
+        } else if (f.tags.size() || f.andTags.size()) {
             indexDbi = env.dbi_Event__tag;
             desc = "Tag";
 
             char tagName = '\0';
+            bool useAndTag = false;
             {
-                uint64_t numTags = MAX_U64;
+                uint64_t bestSize = MAX_U64;
                 for (const auto &[tn, filterSet] : f.tags) {
-                    if (filterSet.size() < numTags) {
-                        numTags = filterSet.size();
+                    if (filterSet.size() < bestSize) {
+                        bestSize = filterSet.size();
                         tagName = tn;
+                        useAndTag = false;
+                    }
+                }
+                // AND tags only need 1 cursor (all values must match, so scanning for one suffices)
+                for (const auto &[tn, filterSet] : f.andTags) {
+                    if (1 < bestSize) {
+                        bestSize = 1;
+                        tagName = tn;
+                        useAndTag = true;
                     }
                 }
             }
 
-            const auto &filterSet = f.tags.at(tagName);
-
-            cursors.reserve(filterSet.size());
-            for (uint64_t i = 0; i < filterSet.size(); i++) {
+            if (useAndTag) {
+                const auto &filterSet = f.andTags.at(tagName);
+                cursors.reserve(1);
                 std::string search;
                 search += tagName;
-                search += filterSet.at(i);
+                search += filterSet.at(0);
 
                 cursors.emplace_back(
                     search + std::string(8, '\xFF'),
@@ -150,6 +159,23 @@ struct DBScan : NonCopyable {
                         return k.size() == search.size() + 8 && k.starts_with(search) ? KeyMatchResult::Yes : KeyMatchResult::No;
                     }
                 );
+            } else {
+                const auto &filterSet = f.tags.at(tagName);
+
+                cursors.reserve(filterSet.size());
+                for (uint64_t i = 0; i < filterSet.size(); i++) {
+                    std::string search;
+                    search += tagName;
+                    search += filterSet.at(i);
+
+                    cursors.emplace_back(
+                        search + std::string(8, '\xFF'),
+                        MAX_U64,
+                        [search](std::string_view k){
+                            return k.size() == search.size() + 8 && k.starts_with(search) ? KeyMatchResult::Yes : KeyMatchResult::No;
+                        }
+                    );
+                }
             }
         } else if (f.authors && f.kinds && f.authors->size() * f.kinds->size() < 1'000) {
             indexDbi = env.dbi_Event__pubkeyKind;
