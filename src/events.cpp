@@ -1,4 +1,3 @@
-#include <openssl/sha.h>
 #include <negentropy.h>
 
 #include "events.h"
@@ -23,7 +22,7 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
     uint64_t expiration = 0;
 
     if (isReplaceableKind(kind)) {
-        // Prepend virtual d-tag
+        // Prepend virtual d-tag. Any later d-tags will be ignored during indexing
         tagBuilder.add('d', "");
     }
 
@@ -58,7 +57,7 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
     }
 
     if (isParamReplaceableKind(kind)) {
-        // Append virtual d-tag
+        // Append virtual d-tag. Will be overidden by any previous d-tags.
         tagBuilder.add('d', "");
     }
 
@@ -84,10 +83,7 @@ Bytes32 nostrHash(const tao::json::value &origJson) {
 
     std::string encoded = tao::json::to_string(arr);
 
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256(reinterpret_cast<unsigned char*>(encoded.data()), encoded.size(), hash);
-
-    return Bytes32(std::string_view(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH));
+    return sha256(encoded);
 }
 
 bool verifySig(secp256k1_context* ctx, std::string_view sig, std::string_view hash, std::string_view pubkey) {
@@ -280,20 +276,20 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 continue;
             }
 
-            {
+            if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
                 std::optional<std::string> replace;
 
-                if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
-                    packed.foreachTag([&](char tagName, std::string_view tagVal){
-                        if (tagName != 'd') return true;
-                        replace = std::string(tagVal);
-                        return false;
-                    });
-                }
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName != 'd') return true;
+                    replace = std::string(tagVal);
+                    return false;
+                });
 
                 if (replace) {
                     auto searchStr = std::string(packed.pubkey()) + *replace;
                     auto searchKey = makeKey_StringUint64(searchStr, packed.kind());
+
+                    // Check if there is a newer event in the DB, or an older event to replace
 
                     env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                         if (k != searchKey) return false;
@@ -302,28 +298,30 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                         auto otherPacked = PackedEventView(otherEv.buf);
 
                         if (isEventABeforeEventB(packed, otherPacked)) {
-                            ev.status = otherPacked.kind() == 5 ? EventWriteStatus::Deleted : EventWriteStatus::Replaced;
-                            return false; // found more recent replacement event, no need to scan more
+                            ev.status = EventWriteStatus::Replaced;
+                        } else {
+                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                            levIdsToDelete.push_back(otherEv.primaryKeyId);
                         }
 
-                        return true;
+                        return false;
                     }, true);
 
-                    // If event is accepted (pending write), then do a second pass to remove/unindex outdated events
+                    // If param-replaceable event is still accepted (pending write), check if there is a more recent deletion
 
-                    if (ev.status == EventWriteStatus::Pending) {
-                        env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
-                            if (k != searchKey) return false;
+                    if (isParamReplaceableKind(packed.kind()) && ev.status == EventWriteStatus::Pending) {
+                        auto searchStr = sha256(std::to_string(packed.kind()) + ":" + to_hex(packed.pubkey()) + ":" + *replace).str();
+                        auto searchKey = makeKey_StringUint64(searchStr, MAX_U64);
 
-                            auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
-                            auto otherPacked = PackedEventView(otherEv.buf);
+                        env.generic_foreachFull(txn, env.dbi_Event__replaceDeletion, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
+                            ParsedKey_StringUint64 parsedKey(k);
+                            if (parsedKey.s != searchStr) return false;
 
-                            if (otherPacked.kind() != 5) {
-                                if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
-                                levIdsToDelete.push_back(otherEv.primaryKeyId);
+                            if (parsedKey.n >= packed.created_at()) {
+                                ev.status = EventWriteStatus::Deleted;
                             }
 
-                            return true;
+                            return false;
                         }, true);
                     }
                 }
@@ -351,14 +349,12 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                                     auto otherEv = lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v));
                                     auto otherPacked = PackedEventView(otherEv.buf);
 
-                                    if (isEventABeforeEventB(otherPacked, packed)) {
-                                        if (otherPacked.kind() != 5) {
-                                            if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(otherPacked.id());
-                                            levIdsToDelete.push_back(otherEv.primaryKeyId);
-                                        }
+                                    if (otherPacked.created_at() <= packed.created_at()) {
+                                        if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(otherPacked.id());
+                                        levIdsToDelete.push_back(otherEv.primaryKeyId);
                                     }
 
-                                    return true;
+                                    return false;
                                 }, true);
                             }
                         } catch(...) {

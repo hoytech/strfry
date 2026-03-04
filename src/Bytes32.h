@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <string>
 #include <string_view>
 
 #include "golpe.h"
@@ -12,6 +13,10 @@ struct Bytes32 {
     Bytes32(std::string_view s) {
         if (s.size() != 32) throw herr("invalid length for Bytes32");
         memcpy(buf, s.data(), 32);
+    }
+
+    std::string str() const {
+        return std::string((char*)buf, 32);
     }
 
     std::string_view sv() const {

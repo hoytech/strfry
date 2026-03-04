@@ -10,6 +10,8 @@ features:
     templar: true
 
 includes: |
+    #include "golpe.h"
+    #include "global.h"
     #include "PackedEvent.h"
     #include "EventUtils.h"
 
@@ -47,6 +49,8 @@ tables:
         multi: true
       replace: # pubkey, d-tag, kind
         multi: true
+      replaceDeletion: # hash(a-tag), created_at
+        multi: true
 
     indexPrelude: |
         PackedEventView packed(v.buf);
@@ -69,11 +73,11 @@ tables:
                 }
             } else if (tagName == 'a') {
                 if (packed.kind() == 5) {
-                    try {
+                    try { // parseATag can fail
                         auto [kind, pubkey, dTag] = parseATag(tagVal);
 
                         if (isParamReplaceableKind(kind) && pubkey == packed.pubkey()) {
-                            replace.push_back(makeKey_StringUint64(pubkey + dTag, kind));
+                            replaceDeletion.push_back(makeKey_StringUint64(sha256(tagVal).sv(), packed.created_at()));
                         }
                     } catch(...) {
                     }

@@ -7,8 +7,10 @@ using namespace phmap;
 
 
 #include "constants.h"
+#include "Bytes32.h"
 
 
+Bytes32 sha256(std::string_view inp);
 std::string renderIP(std::string_view ipBytes);
 std::string renderSize(uint64_t si);
 std::string renderPercent(double p);

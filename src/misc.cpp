@@ -9,8 +9,19 @@
 #include <algorithm>
 #include <string>
 
+#include <openssl/sha.h>
+
 #include "golpe.h"
 
+
+
+
+Bytes32 sha256(std::string_view inp) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(inp.data()), inp.size(), hash);
+
+    return Bytes32(std::string_view(reinterpret_cast<const char*>(hash), SHA256_DIGEST_LENGTH));
+}
 
 std::string renderIP(std::string_view ipBytes) {
     char buf[128];

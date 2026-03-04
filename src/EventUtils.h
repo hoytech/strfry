@@ -3,7 +3,8 @@
 #include <string_view>
 #include <string>
 #include <tuple>
-#include <stdexcept>
+
+#include "golpe.h"
 
 
 inline bool isReplaceableKind(uint64_t kind) {
@@ -30,18 +31,18 @@ inline bool isEphemeralKind(uint64_t kind) {
 
 inline std::tuple<uint64_t, std::string, std::string> parseATag(std::string_view input) {
     size_t firstColon = input.find(':');
-    if (firstColon == std::string::npos) throw std::invalid_argument("parse error");
+    if (firstColon == std::string::npos) throw herr("parse error");
 
     std::string_view kindStr = input.substr(0, firstColon);
     size_t pos;
     uint64_t kind = std::stoull(std::string(kindStr), &pos);
-    if (pos != kindStr.size()) throw std::invalid_argument("parse error");
+    if (pos != kindStr.size()) throw herr("parse error");
 
     size_t secondColon = input.find(':', firstColon + 1);
-    if (secondColon == std::string::npos) throw std::invalid_argument("parse error");
+    if (secondColon == std::string::npos) throw herr("parse error");
 
     std::string_view pubkeyStr = input.substr(firstColon + 1, secondColon - firstColon - 1);
-    if (pubkeyStr.size() != 64) throw std::invalid_argument("parse error");
+    if (pubkeyStr.size() != 64) throw herr("parse error");
 
     std::string dTag = std::string(input.substr(secondColon + 1));
 
