@@ -21,6 +21,7 @@ NEXT
   * Bugfix: No longer attempt to print a stacktrace when we are killed. This
     relied on non-signal safe behaviour in the loguru library, which could cause
     deadlocks when attempting to kill a busy strfry process. (reported by jb55)
+  * Detect and block protected events inside reposts (fiatjaf)
   * Remove 45 and 77 from the default supported NIP list when their respective
     features are disabled. (requested by staab)
   * Updated Dockerfile to clean artifacts before build, to help with cross

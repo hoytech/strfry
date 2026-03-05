@@ -1,10 +1,8 @@
-! fix CI
 ! update docs
 
 PRs
   ? NIP-42 AUTH
   ? NIP-91 AND filters
-  ? fiatjaf's PR about nested protected events
 
 features
   asynchronous plugins (multiple in flight at once)
