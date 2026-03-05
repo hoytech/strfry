@@ -139,10 +139,18 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         if (foundProtected) {
             // NIP-70 protected events must be rejected unless published by an authenticated public key
             // that matches the event author, so we do all the AUTH flow here
-            if (cfg().relay__serviceUrl.empty()) {
-                // except if we don't have a serviceUrl, in that case just fail
-                auto idHex = to_hex(packed.id());
-                LI << "Protected event and no serviceUrl configured, skipping: " << idHex;
+
+            auto idHex = to_hex(packed.id());
+
+            if (!cfg().relay__auth__enabled) {
+                LI << "Protected event and auth disabled, rejecting: " << idHex;
+                sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
+                return;
+            }
+
+            if (cfg().relay__auth__serviceUrl.empty()) {
+                // If we don't have a serviceUrl, just fail
+                LI << "Protected event and no serviceUrl configured, rejecting: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
@@ -155,7 +163,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
 
                 LI << "Protected event, requesting AUTH";
                 sendAuthChallenge(connId, challenge);
-                sendOKResponse(connId, to_hex(packed.id()), false, "auth-required: event marked as protected");
+                sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
             }
 
@@ -163,11 +171,11 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
 
             if (!as.isAuthed()) {
                 // not authenticated
-                sendOKResponse(connId, to_hex(packed.id()), false, "auth-required: event marked as protected");
+                sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
             } else if (as.authed != packed.pubkey()) {
                 // authenticated as someone else
-                sendOKResponse(connId, to_hex(packed.id()), false, "restricted: must be published by the author");
+                sendOKResponse(connId, idHex, false, "restricted: must be published by the author");
                 return;
             }
 
@@ -223,7 +231,7 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
 }
 
 void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
-    if (cfg().relay__serviceUrl.empty()) {
+    if (cfg().relay__auth__serviceUrl.empty()) {
         throw herr("relay needs serviceUrl to be configured before AUTH can work");
     }
 
@@ -253,7 +261,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         if (tag.size() < 2) continue;
         const auto name = tag[0].as<std::string_view>();
         const auto value = tag[1].as<std::string_view>();
-        if (name == "relay" && value == cfg().relay__serviceUrl) {
+        if (name == "relay" && value == cfg().relay__auth__serviceUrl) {
             foundCorrectRelayUrl = true;
         } else if (name == "challenge" && value == as.challengeSv()) {
             foundChallenge = true;
@@ -265,7 +273,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         throw herr("challenge string mismatch");
     }
     if (!foundCorrectRelayUrl) {
-        throw herr("incorrect or missing relay tag, expected: " + cfg().relay__serviceUrl);
+        throw herr("incorrect or missing relay tag, expected: " + cfg().relay__auth__serviceUrl);
     }
 
     // set the connection as authenticated with this pubkey

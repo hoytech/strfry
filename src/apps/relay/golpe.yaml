@@ -122,6 +122,13 @@ config:
     default: 2
     noReload: true
 
+  - name: relay__auth__enabled
+    desc: "Enable NIP-42 authentication"
+    default: true
+  - name: relay__auth__serviceUrl
+    desc: "Relay URL (beginning with wss://). Required in order to validate challenge responses."
+    default: ""
+
   - name: relay__negentropy__enabled
     desc: "Support negentropy protocol messages"
     default: true
@@ -147,7 +154,3 @@ config:
   - name: relay__filterValidation__requireAuthorOrTag
     desc: "Require at least one author, p tag, or e tag in each filter"
     default: false
-
-  - name: relay__serviceUrl
-    desc: "Relay URL (beginning with wss://) that will be used to check NIP-42 AUTH"
-    default: ""
