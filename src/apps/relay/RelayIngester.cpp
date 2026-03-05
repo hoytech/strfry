@@ -37,6 +37,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                                 if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
                             }
                         } else if (cmd == "AUTH") {
+                            PROM_INC_CLIENT_MSG(cmd);
                             if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAuth: " << msg->payload;
 
                             try {

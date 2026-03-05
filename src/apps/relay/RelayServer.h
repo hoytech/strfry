@@ -271,6 +271,7 @@ struct RelayServer {
     }
 
     void sendAuthChallenge(uint64_t connId, std::string_view challenge) {
+        PROM_INC_RELAY_MSG("AUTH");
         auto reply = tao::json::value::array({ "AUTH", challenge });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
         hubTrigger->send();
