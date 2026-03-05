@@ -1,4 +1,4 @@
-NEXT
+1.1.0
   * Support for the COUNT command, NIP-45. Note that this is not yet complete
     support for NIP-45 since it doesn't implement HyperLogLog. COUNT can
     be disabled by setting relay.maxFilterLimitCount to 0.
