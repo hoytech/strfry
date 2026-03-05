@@ -24,6 +24,7 @@ Input messages contain the following keys:
 * `receivedAt`: Unix timestamp of when this event was received by the relay
 * `sourceType`: The channel where this event came from: `IP4`, `IP6`, `Import`, `Stream`, `Sync`, or `Stored`.
 * `sourceInfo`: Specifics of the event's source. Usually an IP address.
+* `authed`: Only present if the connection has completed a NIP-42 AUTH flow. Contains the authenticated public key, in 32-byte hex format.
 
 
 ## Output messages
