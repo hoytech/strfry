@@ -263,12 +263,8 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         }
     }
 
-    if (!foundChallenge) {
-        throw herr("challenge string mismatch");
-    }
-    if (!foundCorrectRelayUrl) {
-        throw herr("incorrect or missing relay tag, expected: " + cfg().relay__auth__serviceUrl);
-    }
+    if (!foundChallenge) throw herr("challenge string mismatch");
+    if (!foundCorrectRelayUrl) throw herr("incorrect or missing relay tag, expected: " + cfg().relay__auth__serviceUrl);
 
     // set the connection as authenticated with this pubkey
     as.authed = packed.pubkey();
