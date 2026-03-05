@@ -2,12 +2,20 @@ NEXT
   * Support for the COUNT command, NIP-45. Note that this is not yet complete
     support for NIP-45 since it doesn't implement HyperLogLog. COUNT can
     be disabled by setting relay.maxFilterLimitCount to 0.
+  * Support for AUTH, NIP-42. If a protected event is received by the relay,
+    it will return an AUTH challenge. The user must reply with a valid kind 22242
+    event, after which the protected event can be re-sent. Authentication state
+    is available to write policy plugins via `authed`. (fiatjaf and zk-bits)
   * New `/metrics/` endpoint for Prometheus monitoring (alexgleason)
   * Limit subId length to 64, as per new NIP-01 clarification (alltheseas)
   * Added missing NIP-11 fields such as banner, privacy_policy, etc (1-leo)
   * When a REQ is invalid, respond with the CLOSED message instead of a NOTICE.
     This message contains the subscription ID so clients can determine which
     request caused the error and release resources (suggested by alexgleason)
+  * Reworked the write policy plugin implementation. Instead of using stdio
+    buffering, it now uses a custom poll() mechanism and custom buffer. This
+    supports timeout detection of both reads and writes, and detects and reports
+    several other common error conditions with buggy plugins.
   * Added a relay.writePolicy.timeoutSeconds config setting. This controls how
     long strfry will wait for a write policy plugin's response before killing
     and re-spawning the plugin.
@@ -15,7 +23,9 @@ NEXT
     can be provided to REQ/COUNT. You can restrict the number of filters, the
     allowed kinds to query, and/or require authors/p/e tags. (frnandu)
   * Implement deletion of parameterised replaceable events using a-tags in
-    kind 5 events, as described in NIP-09.
+    kind 5 events, as described in NIP-09. This change creates a new index
+    `replaceDeletion`, but this is backwards and forwards compatible with the
+    current DB schema.
   * Better error messages for incorrectly formed REQ filters.
   * Improve relay's logging of negentropy activity.
   * Bugfix: No longer attempt to print a stacktrace when we are killed. This
@@ -29,7 +39,7 @@ NEXT
   * Improvement to config file inline docs (n7ekb)
   * Added a new deployment script: `scripts/idempotent-vps-deploy.sh` (chr15m)
   * Better error reporting/handling when strfry.conf is malformed.
-  * Print ANSI strfry logo when strfry is run with no arguments.
+  * Print cool ANSI strfry logo when strfry is run with no arguments.
     Artwork thanks to Zen GT.
   * HTML landing page improvements: Only show relay info fields that have
     configured values, make URLs actual links, render pubkeys as npubs instead

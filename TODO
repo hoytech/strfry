@@ -1,14 +1,14 @@
 ! update docs
 
 PRs
-  ? NIP-42 AUTH
   ? NIP-91 AND filters
 
-features
+possible features
+  HyperLogLog support in COUNT, as per NIP-45
   asynchronous plugins (multiple in flight at once)
   slow-websocket connection detection and back-pressure
   in sync/stream, log bytes up/down and compression ratios
-  ? archival mode (no deleting of events)
+  archival mode (no deleting of events)
 
 rate limits (maybe not needed now that we have plugins?)
   event writes per second per ip
