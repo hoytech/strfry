@@ -147,3 +147,7 @@ config:
   - name: relay__filterValidation__requireAuthorOrTag
     desc: "Require at least one author, p tag, or e tag in each filter"
     default: false
+
+  - name: relay__serviceUrl
+    desc: "Relay URL (beginning with wss://) that will be used to check NIP-42 AUTH"
+    default: ""
