@@ -4,10 +4,7 @@
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
-    secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
-    Decompressor decomp;
-    FilterValidator filterValidator;
-    flat_hash_map<uint64_t, AuthStatus*> connIdToAuthStatus;
+    RelayServerCtx rsctx;
 
     while(1) {
         auto newMsgs = thr.inbox.pop_all();
@@ -34,7 +31,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
 
                             try {
-                                ingesterProcessEvent(txn, msg->connId, connIdToAuthStatus, msg->ipAddr, secpCtx, arr[1], writerMsgs);
+                                ingesterProcessEvent(txn, rsctx, msg->connId, msg->ipAddr, arr[1], writerMsgs);
                             } catch (std::exception &e) {
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("invalid: ") + e.what());
@@ -44,7 +41,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAuth: " << msg->payload;
 
                             try {
-                                ingesterProcessAuth(msg->connId, connIdToAuthStatus, secpCtx, arr[1]);
+                                ingesterProcessAuth(rsctx, msg->connId, arr[1]);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("auth failed: ") + e.what());
                             }
@@ -55,7 +52,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             std::string subIdStr;
 
                             try {
-                                ingesterProcessReq(txn, filterValidator, msg->connId, arr, cmd == "COUNT", subIdStr);
+                                ingesterProcessReq(txn, rsctx, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
                                 if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
                                 else sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
@@ -74,7 +71,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
                             try {
-                                ingesterProcessNegentropy(txn, decomp, msg->connId, arr);
+                                ingesterProcessNegentropy(txn, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
@@ -104,10 +101,10 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     }
 }
 
-void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_hash_map<uint64_t, AuthStatus*> &connIdToAuthStatus, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output) {
+void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, std::string ipAddr, const tao::json::value &origJson, std::vector<MsgWriter> &output) {
     std::string packedStr, jsonStr;
 
-    parseAndVerifyEvent(origJson, secpCtx, true, true, packedStr, jsonStr);
+    parseAndVerifyEvent(origJson, rsctx.secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
     
@@ -127,7 +124,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_has
 
         bool foundProtected = false;
 
-        packed.foreachTag([&](char tagName, std::string_view tagVal){
+        packed.foreachTag([&](char tagName, std::string_view){
             if (tagName == '-') {
                 foundProtected = true;
                 return false;
@@ -140,24 +137,25 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_has
             // that matches the event author, so we do all the AUTH flow here
             if (cfg().relay__serviceUrl.empty()) {
                 // except if we don't have a serviceUrl, in that case just fail
-                LI << "Protected event and no serviceUrl configured, skipping";
-                sendOKResponse(connId, to_hex(packed.id()), false, "blocked: event marked as protected");
+                auto idHex = to_hex(packed.id());
+                LI << "Protected event and no serviceUrl configured, skipping: " << idHex;
+                sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
 
-            auto as = connIdToAuthStatus.find(connId);
-            if (as == connIdToAuthStatus.end()) {
+            auto as = rsctx.connIdToAuthStatus.find(connId);
+            if (as == rsctx.connIdToAuthStatus.end()) {
                 // we haven't sent an AUTH event for this, so first we generate a challenge for this connection
-                auto authStatus = new AuthStatus();
-                authStatus->challenge = std::to_string(int64_t(std::pow(packed.created_at(), connId + 1)));
-                connIdToAuthStatus.emplace(connId, authStatus);
+                auto challenge = std::to_string(int64_t(std::pow(packed.created_at(), connId + 1)));
+                rsctx.connIdToAuthStatus.emplace(connId, challenge);
+
                 LI << "Protected event, requesting AUTH";
-                sendAuthChallenge(connId, authStatus->challenge);
+                sendAuthChallenge(connId, challenge);
                 sendOKResponse(connId, to_hex(packed.id()), false, "auth-required: event marked as protected");
                 return;
             }
 
-            const auto authed = (*as->second).authed;
+            const auto authed = as->second.authed;
             if (authed.empty()) {
                 // not authenticated
                 sendOKResponse(connId, to_hex(packed.id()), false, "auth-required: event marked as protected");
@@ -167,13 +165,8 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_has
                 sendOKResponse(connId, to_hex(packed.id()), false, "restricted: must be published by the author");
                 return;
             }
+
             // otherwise we proceed to accept the event
-        }
-        if (!foundProtected) {
-            // Reject non-protected events
-            LI << "Non-protected event rejected";
-            sendOKResponse(connId, to_hex(packed.id()), false, "blocked: only protected events accepted");
-            return;
         }
     }
 
@@ -189,7 +182,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_has
     output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
 }
 
-void RelayServer::ingesterProcessReq(lmdb::txn &txn, FilterValidator &filterValidator, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {
+void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {
     if (arr.get_array().size() < 2 + 1) throw herr("arr too small");
     outSubIdStr = jsonGetString(arr[1], "subscription id was not a string");
     if (arr.get_array().size() > 2 + cfg().relay__maxReqFilterSize) throw herr("arr too big");
@@ -207,7 +200,7 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, FilterValidator &filterVali
     NostrFilterGroup filterGroup(arr, maxFilterLimit);
 
     try {
-        filterValidator.validate(filterGroup);
+        rsctx.filterValidator.validate(filterGroup);
     } catch (std::exception &e) {
         throw herr("filter validation failed: ", e.what());
     }
@@ -223,13 +216,13 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(jsonGetString(arr[1], "CLOSE subscription id was not a string"))}});
 }
 
-void RelayServer::ingesterProcessAuth(uint64_t connId, flat_hash_map<uint64_t, AuthStatus*> connIdToAuthStatus, secp256k1_context *secpCtx, const tao::json::value &eventJson) {
+void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
     if (cfg().relay__serviceUrl.empty()) {
         throw herr("relay needs serviceUrl to be configured before AUTH can work");
     }
 
     std::string packedStr, jsonStr;
-    parseAndVerifyEvent(eventJson, secpCtx, true, true, packedStr, jsonStr);
+    parseAndVerifyEvent(eventJson, rsctx.secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
 
@@ -237,14 +230,14 @@ void RelayServer::ingesterProcessAuth(uint64_t connId, flat_hash_map<uint64_t, A
         throw herr("wrong event kind, expected 22242");
     }
 
-    auto as = connIdToAuthStatus.find(connId);
-    if (as == connIdToAuthStatus.end()) {
+    auto as = rsctx.connIdToAuthStatus.find(connId);
+    if (as == rsctx.connIdToAuthStatus.end()) {
         throw herr("no auth status available for connection");
     }
-    if (!(*as->second).authed.empty()) {
+    if (!as->second.authed.empty()) {
         throw herr("already authenticated");
     }
-    const auto challenge = (*as->second).challenge;
+    const auto challenge = as->second.challenge;
 
     bool foundChallenge = false;
     bool foundCorrectRelayUrl = false;
@@ -269,12 +262,12 @@ void RelayServer::ingesterProcessAuth(uint64_t connId, flat_hash_map<uint64_t, A
     }
 
     // set the connection as authenticated with this pubkey
-    (*as->second).authed = packed.pubkey();
+    as->second.authed = packed.pubkey();
 
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 
-void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
     const auto &subscriptionStr = jsonGetString(arr[1], "NEG-OPEN subscription id was not a string");
 
     if (arr.at(0) == "NEG-OPEN") {

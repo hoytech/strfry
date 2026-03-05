@@ -69,6 +69,7 @@ struct MsgWriter : NonCopyable {
         std::string ipAddr;
         std::string packedStr;
         std::string jsonStr;
+        Bytes32 authed;
     };
 
     struct CloseConn {
@@ -148,12 +149,16 @@ struct MsgNegentropy : NonCopyable {
     MsgNegentropy(Var &&msg_) : msg(std::move(msg_)) {}
 };
 
-// NIP-42 stuff
 struct AuthStatus {
     std::string challenge;
     std::string authed;
 };
 
+struct RelayServerCtx {
+    secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+    FilterValidator filterValidator;
+    flat_hash_map<uint64_t, AuthStatus> connIdToAuthStatus;
+};
 
 struct RelayServer {
     uS::Async *hubTrigger = nullptr;
@@ -175,10 +180,12 @@ struct RelayServer {
 
     void runIngester(ThreadPool<MsgIngester>::Thread &thr);
     void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_hash_map<uint64_t, AuthStatus*> &connIdToAuthStatus, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
-    void ingesterProcessReq(lmdb::txn &txn, FilterValidator &filterValidator, uint64_t connId, const tao::json::value &origJson, bool counOnly, std::string &outSubIdStr);
-    void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, std::string ipAddr, const tao::json::value &origJson, std::vector<MsgWriter> &output);
+    void ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr);
+    void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr);
     void ingesterProcessAuth(uint64_t connId, flat_hash_map<uint64_t, AuthStatus*> connIdToAuthStatus, secp256k1_context *secpCtx, const tao::json::value &eventJson);
-    void ingesterProcessNegentropy(lmdb::txn &txn, Decompressor &decomp, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson);
+    void ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
 
     void runWriter(ThreadPool<MsgWriter>::Thread &thr);
 
