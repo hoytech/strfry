@@ -1,6 +1,5 @@
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
-#include <cstdlib>
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
@@ -143,10 +142,10 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 return;
             }
 
-            auto as = rsctx.connIdToAuthStatus.find(connId);
-            if (as == rsctx.connIdToAuthStatus.end()) {
+            auto it = rsctx.connIdToAuthStatus.find(connId);
+            if (it == rsctx.connIdToAuthStatus.end()) {
                 // we haven't sent an AUTH event for this, so first we generate a challenge for this connection
-                auto challenge = std::to_string(int64_t(std::pow(packed.created_at(), connId + 1)));
+                auto challenge = rsctx.challengeGenerator.get();
                 rsctx.connIdToAuthStatus.emplace(connId, challenge);
 
                 LI << "Protected event, requesting AUTH";
@@ -155,12 +154,13 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 return;
             }
 
-            const auto authed = as->second.authed;
-            if (authed.empty()) {
+            const auto &as = it->second;
+
+            if (!as.isAuthed()) {
                 // not authenticated
                 sendOKResponse(connId, to_hex(packed.id()), false, "auth-required: event marked as protected");
                 return;
-            } else if (authed != packed.pubkey()) {
+            } else if (as.authed != packed.pubkey()) {
                 // authenticated as someone else
                 sendOKResponse(connId, to_hex(packed.id()), false, "restricted: must be published by the author");
                 return;
@@ -230,17 +230,17 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         throw herr("wrong event kind, expected 22242");
     }
 
-    auto as = rsctx.connIdToAuthStatus.find(connId);
-    if (as == rsctx.connIdToAuthStatus.end()) {
-        throw herr("no auth status available for connection");
-    }
-    if (!as->second.authed.empty()) {
-        throw herr("already authenticated");
-    }
-    const auto challenge = as->second.challenge;
+    auto it = rsctx.connIdToAuthStatus.find(connId);
+    if (it == rsctx.connIdToAuthStatus.end()) throw herr("no auth status available for connection"); //FIXME: better error message to client
+
+    auto &as = it->second;
+
+    if (as.isAuthed()) throw herr("already authenticated"); //FIXME: better error message to client. Or maybe, re-auth?
 
     bool foundChallenge = false;
     bool foundCorrectRelayUrl = false;
+
+    //FIXME: catch parse errors
 
     for (const auto &tagj : eventJson.at("tags").get_array()) {
         const auto &tag = tagj.get_array();
@@ -249,11 +249,12 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         const auto value = tag[1].as<std::string_view>();
         if (name == "relay" && value == cfg().relay__serviceUrl) {
             foundCorrectRelayUrl = true;
-        } else if (name == "challenge" && value == challenge) {
+        } else if (name == "challenge" && value == as.challengeSv()) {
             foundChallenge = true;
         }
     }
 
+    //FIXME: better error messages to client
     if (!foundChallenge) {
         throw herr("challenge string mismatch");
     }
@@ -262,7 +263,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     }
 
     // set the connection as authenticated with this pubkey
-    as->second.authed = packed.pubkey();
+    as.authed = packed.pubkey();
 
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }

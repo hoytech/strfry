@@ -7,6 +7,7 @@
 #include <hoytech/time.h>
 #include <hoytech/hex.h>
 #include <hoytech/file_change_monitor.h>
+#include <SessionToken.h>
 #include <uWebSockets/src/uWS.h>
 #include <tao/json.hpp>
 
@@ -150,13 +151,27 @@ struct MsgNegentropy : NonCopyable {
 };
 
 struct AuthStatus {
-    std::string challenge;
-    std::string authed;
+    char challenge[22];
+    Bytes32 authed;
+
+    AuthStatus(std::string_view c) {
+        if (c.size() != 22) throw herr("challenge size not 22 bytes");
+        ::memcpy(challenge, c.data(), 22);
+    }
+
+    std::string_view challengeSv() const {
+        return std::string_view(challenge, sizeof(challenge));
+    }
+
+    bool isAuthed() const {
+        return !authed.isNull();
+    }
 };
 
 struct RelayServerCtx {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     FilterValidator filterValidator;
+    SessionToken::Generator challengeGenerator;
     flat_hash_map<uint64_t, AuthStatus> connIdToAuthStatus;
 };
 
