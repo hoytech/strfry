@@ -143,14 +143,14 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
             auto idHex = to_hex(packed.id());
 
             if (!cfg().relay__auth__enabled) {
-                LI << "Protected event and auth disabled, rejecting: " << idHex;
+                LI << "[" << connId << "] Protected event and auth disabled, rejecting: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
 
             if (cfg().relay__auth__serviceUrl.empty()) {
                 // If we don't have a serviceUrl, just fail
-                LI << "Protected event and no serviceUrl configured, rejecting: " << idHex;
+                LI << "[" << connId << "] Protected event and no serviceUrl configured, rejecting: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
@@ -161,7 +161,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 auto challenge = rsctx.challengeGenerator.get();
                 rsctx.connIdToAuthStatus.emplace(connId, challenge);
 
-                LI << "Protected event, requesting AUTH";
+                LI << "[" << connId << "] Protected event, requesting AUTH: " << idHex;
                 sendAuthChallenge(connId, challenge);
                 sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
@@ -187,8 +187,9 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
     {
         auto existing = lookupEventById(txn, packed.id());
         if (existing) {
-            LI << "Duplicate event, skipping";
-            sendOKResponse(connId, to_hex(packed.id()), true, "duplicate: have this event");
+            auto hexId = to_hex(packed.id());
+            LI << "[" << connId << "] Duplicate event, skipping: " << hexId;
+            sendOKResponse(connId, hexId, true, "duplicate: have this event");
             return;
         }
     }
@@ -231,30 +232,24 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
 }
 
 void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
-    if (cfg().relay__auth__serviceUrl.empty()) {
-        throw herr("relay needs serviceUrl to be configured before AUTH can work");
-    }
+    if (cfg().relay__auth__serviceUrl.empty()) throw herr("relay needs serviceUrl to be configured before AUTH can work");
 
     std::string packedStr, jsonStr;
     parseAndVerifyEvent(eventJson, rsctx.secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
 
-    if (packed.kind() != 22242) {
-        throw herr("wrong event kind, expected 22242");
-    }
+    if (packed.kind() != 22242) throw herr("wrong event kind, expected 22242");
 
     auto it = rsctx.connIdToAuthStatus.find(connId);
-    if (it == rsctx.connIdToAuthStatus.end()) throw herr("no auth status available for connection"); //FIXME: better error message to client
+    if (it == rsctx.connIdToAuthStatus.end()) throw herr("no auth status available for connection");
 
     auto &as = it->second;
 
-    if (as.isAuthed()) throw herr("already authenticated"); //FIXME: better error message to client. Or maybe, re-auth?
+    if (as.isAuthed()) throw herr("already authenticated");
 
     bool foundChallenge = false;
     bool foundCorrectRelayUrl = false;
-
-    //FIXME: catch parse errors
 
     for (const auto &tagj : eventJson.at("tags").get_array()) {
         const auto &tag = tagj.get_array();
@@ -268,7 +263,6 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
         }
     }
 
-    //FIXME: better error messages to client
     if (!foundChallenge) {
         throw herr("challenge string mismatch");
     }
@@ -279,6 +273,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     // set the connection as authenticated with this pubkey
     as.authed = packed.pubkey();
 
+    LI << "[" << connId << "] AUTHed as " << to_hex(packed.pubkey());
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 
