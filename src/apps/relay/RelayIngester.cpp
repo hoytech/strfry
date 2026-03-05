@@ -105,31 +105,13 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, std::str
 
     {
         // discard reposts that embed protected events
-        if ((packed.kind() == 6 || packed.kind() == 16)) {
-          auto content = jsonGetString(origJson.at("content"),
-                                       "event content field was not a string");
-
-          if (content.find("[\"-\"]") != std::string::npos) {
-            try {
-              auto embedded = tao::json::from_string(content);
-              auto &embeddedTags =
-                  jsonGetArray(embedded.at("tags"),
-                               "embedded event tags field was not an array");
-
-              for (auto &tagArr : embeddedTags) {
-                auto &tag = jsonGetArray(
-                    tagArr, "tag in embedded event tags field was not an array");
-                if (tag.size() == 1 &&
-                    jsonGetString(tag.at(0),
-                                  "embedded tag name was not a string") == "-") {
-                  sendOKResponse(connId, to_hex(packed.id()), false,
-                                 "blocked: reposts can't embed protected events");
-                  return;
-                }
-              }
-            } catch (std::exception &) {
+        if (packed.kind() == 6 || packed.kind() == 16) {
+            if (origJson.at("content").get_string().find("[\"-\"]") != std::string::npos) {
+                auto idHex = to_hex(packed.id());
+                LI << "Repost embedded a protected event, blocking: " << idHex;
+                sendOKResponse(connId, idHex, false, "blocked: reposts can't embed protected events");
+                return;
             }
-          }
         }
 
         bool foundProtected = false;
