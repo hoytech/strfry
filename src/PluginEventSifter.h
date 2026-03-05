@@ -57,7 +57,7 @@ struct PluginEventSifter {
 
     std::unique_ptr<RunningPlugin> running; 
 
-    PluginEventSifterResult acceptEvent(const std::string &pluginCmd, const tao::json::value &evJson, EventSourceType sourceType, std::string_view sourceInfo, std::string &okMsg) {
+    PluginEventSifterResult acceptEvent(const std::string &pluginCmd, const tao::json::value &evJson, EventSourceType sourceType, std::string_view sourceInfo, const Bytes32 &authed, std::string &okMsg) {
         if (pluginCmd.size() == 0) {
             running.reset();
             return PluginEventSifterResult::Accept;
@@ -87,6 +87,8 @@ struct PluginEventSifter {
                 { "sourceType", eventSourceTypeToStr(sourceType) },
                 { "sourceInfo", sourceType == EventSourceType::IP4 || sourceType == EventSourceType::IP6 ? renderIP(sourceInfo) : sourceInfo },
             });
+
+            if (!authed.isNull()) request["authed"] = to_hex(authed.sv());
 
             std::string output = tao::json::to_string(request);
             output += "\n";

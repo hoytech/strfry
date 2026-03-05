@@ -88,6 +88,9 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                 }
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
+
+                rsctx.connIdToAuthStatus.erase(connId);
+
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
                 tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::CloseConn{connId}});
@@ -106,6 +109,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
     parseAndVerifyEvent(origJson, rsctx.secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
+    Bytes32 authedPubkey;
     
     // Track event kind metrics
     PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
@@ -167,6 +171,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
             }
 
             // otherwise we proceed to accept the event
+            authedPubkey = as.authed;
         }
     }
 
@@ -179,7 +184,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         }
     }
 
-    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr)}});
+    output.emplace_back(MsgWriter{MsgWriter::AddEvent{connId, std::move(ipAddr), std::move(packedStr), std::move(jsonStr), authedPubkey}});
 }
 
 void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr) {

@@ -183,7 +183,7 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, EventSourceType::Stream, url, okMsg);
+            auto res = pluginDown.acceptEvent(pluginDownCmd, evJson, EventSourceType::Stream, url, Bytes32(), okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 router->writer.write({ std::move(evJson), });
             } else {
@@ -206,7 +206,7 @@ struct Router {
 
             std::string okMsg;
 
-            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, EventSourceType::Stored, "", okMsg);
+            auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, EventSourceType::Stored, "", Bytes32(), okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 for (auto &[url, c] : conns) {
                     if (c.ws) c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);
