@@ -15,6 +15,13 @@ config:
     desc: "HTTP header that contains the client's real IP, before reverse proxying (ie x-real-ip) (MUST be all lower-case)"
     default: ""
 
+  - name: relay__auth__enabled
+    desc: "Enable NIP-42 authentication"
+    default: true
+  - name: relay__auth__serviceUrl
+    desc: "External relay URL (beginning with wss://). Required in order to validate challenge responses."
+    default: ""
+
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
     default: "strfry default"
@@ -121,13 +128,6 @@ config:
     desc: negentropy threads: Handle negentropy protocol messages
     default: 2
     noReload: true
-
-  - name: relay__auth__enabled
-    desc: "Enable NIP-42 authentication"
-    default: true
-  - name: relay__auth__serviceUrl
-    desc: "Relay URL (beginning with wss://). Required in order to validate challenge responses."
-    default: ""
 
   - name: relay__negentropy__enabled
     desc: "Support negentropy protocol messages"

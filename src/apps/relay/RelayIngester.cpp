@@ -171,6 +171,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
 
             if (!as.isAuthed()) {
                 // not authenticated
+                LI << "[" << connId << "] Protected event, AUTH already requested: " << idHex;
                 sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
             } else if (as.authed != packed.pubkey()) {
