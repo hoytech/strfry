@@ -12,6 +12,9 @@ struct QueryScheduler : NonCopyable {
     // If false, then onEvent's eventPayload will always be ""
     bool ensureExists = true;
 
+    // Search provider for NIP-50 queries
+    ISearchProvider *searchProvider = nullptr;
+
     using ConnQueries = flat_hash_map<SubId, DBQuery*>;
     flat_hash_map<uint64_t, ConnQueries> conns; // connId -> subId -> DBQuery*
     std::deque<DBQuery*> running;
@@ -32,7 +35,7 @@ struct QueryScheduler : NonCopyable {
             return false;
         }
 
-        DBQuery *q = new DBQuery(sub);
+        DBQuery *q = new DBQuery(sub, searchProvider);
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);

@@ -5,6 +5,8 @@
 #include "Subscription.h"
 #include "filters.h"
 #include "events.h"
+#include "search/SearchProvider.h"
+#include "search/SearchRunner.h"
 
 
 struct DBScan : NonCopyable {
@@ -284,6 +286,8 @@ struct DBQuery : NonCopyable {
     Subscription sub;
 
     std::unique_ptr<DBScan> scanner;
+    std::unique_ptr<SearchRunner> searchRunner;
+    ISearchProvider *searchProvider = nullptr;
     size_t filterGroupIndex = 0;
     bool dead = false; // external flag
     flat_hash_set<uint64_t> sentEventsFull;
@@ -295,22 +299,27 @@ struct DBQuery : NonCopyable {
     uint64_t totalTime = 0;
     uint64_t totalWork = 0;
 
-    DBQuery(Subscription &sub) : sub(std::move(sub)) {}
+    DBQuery(Subscription &sub, ISearchProvider *searchProvider_ = nullptr) : sub(std::move(sub)), searchProvider(searchProvider_) {}
     DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup::unwrapped(filter, maxLimit))) {}
 
-    // If scan is complete, returns true
     bool process(lmdb::txn &txn, const std::function<void(const Subscription &, uint64_t)> &cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
         while (filterGroupIndex < sub.filterGroup.size()) {
             const auto &f = sub.filterGroup.filters[filterGroupIndex];
 
-            if (!scanner) scanner = std::make_unique<DBScan>(f);
+            // Determine execution strategy: search vs traditional index scan
+            bool useSearch = f.hasSearch() && searchProvider && cfg().relay__search__enabled;
+
+            if (useSearch && !searchRunner) {
+                searchRunner = std::make_unique<SearchRunner>(f, searchProvider);
+            } else if (!useSearch && !scanner) {
+                scanner = std::make_unique<DBScan>(f);
+            }
 
             uint64_t startTime = hoytech::curr_time_us();
 
-            bool complete = scanner->scan(txn, [&](uint64_t levId){
+            auto handleEvent = [&](uint64_t levId){
                 if (f.limit == 0) return true;
 
-                // If this event came in after our query began, don't send it. It will be sent after the EOSE.
                 if (levId > sub.latestEventId) return false;
 
                 if (sentEventsFull.find(levId) == sentEventsFull.end()) {
@@ -320,13 +329,22 @@ struct DBQuery : NonCopyable {
 
                 sentEventsCurr.insert(levId);
                 return sentEventsCurr.size() >= f.limit;
-            }, [&](uint64_t approxWork){
+            };
+
+            auto doPause = [&](uint64_t approxWork){
                 if (approxWork > lastWorkChecked + 2'000) {
                     lastWorkChecked = approxWork;
                     return hoytech::curr_time_us() - startTime > timeBudgetMicroseconds;
                 }
                 return false;
-            });
+            };
+
+            bool complete;
+            if (useSearch) {
+                complete = searchRunner->scan(txn, handleEvent, doPause);
+            } else {
+                complete = scanner->scan(txn, handleEvent, doPause);
+            }
 
             currScanTime += hoytech::curr_time_us() - startTime;
 
@@ -335,21 +353,23 @@ struct DBQuery : NonCopyable {
                 return false;
             }
 
+            uint64_t approxWork = useSearch ? searchRunner->approxWork : scanner->approxWork;
             totalTime += currScanTime;
-            totalWork += scanner->approxWork;
+            totalWork += approxWork;
 
             if (logMetrics) {
                 LI << "[" << sub.connId << "] REQ='" << sub.subId.sv() << "'"
-                   << " scan=" << scanner->desc
-                   << " indexOnly=" << scanner->indexOnly
+                   << " scan=" << (useSearch ? "Search" : scanner->desc)
+                   << " indexOnly=" << (useSearch ? false : scanner->indexOnly)
                    << " time=" << currScanTime << "us"
                    << " saveRestores=" << currScanSaveRestores
                    << " recsFound=" << sentEventsCurr.size()
-                   << " work=" << scanner->approxWork;
+                   << " work=" << approxWork;
                 ;
             }
 
             scanner.reset();
+            searchRunner.reset();
             filterGroupIndex++;
             sentEventsCurr.clear();
 

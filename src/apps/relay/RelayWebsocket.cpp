@@ -58,9 +58,9 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (cfg().relay__auth__enabled && cfg().relay__auth__serviceUrl.size() > 0) output.push_back(42);
         if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
         if (cfg().relay__negentropy__enabled) output.push_back(77);
+        if (searchProvider && searchProvider->healthy()) output.push_back(50);
 
         std::sort(output.get_array().begin(), output.get_array().end());
-
         if (cfg().relay__info__nips.size() == 0) return output;
 
         try {
