@@ -21,7 +21,6 @@ struct WriterPipeline {
     bool verifyMsg = true;
     bool verifyTime = true;
     bool verboseReject = true;
-    bool verboseCommit = true;
     std::function<void(uint64_t)> onCommit;
 
     // For logging:
@@ -163,7 +162,7 @@ struct WriterPipeline {
                     if (onCommit) onCommit(written);
                 }
 
-                if (verboseCommit && (written || dups)) LI << "Writer: added: " << written << " dups: " << dups;
+                LD << "Writer: added: " << written << " dups: " << dups;
 
                 if (shutdownComplete) {
                     flushInbox.push_move(true);
