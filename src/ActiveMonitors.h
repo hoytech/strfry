@@ -166,6 +166,9 @@ struct ActiveMonitors : NonCopyable {
 
     void installLookups(Monitor *m, uint64_t currEventId) {
         for (auto &f : m->sub.filterGroup.filters) {
+            // Skip search filters: they are one-shot queries, not live monitors
+            if (f.hasSearch()) continue;
+
             if (f.ids) {
                 for (size_t i = 0; i < f.ids->size(); i++) {
                     auto res = allIds.try_emplace(Bytes32(f.ids->at(i)));
@@ -197,6 +200,9 @@ struct ActiveMonitors : NonCopyable {
 
     void uninstallLookups(Monitor *m) {
         for (auto &f : m->sub.filterGroup.filters) {
+            // Skip search filters: they were never installed
+            if (f.hasSearch()) continue;
+
             if (f.ids) {
                 for (size_t i = 0; i < f.ids->size(); i++) {
                     Bytes32 id(f.ids->at(i));
