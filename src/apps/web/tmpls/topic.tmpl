@@ -1,0 +1,13 @@
+<div class="topic-notes">
+    <h2 class="notes-header">
+        Notes for topic #$(ctx.topicStr)
+    </h2>
+
+    <div class="note-thread"> @(auto &r : ctx.renderedThreads)
+        $(r)
+    </div>
+
+    <div class="more-notes"> ?(ctx.nextResumeTime)
+        <a href="/t/$(ctx.topicStr)?next=$(*ctx.nextResumeTime)">More notes for topic #$(ctx.topicStr)</a>
+    </div>
+</div>

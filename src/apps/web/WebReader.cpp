@@ -174,6 +174,20 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         };
 
         body = tmpl::community::communityInfo(ctx);
+    } else if (u.path[0] == "t") {
+        if (u.path.size() == 2) {
+            std::string topic = std::string(u.path[1]);
+            uint64_t resumeTime = MAX_U64;
+
+            try {
+                auto resumeTimeStr = u.lookupQuery("next");
+                if (resumeTimeStr) resumeTime = std::stoull(std::string(*resumeTimeStr));
+            } catch(...) {}
+
+            TopicEvents uc(txn, decomp, topic, resumeTime);
+            title = std::string("topic: ") + topic;
+            body = uc.render(txn, decomp);
+        }
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));

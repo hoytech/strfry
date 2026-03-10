@@ -697,6 +697,100 @@ struct UserEvents {
 };
 
 
+struct TopicEvents {
+    std::string topic;
+
+    struct EventCluster {
+        std::string rootEventId;
+        flat_hash_map<std::string, Event> eventCache; // eventId (non-root) -> Event
+        bool isRootPresent = false;
+        uint64_t rootEventTimestamp = 0;
+
+        EventCluster(std::string rootEventId) : rootEventId(rootEventId) {}
+    };
+
+    std::vector<EventCluster> eventClusterArr;
+    uint64_t totalEvents = 0;
+    std::optional<uint64_t> timestampCutoff;
+    std::optional<uint64_t> nextResumeTime;
+
+    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t resumeTime) : topic(topic) {
+        flat_hash_map<std::string, EventCluster> eventClusters; // eventId (root) -> EventCluster
+
+        std::string prefix = "t";
+        prefix += topic;
+
+        env.generic_foreachFull(txn, env.dbi_Event__tag, makeKey_StringUint64(prefix, resumeTime), "", [&](std::string_view k, std::string_view v){
+            ParsedKey_StringUint64 parsedKey(k);
+            if (parsedKey.s != prefix) return false;
+
+            Event ev = Event::fromLevId(txn, lmdb::from_sv<uint64_t>(v));
+            ev.populateRootParent(txn, decomp);
+            auto id = ev.getId();
+
+            auto installRoot = [&](std::string rootId, Event &&rootEvent){
+                rootEvent.populateRootParent(txn, decomp);
+
+                eventClusters.emplace(rootId, rootId);
+                auto &cluster = eventClusters.at(rootId);
+
+                cluster.isRootPresent = true;
+                cluster.rootEventTimestamp = rootEvent.getCreatedAt();
+                cluster.eventCache.emplace(rootId, std::move(rootEvent));
+                totalEvents++;
+            };
+
+            if (!ev.root.size()) {
+                // Event root
+
+                if (!eventClusters.contains(ev.root)) {
+                    installRoot(id, std::move(ev));
+                }
+            }
+
+            if (timestampCutoff) {
+                if (*timestampCutoff != parsedKey.n) {
+                    nextResumeTime = *timestampCutoff - 1;
+                    return false;
+                }
+            } else if (totalEvents > 100) {
+                timestampCutoff = parsedKey.n;
+            }
+
+            return true;
+        }, true);
+
+        for (auto &[k, v] : eventClusters) {
+            eventClusterArr.emplace_back(std::move(v));
+        }
+
+        std::sort(eventClusterArr.begin(), eventClusterArr.end(), [](auto &a, auto &b){ return b.rootEventTimestamp < a.rootEventTimestamp; });
+    }
+
+    TemplarResult render(lmdb::txn &txn, Decompressor &decomp) {
+        std::vector<TemplarResult> renderedThreads;
+        UserCache userCache;
+
+        for (auto &cluster : eventClusterArr) {
+            EventThread eventThread(cluster.rootEventId, false, std::move(cluster.eventCache));
+            renderedThreads.emplace_back(eventThread.render(txn, decomp, userCache, "")); //FIXME ""
+        }
+
+        struct {
+            std::vector<TemplarResult> &renderedThreads;
+            const std::string &topicStr;
+            std::optional<uint64_t> nextResumeTime;
+        } ctx = {
+            renderedThreads,
+            topic,
+            nextResumeTime,
+        };
+
+        return tmpl::topic(ctx);
+    }
+};
+
+
 
 struct CommunitySpec {
     bool valid = true;
