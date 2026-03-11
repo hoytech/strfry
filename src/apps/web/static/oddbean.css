@@ -188,6 +188,7 @@ table.vert {
     }
 
     .more-notes {
+        margin-top: 20px;
         margin-left: 20px;
         margin-bottom: 20px;
     }
@@ -253,6 +254,18 @@ table.vert {
 
 
 /* topics */
+
+.topic-header {
+    .topic-name {
+        margin-right: 30px;
+        color: #730097;
+        font-weight: bold;
+    }
+
+    .nav-current {
+        font-weight: bold;
+    }
+}
 
 .topic-item {
     margin-bottom: 8px;

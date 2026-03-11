@@ -127,6 +127,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             std::string topic = std::string(u.path[1]);
             uint64_t resumeTime = MAX_U64;
             uint64_t n = 1;
+            bool showAll = false;
 
             try {
                 auto resumeTimeStr = u.lookupQuery("next");
@@ -138,7 +139,11 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
                 if (nStr) n = std::stoull(std::string(*nStr));
             } catch(...) {}
 
-            TopicEvents uc(txn, decomp, topic, n, resumeTime);
+            try {
+                if (u.lookupQuery("all")) showAll = true;
+            } catch(...) {}
+
+            TopicEvents uc(txn, decomp, showAll, topic, n, resumeTime);
             title = std::string("/t/") + topic;
             body = uc.render();
         }

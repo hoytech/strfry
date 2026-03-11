@@ -705,11 +705,16 @@ struct UserEvents {
 
 struct TopicEventScores {
     defaultDb::environment::View_Event eventView;
+    uint64_t timestamp;
 
     uint64_t comments = 0;
+    uint64_t upVotes = 0;
+    uint64_t flags = 0;
     double score = 0.0;
 
     TopicEventScores(lmdb::txn &txn, const defaultDb::environment::View_Event &eventView, const PackedEventView &packed) : eventView(eventView) {
+        timestamp = packed.created_at();
+
         std::string prefix = "e";
         prefix += packed.id();
 
@@ -722,37 +727,47 @@ struct TopicEventScores {
             auto kind = packed2.kind();
 
             if (kind == 1) comments++;
-            else if (kind == 7) score++;
+            else if (kind == 7) upVotes++;
+            else if (kind == 1984) flags++;
 
             return true;
         }, true);
+
+        score = comments + upVotes;
     }
 };
 
 struct TopicEventRendered {
+    TopicEventScores scores;
+
     uint64_t n;
     std::string noteId;
     std::string summaryHtml;
     std::string userNpub;
     std::string username;
     std::string timestamp;
-    uint64_t comments;
-    double score;
+
+    TopicEventRendered(const TopicEventScores &scores) : scores(scores) {
+    }
 };
 
 struct TopicEvents {
+    bool showAll;
     std::string topic;
     uint64_t startN;
 
-    std::vector<TopicEventRendered> renderedEvents;
-    std::optional<uint64_t> timestampCutoff;
+    std::vector<TopicEventRendered> events;
     std::optional<uint64_t> nextResumeTime;
 
-    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t startN, uint64_t resumeTime) : topic(topic), startN(startN) {
-        std::vector<TopicEventScores> events;
+    static const uint64_t EVENTS_PER_PAGE = 30;
+
+    TopicEvents(lmdb::txn &txn, Decompressor &decomp, bool showAll, const std::string &topic, uint64_t startN, uint64_t resumeTime) : showAll(showAll), topic(topic), startN(startN) {
+        std::vector<TopicEventScores> eventsAll;
 
         UserCache userCache;
         auto now = hoytech::curr_time_s();
+
+        if (resumeTime > now) resumeTime = now;
 
         std::string prefix = "t";
         prefix += topic;
@@ -768,26 +783,38 @@ struct TopicEvents {
 
             if (!isRootEvent(txn, packed)) return true;
 
-            events.push_back(TopicEventScores(txn, ev, packed));
+            eventsAll.push_back(TopicEventScores(txn, ev, packed));
 
-            if (timestampCutoff) {
-                if (*timestampCutoff != parsedKey.n) {
-                    nextResumeTime = *timestampCutoff - 1;
-                    return false;
-                }
-            } else if (events.size() >= 30 - 1) {
-                timestampCutoff = parsedKey.n;
+            if (showAll) {
+                if (eventsAll.size() >= EVENTS_PER_PAGE) return false;
+            } else {
+                if (now - resumeTime > 86400*2 && eventsAll.size() >= EVENTS_PER_PAGE) return false;
+                if (eventsAll.size() > 1'000) return false;
             }
 
             return true;
         }, true);
 
-        for (const auto &eScore : events) {
+        if (showAll) {
+            // nothing
+        } else {
+            std::sort(eventsAll.begin(), eventsAll.end(), [](auto &a, auto &b){ return a.score > b.score; });
+
+            if (eventsAll.size() > EVENTS_PER_PAGE) eventsAll.erase(eventsAll.begin() + EVENTS_PER_PAGE, eventsAll.end());
+
+            std::sort(eventsAll.begin(), eventsAll.end(), [](auto &a, auto &b){ return a.timestamp > b.timestamp; });
+        }
+
+        if (eventsAll.size()) {
+            nextResumeTime = eventsAll.back().timestamp - 1; // might skip over some events with exact same timestamp.. oh well
+        }
+
+        for (const auto &eScore : eventsAll) {
             PackedEventView packed(eScore.eventView.buf);
 
-            TopicEventRendered rendered;
+            TopicEventRendered rendered(eScore);
 
-            rendered.n = startN + renderedEvents.size();
+            rendered.n = startN + events.size();
 
             {
                 Event event(eScore.eventView);
@@ -804,10 +831,7 @@ struct TopicEvents {
 
             rendered.timestamp = renderTimestamp(now, packed.created_at());
 
-            rendered.comments = eScore.comments;
-            rendered.score = eScore.score;
-
-            renderedEvents.push_back(std::move(rendered));
+            events.push_back(std::move(rendered));
         }
     }
 
@@ -827,18 +851,10 @@ struct TopicEvents {
     }
 
     TemplarResult render() {
-        struct {
-            uint64_t startN;
-            const std::vector<TopicEventRendered> &events;
-            const std::string &topic;
-            std::optional<uint64_t> nextResumeTime;
-        } ctx = {
-            startN,
-            renderedEvents,
-            topic,
-            nextResumeTime,
-        };
+        return tmpl::topic(*this);
+    }
 
-        return tmpl::topic(ctx);
+    const char *showAllQueryString() const {
+        return showAll ? "&all=1" : "";
     }
 };
