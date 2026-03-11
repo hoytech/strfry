@@ -4,7 +4,6 @@
 
 #include "Bech32Utils.h"
 #include "WebUtils.h"
-#include "AlgoScanner.h"
 #include "WebTemplates.h"
 #include "DBQuery.h"
 
