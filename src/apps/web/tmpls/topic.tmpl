@@ -36,5 +36,5 @@
 </div>
 
 <div class="more-notes"> ?(ctx.nextResumeTime)
-    <a href="$(ctx.urlBase)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for #$(ctx.topic)</a>
+    <a href="$(ctx.urlBase)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for $(ctx.topicRendered)</a>
 </div>

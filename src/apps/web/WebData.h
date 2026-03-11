@@ -250,14 +250,14 @@ struct Event {
         };
 
         textAbbrev(content, 100);
-        templarInternal::htmlEscape(content, true);
+        content = templarInternal::htmlEscape(content, true);
 
         if (firstUrl.size()) {
             while (content.size() && isspace(content.back())) content.pop_back();
             if (content.empty()) {
                 content = firstUrl;
                 textAbbrev(content, 100);
-                templarInternal::htmlEscape(content, true);
+                content = templarInternal::htmlEscape(content, true);
             }
 
             return std::string("<a href=\"") + templarInternal::htmlEscape(firstUrl, true) + "\">" + content + "</a>";
@@ -406,7 +406,7 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
 
 
 inline std::string stripUrls(std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+))");
+    static RE2 matcher(R"((?is)(.*?)(\bhttps?://\S+))");
 
     std::string output;
     std::string firstUrl;
