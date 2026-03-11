@@ -213,6 +213,20 @@ table.vert {
     .header {
     }
 
+    .topic-links {
+        display: flex;
+        flex-wrap: wrap;
+
+        margin-left: 50px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+
+        > span {
+            margin-right: 10px;
+            margin-top: 5px;
+        }
+    }
+
     .highlight {
         font-weight: bold;
     }
@@ -222,6 +236,7 @@ table.vert {
 
     .content {
         padding-left: 25px;
+        line-height: 1.2;
     }
 }
 
@@ -258,7 +273,6 @@ table.vert {
 .topic-header {
     .topic-name {
         margin-right: 30px;
-        color: #730097;
         font-weight: bold;
     }
 
@@ -310,6 +324,8 @@ table.vert {
 
 
 
+/* info/about page */
+
 .info-page {
     line-height: 1.2;
 
@@ -323,5 +339,20 @@ table.vert {
 
     b {
         font-weight: bold;
+    }
+}
+
+
+
+/* misc */
+
+.topic-chip {
+    color: white;
+    background-color: #730097;
+    padding: 2px 8px 2px 8px;
+    border-radius: 5px;
+
+    >a {
+        color: white;
     }
 }

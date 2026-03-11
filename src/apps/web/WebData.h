@@ -267,6 +267,21 @@ struct Event {
         return content;
     }
 
+    std::vector<std::string> getTopics() const {
+        std::vector<std::string> output;
+        PackedEventView packed(ev.buf);
+
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
+            if (tagName == 't') {
+                output.emplace_back(tagVal);
+            }
+
+            return true;
+        });
+
+        return output;
+    }
+
 
     void populateJson(lmdb::txn &txn, Decompressor &decomp) {
         if (!json.is_null()) return;
@@ -434,6 +449,7 @@ struct RenderedEventCtx {
     bool highlight = false;
     bool showActions = true;
     std::vector<ReplyCtx> replies;
+    std::vector<std::string> topics;
 };
 
 
@@ -548,6 +564,8 @@ struct EventThread {
                 }
 
                 ctx.ev = &elem;
+
+                ctx.topics = elem.getTopics();
             } else {
                 ctx.eventPresent = false;
             }

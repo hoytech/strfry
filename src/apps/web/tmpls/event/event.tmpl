@@ -30,6 +30,12 @@
         <pre class="content">
             $!(ctx.content)
         </pre>
+
+        <div class="topic-links">
+            <span class="topic-chip"> @(const auto &topic : ctx.topics)
+                <a href="/t/$(topic)">#$(topic)</a>
+            </span>
+        </div>
     </>
 
     <> ?(!ctx.eventPresent)
