@@ -120,32 +120,40 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
     }
 
+    auto handleTopic = [&](const std::string &topic) {
+        uint64_t resumeTime = MAX_U64;
+        uint64_t n = 1;
+        bool showAll = false;
+
+        try {
+            auto resumeTimeStr = u.lookupQuery("next");
+            if (resumeTimeStr) resumeTime = std::stoull(std::string(*resumeTimeStr));
+        } catch(...) {}
+
+        try {
+            auto nStr = u.lookupQuery("n");
+            if (nStr) n = std::stoull(std::string(*nStr));
+        } catch(...) {}
+
+        try {
+            if (u.lookupQuery("all")) showAll = true;
+        } catch(...) {}
+
+        return TopicEvents(topic, showAll, n, resumeTime);
+    };
+
     if (u.path.size() == 0) {
-        rawBody = "Coming soon...";
+        title = "homepage";
+        auto topicEvents = handleTopic("");
+        topicEvents.process(txn, decomp);
+        body = topicEvents.render();
     } else if (u.path[0] == "t") {
         if (u.path.size() == 2) {
             std::string topic = std::string(u.path[1]);
-            uint64_t resumeTime = MAX_U64;
-            uint64_t n = 1;
-            bool showAll = false;
-
-            try {
-                auto resumeTimeStr = u.lookupQuery("next");
-                if (resumeTimeStr) resumeTime = std::stoull(std::string(*resumeTimeStr));
-            } catch(...) {}
-
-            try {
-                auto nStr = u.lookupQuery("n");
-                if (nStr) n = std::stoull(std::string(*nStr));
-            } catch(...) {}
-
-            try {
-                if (u.lookupQuery("all")) showAll = true;
-            } catch(...) {}
-
-            TopicEvents uc(txn, decomp, showAll, topic, n, resumeTime);
             title = std::string("/t/") + topic;
-            body = uc.render();
+            auto topicEvents = handleTopic(topic);
+            topicEvents.process(txn, decomp);
+            body = topicEvents.render();
         }
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {

@@ -1,10 +1,10 @@
 <h2 class="topic-header">
-    <span class="topic-name">#$(ctx.topic)</span>
+    <span class="topic-name">$(ctx.topicRendered)</span>
 
     <span class="nav-current">best</span> ?(!ctx.showAll)
-    <a href="/t/$(ctx.topic)">best</a> ?(ctx.showAll)
+    <a href="$(ctx.urlBase)">best</a> ?(ctx.showAll)
     |
-    <a href="/t/$(ctx.topic)?all=1">all</a> ?(!ctx.showAll)
+    <a href="$(ctx.urlBase)?all=1">all</a> ?(!ctx.showAll)
     <span class="nav-current">all</span> ?(ctx.showAll)
 </h2>
 
@@ -36,5 +36,5 @@
 </div>
 
 <div class="more-notes"> ?(ctx.nextResumeTime)
-    <a href="/t/$(ctx.topic)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for #$(ctx.topic)</a>
+    <a href="$(ctx.urlBase)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for #$(ctx.topic)</a>
 </div>

@@ -752,16 +752,24 @@ struct TopicEventRendered {
 };
 
 struct TopicEvents {
-    bool showAll;
     std::string topic;
+    bool showAll;
     uint64_t startN;
+    uint64_t resumeTime;
 
     std::vector<TopicEventRendered> events;
     std::optional<uint64_t> nextResumeTime;
+    std::string urlBase;
+    std::string topicRendered;
 
-    static const uint64_t EVENTS_PER_PAGE = 30;
+    uint64_t EVENTS_PER_PAGE = 30;
+    uint64_t LOOKBACK_SECONDS = 86400*2;
+    uint64_t MAX_EVENTS_TO_SCAN = 200'000;
 
-    TopicEvents(lmdb::txn &txn, Decompressor &decomp, bool showAll, const std::string &topic, uint64_t startN, uint64_t resumeTime) : showAll(showAll), topic(topic), startN(startN) {
+    TopicEvents(const std::string &topic, bool showAll, uint64_t startN, uint64_t resumeTime) : topic(topic), showAll(showAll), startN(startN), resumeTime(resumeTime) {
+    }
+
+    void process(lmdb::txn &txn, Decompressor &decomp) {
         std::vector<TopicEventScores> eventsAll;
 
         UserCache userCache;
@@ -769,15 +777,7 @@ struct TopicEvents {
 
         if (resumeTime > now) resumeTime = now;
 
-        std::string prefix = "t";
-        prefix += topic;
-
-        env.generic_foreachFull(txn, env.dbi_Event__tag, makeKey_StringUint64(prefix, resumeTime), "", [&](std::string_view k, std::string_view v){
-            ParsedKey_StringUint64 parsedKey(k);
-            if (parsedKey.s != prefix) return false;
-
-            auto levId = lmdb::from_sv<uint64_t>(v);
-
+        auto cb = [&](uint64_t levId){
             auto ev = lookupEventByLevId(txn, levId);
             PackedEventView packed(ev.buf);
 
@@ -788,12 +788,33 @@ struct TopicEvents {
             if (showAll) {
                 if (eventsAll.size() >= EVENTS_PER_PAGE) return false;
             } else {
-                if (now - resumeTime > 86400*2 && eventsAll.size() >= EVENTS_PER_PAGE) return false;
-                if (eventsAll.size() > 1'000) return false;
+                if (now - resumeTime > LOOKBACK_SECONDS && eventsAll.size() >= EVENTS_PER_PAGE) return false;
+                if (eventsAll.size() > MAX_EVENTS_TO_SCAN) return false;
             }
 
             return true;
-        }, true);
+        };
+
+        if (topic.size()) {
+            std::string prefix = "t";
+            prefix += topic;
+            env.generic_foreachFull(txn, env.dbi_Event__tag, makeKey_StringUint64(prefix, resumeTime), "", [&](std::string_view k, std::string_view v){
+                ParsedKey_StringUint64 parsedKey(k);
+                if (parsedKey.s != prefix) return false;
+
+                auto levId = lmdb::from_sv<uint64_t>(v);
+                return cb(levId);
+            }, true);
+        } else {
+            uint64_t kind = 1;
+            env.generic_foreachFull(txn, env.dbi_Event__kind, makeKey_Uint64Uint64(kind, resumeTime), lmdb::to_sv<uint64_t>(MAX_U64), [&](std::string_view k, std::string_view v){
+                ParsedKey_Uint64Uint64 parsedKey(k);
+                if (parsedKey.n1 != kind) return false;
+
+                auto levId = lmdb::from_sv<uint64_t>(v);
+                return cb(levId);
+            }, true);
+        }
 
         if (showAll) {
             // nothing
@@ -832,6 +853,14 @@ struct TopicEvents {
             rendered.timestamp = renderTimestamp(now, packed.created_at());
 
             events.push_back(std::move(rendered));
+        }
+
+        if (topic.size()) {
+            topicRendered = std::string("#") + topic;
+            urlBase = std::string("/t/") + topic;
+        } else {
+            topicRendered = "homepage";
+            urlBase = "/";
         }
     }
 
