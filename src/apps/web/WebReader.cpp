@@ -94,44 +94,6 @@ void doSearch(lmdb::txn &txn, Decompressor &decomp, std::string_view search, std
 
 
 
-TemplarResult renderCommunityEvents(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, const CommunitySpec &communitySpec) {
-    AlgoScanner a(txn, communitySpec.algo);
-    auto events = a.getEvents(txn, decomp, 60);
-
-    std::vector<TemplarResult> rendered;
-    auto now = hoytech::curr_time_s();
-    uint64_t n = 1;
-
-    for (auto &fe : events) {
-        auto ev = Event::fromLevId(txn, fe.levId);
-        ev.populateJson(txn, decomp);
-
-        struct {
-            uint64_t n;
-            const Event &ev;
-            const User &user;
-            std::string timestamp;
-            AlgoScanner::EventInfo &info;
-        } ctx = {
-            n,
-            ev,
-            *userCache.getUser(txn, decomp, ev.getPubkey()),
-            renderTimestamp(now, ev.getCreatedAt()),
-            fe.info,
-        };
-
-        rendered.emplace_back(tmpl::community::item(ctx));
-        n++;
-    }
-
-    return tmpl::community::list(rendered);
-}
-
-
-
-
-
-
 HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decomp, const HTTPRequest &req) {
     HTTPResponse httpResp;
 
@@ -148,32 +110,18 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
     // Normal frame:
 
     std::optional<TemplarResult> body;
-    std::optional<CommunitySpec> communitySpec;
     std::string title;
 
     // Or, raw:
 
     std::optional<std::string> rawBody;
 
-    if (u.path.size() == 0 || u.path[0] == "algo") {
-        communitySpec = lookupCommunitySpec(txn, decomp, userCache, cfg().web__homepageCommunity);
+    if (u.path.size() == 0 || u.path[0] == "t") {
         httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
     }
 
     if (u.path.size() == 0) {
-        body = renderCommunityEvents(txn, decomp, userCache, *communitySpec);
-    } else if (u.path[0] == "algo") {
-        struct {
-            std::string community;
-            const CommunitySpec &communitySpec;
-            std::string_view descriptor;
-        } ctx = {
-            "homepage",
-            *communitySpec,
-            cfg().web__homepageCommunity,
-        };
-
-        body = tmpl::community::communityInfo(ctx);
+        rawBody = "Coming soon...";
     } else if (u.path[0] == "t") {
         if (u.path.size() == 2) {
             std::string topic = std::string(u.path[1]);
@@ -334,7 +282,6 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
         struct {
             const TemplarResult &body;
-            const std::optional<CommunitySpec> &communitySpec;
             std::string_view title;
             std::string staticFilesPrefix;
             std::string_view staticOddbeanCssHash;
@@ -342,7 +289,6 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             std::string_view staticOddbeanSvgHash;
         } ctx = {
             *body,
-            communitySpec,
             title,
             cfg().web__staticFilesPrefix.size() ? cfg().web__staticFilesPrefix : "/static",
             oddbeanStatic__oddbean_css__hash().substr(0, 16),
