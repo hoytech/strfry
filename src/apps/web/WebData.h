@@ -697,25 +697,63 @@ struct UserEvents {
 };
 
 
+
+struct TopicEventInfo {
+    uint64_t n;
+    std::string noteId;
+    std::string summaryHtml;
+    std::string userNpub;
+    std::string username;
+    std::string timestamp;
+
+    uint64_t comments = 0;
+    double score = 0.0;
+
+    TopicEventInfo(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, uint64_t now, uint64_t n, uint64_t levId, const defaultDb::environment::View_Event &evView, const PackedEventView &packed) : n(n) {
+        {
+            Event event(evView);
+            event.populateJson(txn, decomp);
+            noteId = event.getNoteId();
+            summaryHtml = event.summaryHtml();
+        }
+
+        {
+            auto user = userCache.getUser(txn, decomp, std::string(packed.pubkey()));
+            userNpub = user->npubId;
+            username = user->username;
+        }
+
+        timestamp = renderTimestamp(now, packed.created_at());
+
+        std::string prefix = "e";
+        prefix += packed.id();
+
+        env.generic_foreachFull(txn, env.dbi_Event__tag, makeKey_StringUint64(prefix, MAX_U64), "", [&](std::string_view k, std::string_view v){
+            ParsedKey_StringUint64 parsedKey(k);
+            if (parsedKey.s != prefix) return false;
+
+            PackedEventView packed2(lookupEventByLevId(txn, lmdb::from_sv<uint64_t>(v)).buf);
+
+            auto kind = packed2.kind();
+
+            if (kind == 1) comments++;
+            else if (kind == 7) score++;
+
+            return true;
+        }, true);
+    }
+};
+
 struct TopicEvents {
     std::string topic;
 
-    struct EventCluster {
-        std::string rootEventId;
-        flat_hash_map<std::string, Event> eventCache; // eventId (non-root) -> Event
-        bool isRootPresent = false;
-        uint64_t rootEventTimestamp = 0;
-
-        EventCluster(std::string rootEventId) : rootEventId(rootEventId) {}
-    };
-
-    std::vector<EventCluster> eventClusterArr;
-    uint64_t totalEvents = 0;
+    std::vector<TopicEventInfo> events;
     std::optional<uint64_t> timestampCutoff;
     std::optional<uint64_t> nextResumeTime;
 
     TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t resumeTime) : topic(topic) {
-        flat_hash_map<std::string, EventCluster> eventClusters; // eventId (root) -> EventCluster
+        UserCache userCache;
+        auto now = hoytech::curr_time_s();
 
         std::string prefix = "t";
         prefix += topic;
@@ -724,64 +762,50 @@ struct TopicEvents {
             ParsedKey_StringUint64 parsedKey(k);
             if (parsedKey.s != prefix) return false;
 
-            Event ev = Event::fromLevId(txn, lmdb::from_sv<uint64_t>(v));
-            ev.populateRootParent(txn, decomp);
-            auto id = ev.getId();
+            auto levId = lmdb::from_sv<uint64_t>(v);
 
-            auto installRoot = [&](std::string rootId, Event &&rootEvent){
-                rootEvent.populateRootParent(txn, decomp);
+            auto ev = lookupEventByLevId(txn, levId);
+            PackedEventView packed(ev.buf);
 
-                eventClusters.emplace(rootId, rootId);
-                auto &cluster = eventClusters.at(rootId);
+            if (!isRootEvent(txn, packed)) return true;
 
-                cluster.isRootPresent = true;
-                cluster.rootEventTimestamp = rootEvent.getCreatedAt();
-                cluster.eventCache.emplace(rootId, std::move(rootEvent));
-                totalEvents++;
-            };
-
-            if (!ev.root.size()) {
-                // Event root
-
-                if (!eventClusters.contains(ev.root)) {
-                    installRoot(id, std::move(ev));
-                }
-            }
+            events.push_back(TopicEventInfo(txn, decomp, userCache, now, events.size() + 1, levId, ev, packed));
 
             if (timestampCutoff) {
                 if (*timestampCutoff != parsedKey.n) {
                     nextResumeTime = *timestampCutoff - 1;
                     return false;
                 }
-            } else if (totalEvents > 100) {
+            } else if (events.size() >= 30 - 1) {
                 timestampCutoff = parsedKey.n;
             }
 
             return true;
         }, true);
+    }
 
-        for (auto &[k, v] : eventClusters) {
-            eventClusterArr.emplace_back(std::move(v));
-        }
+    bool isRootEvent(lmdb::txn &txn, PackedEventView &packed) {
+        bool foundETag = false;
 
-        std::sort(eventClusterArr.begin(), eventClusterArr.end(), [](auto &a, auto &b){ return b.rootEventTimestamp < a.rootEventTimestamp; });
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
+            if (tagName == 'e') {
+                foundETag = true;
+                return false;
+            }
+
+            return true;
+        });
+
+        return !foundETag;
     }
 
     TemplarResult render(lmdb::txn &txn, Decompressor &decomp) {
-        std::vector<TemplarResult> renderedThreads;
-        UserCache userCache;
-
-        for (auto &cluster : eventClusterArr) {
-            EventThread eventThread(cluster.rootEventId, false, std::move(cluster.eventCache));
-            renderedThreads.emplace_back(eventThread.render(txn, decomp, userCache, "")); //FIXME ""
-        }
-
         struct {
-            std::vector<TemplarResult> &renderedThreads;
-            const std::string &topicStr;
+            const std::vector<TopicEventInfo> &events;
+            const std::string &topic;
             std::optional<uint64_t> nextResumeTime;
         } ctx = {
-            renderedThreads,
+            events,
             topic,
             nextResumeTime,
         };

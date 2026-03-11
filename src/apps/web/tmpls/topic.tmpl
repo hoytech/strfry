@@ -1,13 +1,34 @@
-<div class="topic-notes">
-    <h2 class="notes-header">
-        Notes for topic #$(ctx.topicStr)
-    </h2>
+<h2 class="notes-header">
+    Notes for topic #$(ctx.topic)
+</h2>
 
-    <div class="note-thread"> @(auto &r : ctx.renderedThreads)
-        $(r)
-    </div>
+<div> @(const auto &ev : ctx.events)
+    <div class="community-item vote-context" data-note="$(ev.noteId)">
+        <div class="left">
+            <div>$(ev.n).</div>
+        </div>
 
-    <div class="more-notes"> ?(ctx.nextResumeTime)
-        <a href="/t/$(ctx.topicStr)?next=$(*ctx.nextResumeTime)">More notes for topic #$(ctx.topicStr)</a>
+        <div class="vote-buttons">
+            <span class="u">▲</span>
+            <span class="d">▼</span>
+        </div>
+
+        <div class="right">
+            <div class="summary">
+                <a href="/e/$(ev.noteId)">$!(ev.summaryHtml)</a>
+            </div>
+
+            <div class="info">
+                <span>$(renderPoints(ev.score))</span> points by
+                <a href="/u/$(ev.userNpub)">$(ev.username)</a>
+                $(ev.timestamp) |
+                <span class="f">flag</span> |
+                <a href="/e/$(ev.noteId)">$(ev.comments) comments</a>
+            </div>
+        </div>
     </div>
+</div>
+
+<div class="more-notes"> ?(ctx.nextResumeTime)
+    <a href="/t/$(ctx.topic)?next=$(*ctx.nextResumeTime)">More notes for $(ctx.topic)</a>
 </div>
