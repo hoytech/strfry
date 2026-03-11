@@ -138,9 +138,9 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
                 if (nStr) n = std::stoull(std::string(*nStr));
             } catch(...) {}
 
-            TopicEvents uc(txn, decomp, topic, resumeTime, n);
-            title = std::string("topic: ") + topic;
-            body = uc.render(txn, decomp);
+            TopicEvents uc(txn, decomp, topic, n, resumeTime);
+            title = std::string("/t/") + topic;
+            body = uc.render();
         }
     } else if (u.path[0] == "e") {
         if (u.path.size() == 2) {

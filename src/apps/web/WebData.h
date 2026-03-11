@@ -702,33 +702,14 @@ struct UserEvents {
 
 
 
-struct TopicEventInfo {
-    uint64_t n;
-    std::string noteId;
-    std::string summaryHtml;
-    std::string userNpub;
-    std::string username;
-    std::string timestamp;
+
+struct TopicEventScores {
+    defaultDb::environment::View_Event eventView;
 
     uint64_t comments = 0;
     double score = 0.0;
 
-    TopicEventInfo(lmdb::txn &txn, Decompressor &decomp, UserCache &userCache, uint64_t now, uint64_t n, uint64_t levId, const defaultDb::environment::View_Event &evView, const PackedEventView &packed) : n(n) {
-        {
-            Event event(evView);
-            event.populateJson(txn, decomp);
-            noteId = event.getNoteId();
-            summaryHtml = event.summaryHtml();
-        }
-
-        {
-            auto user = userCache.getUser(txn, decomp, std::string(packed.pubkey()));
-            userNpub = user->npubId;
-            username = user->username;
-        }
-
-        timestamp = renderTimestamp(now, packed.created_at());
-
+    TopicEventScores(lmdb::txn &txn, const defaultDb::environment::View_Event &eventView, const PackedEventView &packed) : eventView(eventView) {
         std::string prefix = "e";
         prefix += packed.id();
 
@@ -748,15 +729,28 @@ struct TopicEventInfo {
     }
 };
 
+struct TopicEventRendered {
+    uint64_t n;
+    std::string noteId;
+    std::string summaryHtml;
+    std::string userNpub;
+    std::string username;
+    std::string timestamp;
+    uint64_t comments;
+    double score;
+};
+
 struct TopicEvents {
     std::string topic;
     uint64_t startN;
 
-    std::vector<TopicEventInfo> events;
+    std::vector<TopicEventRendered> renderedEvents;
     std::optional<uint64_t> timestampCutoff;
     std::optional<uint64_t> nextResumeTime;
 
-    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t resumeTime, uint64_t startN) : topic(topic), startN(startN) {
+    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t startN, uint64_t resumeTime) : topic(topic), startN(startN) {
+        std::vector<TopicEventScores> events;
+
         UserCache userCache;
         auto now = hoytech::curr_time_s();
 
@@ -774,7 +768,7 @@ struct TopicEvents {
 
             if (!isRootEvent(txn, packed)) return true;
 
-            events.push_back(TopicEventInfo(txn, decomp, userCache, now, startN + events.size(), levId, ev, packed));
+            events.push_back(TopicEventScores(txn, ev, packed));
 
             if (timestampCutoff) {
                 if (*timestampCutoff != parsedKey.n) {
@@ -787,6 +781,34 @@ struct TopicEvents {
 
             return true;
         }, true);
+
+        for (const auto &eScore : events) {
+            PackedEventView packed(eScore.eventView.buf);
+
+            TopicEventRendered rendered;
+
+            rendered.n = startN + renderedEvents.size();
+
+            {
+                Event event(eScore.eventView);
+                event.populateJson(txn, decomp);
+                rendered.noteId = event.getNoteId();
+                rendered.summaryHtml = event.summaryHtml();
+            }
+
+            {
+                auto user = userCache.getUser(txn, decomp, std::string(packed.pubkey()));
+                rendered.userNpub = user->npubId;
+                rendered.username = user->username;
+            }
+
+            rendered.timestamp = renderTimestamp(now, packed.created_at());
+
+            rendered.comments = eScore.comments;
+            rendered.score = eScore.score;
+
+            renderedEvents.push_back(std::move(rendered));
+        }
     }
 
     bool isRootEvent(lmdb::txn &txn, PackedEventView &packed) {
@@ -804,15 +826,15 @@ struct TopicEvents {
         return !foundETag;
     }
 
-    TemplarResult render(lmdb::txn &txn, Decompressor &decomp) {
+    TemplarResult render() {
         struct {
             uint64_t startN;
-            const std::vector<TopicEventInfo> &events;
+            const std::vector<TopicEventRendered> &events;
             const std::string &topic;
             std::optional<uint64_t> nextResumeTime;
         } ctx = {
             startN,
-            events,
+            renderedEvents,
             topic,
             nextResumeTime,
         };
