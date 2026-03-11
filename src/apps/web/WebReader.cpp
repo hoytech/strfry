@@ -126,13 +126,19 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         if (u.path.size() == 2) {
             std::string topic = std::string(u.path[1]);
             uint64_t resumeTime = MAX_U64;
+            uint64_t n = 1;
 
             try {
                 auto resumeTimeStr = u.lookupQuery("next");
                 if (resumeTimeStr) resumeTime = std::stoull(std::string(*resumeTimeStr));
             } catch(...) {}
 
-            TopicEvents uc(txn, decomp, topic, resumeTime);
+            try {
+                auto nStr = u.lookupQuery("n");
+                if (nStr) n = std::stoull(std::string(*nStr));
+            } catch(...) {}
+
+            TopicEvents uc(txn, decomp, topic, resumeTime, n);
             title = std::string("topic: ") + topic;
             body = uc.render(txn, decomp);
         }

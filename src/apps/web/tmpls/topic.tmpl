@@ -30,5 +30,5 @@
 </div>
 
 <div class="more-notes"> ?(ctx.nextResumeTime)
-    <a href="/t/$(ctx.topic)?next=$(*ctx.nextResumeTime)">More notes for $(ctx.topic)</a>
+    <a href="/t/$(ctx.topic)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())">More notes for #$(ctx.topic)</a>
 </div>

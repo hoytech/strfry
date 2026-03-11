@@ -317,7 +317,7 @@ struct Event {
 
 
 inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(https?://\S+|#\[\d+\]|nostr:(?:note|npub)1\w+))");
+    static RE2 matcher(R"((?is)(.*?)(\bhttps?://\S+|\bnostr:(?:note|npub)1\w+|#\[\d+\]|#\w+))");
 
     std::string output;
 
@@ -351,7 +351,7 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
                 appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
                 didTransform = true;
             } catch(std::exception &e) {
-                //LW << "tag parse error: " << e.what();
+                //LW << "parse error: " << e.what();
             }
 
             if (!didTransform) output += sv(match);
@@ -373,10 +373,14 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
                     didTransform = true;
                 }
             } catch(std::exception &e) {
-                //LW << "tag parse error: " << e.what();
+                //LW << "parse error: " << e.what();
             }
 
             if (!didTransform) output += sv(match);
+        } else if (match.starts_with("#")) {
+            std::string url = "/t/";
+            url += sv(match).substr(1);
+            appendLink(url, sv(match));
         }
     }
 
@@ -746,12 +750,13 @@ struct TopicEventInfo {
 
 struct TopicEvents {
     std::string topic;
+    uint64_t startN;
 
     std::vector<TopicEventInfo> events;
     std::optional<uint64_t> timestampCutoff;
     std::optional<uint64_t> nextResumeTime;
 
-    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t resumeTime) : topic(topic) {
+    TopicEvents(lmdb::txn &txn, Decompressor &decomp, const std::string &topic, uint64_t resumeTime, uint64_t startN) : topic(topic), startN(startN) {
         UserCache userCache;
         auto now = hoytech::curr_time_s();
 
@@ -769,7 +774,7 @@ struct TopicEvents {
 
             if (!isRootEvent(txn, packed)) return true;
 
-            events.push_back(TopicEventInfo(txn, decomp, userCache, now, events.size() + 1, levId, ev, packed));
+            events.push_back(TopicEventInfo(txn, decomp, userCache, now, startN + events.size(), levId, ev, packed));
 
             if (timestampCutoff) {
                 if (*timestampCutoff != parsedKey.n) {
@@ -801,10 +806,12 @@ struct TopicEvents {
 
     TemplarResult render(lmdb::txn &txn, Decompressor &decomp) {
         struct {
+            uint64_t startN;
             const std::vector<TopicEventInfo> &events;
             const std::string &topic;
             std::optional<uint64_t> nextResumeTime;
         } ctx = {
+            startN,
             events,
             topic,
             nextResumeTime,
