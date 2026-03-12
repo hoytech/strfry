@@ -833,8 +833,6 @@ struct TopicEventScores {
         }, true);
 
         isOddbean = isEventPostedByOddbean(packed);
-
-        score = comments + upVotes;
     }
 };
 
@@ -919,10 +917,21 @@ struct TopicEvents {
         }
 
         if (showAll) {
-            // nothing
+            // no scoring/filtering, just all notes sorted by time
         } else {
-            // time decay
+            double maxScore = 0.0;
+
             for (auto &e : eventsAll) {
+                e.score = e.comments + e.upVotes;
+                if (e.score > maxScore) maxScore = e.score;
+            }
+
+            for (auto &e : eventsAll) {
+                if (e.isOddbean) e.score = (e.score * 10) + maxScore / 3;
+            }
+
+            for (auto &e : eventsAll) {
+                // time decay
                 double age = (double)now - e.timestamp;
                 double scale = (double)LOOKBACK_SECONDS - age;
                 if (scale < 0.0) scale = 0.0;
