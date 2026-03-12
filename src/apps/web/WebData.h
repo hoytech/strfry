@@ -777,6 +777,7 @@ struct TopicEventScores {
     uint64_t upVotes = 0;
     uint64_t flags = 0;
     double score = 0.0;
+    bool isOddbean = false;
 
     TopicEventScores(lmdb::txn &txn, const defaultDb::environment::View_Event &eventView, const PackedEventView &packed) : eventView(eventView) {
         timestamp = packed.created_at();
@@ -798,6 +799,13 @@ struct TopicEventScores {
 
             return true;
         }, true);
+
+        // Assumes C-tag is always first in array
+
+        packed.foreachTag([&](char tagName, std::string_view tagVal){
+            if (tagName == 'C' && tagVal == "oddbean") isOddbean = true;
+            return false;
+        });
 
         score = comments + upVotes;
     }

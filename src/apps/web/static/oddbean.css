@@ -216,6 +216,7 @@ table.vert {
     .topic-links {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
 
         margin-left: 50px;
         margin-top: 10px;
@@ -224,6 +225,16 @@ table.vert {
         > span {
             margin-right: 10px;
             margin-top: 5px;
+        }
+
+        .oddbean-post {
+            height: 20px;
+            width: 20px;
+
+            background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
+            background-size: 20px 20px;
+            background-repeat: no-repeat;
+            background-position: center;
         }
     }
 
@@ -309,6 +320,17 @@ table.vert {
         padding-top: 5px;
         font-size: 75%;
         color: #828282;
+    }
+
+    .oddbean-post {
+        height: 13px;
+        width: 13px;
+        margin-top: 3px;
+
+        background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
+        background-size: 13px 13px;
+        background-repeat: no-repeat;
+        background-position: center;
     }
 }
 
