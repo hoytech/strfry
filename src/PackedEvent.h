@@ -49,7 +49,7 @@ struct PackedEventView {
         return lmdb::from_sv<uint64_t>(buf.substr(80, 8));
     }
 
-    void foreachTag(const std::function<bool(char, std::string_view)> &cb) {
+    void foreachTag(const std::function<bool(char, std::string_view)> &cb) const {
         std::string_view b = buf.substr(88);
 
         while (b.size()) {
