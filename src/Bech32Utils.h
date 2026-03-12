@@ -38,18 +38,23 @@ inline std::string encodeBech32Simple(const std::string &hrp, std::string_view v
     std::vector<uint8_t> values5;
     convertbits<8, 5, true>(values5, values);
 
-    return bech32::encode(hrp, values5, bech32::Encoding::BECH32);
+    return bech32::Encode(bech32::Encoding::BECH32, hrp, values5);
 }
 
-inline std::string decodeBech32Simple(std::string_view v) {
-    auto res = bech32::decode(std::string(v));
+inline std::string decodeBech32(std::string_view v) {
+    auto res = bech32::Decode(std::string(v), bech32::CharLimit(5000));
 
     if (res.encoding == bech32::Encoding::INVALID) throw herr("invalid bech32");
     else if (res.encoding == bech32::Encoding::BECH32M) throw herr("got bech32m");
 
     std::vector<uint8_t> out;
     if (!convertbits<5, 8, false>(out, res.data)) throw herr("convertbits failed");
-    if (out.size() != 32) throw herr("unexpected size from bech32");
 
     return std::string((char*)out.data(), out.size());
+}
+
+inline std::string decodeBech32Simple(std::string_view v) {
+    auto out = decodeBech32(v);
+    if (out.size() != 32) throw herr("unexpected size from bech32");
+    return out;
 }
