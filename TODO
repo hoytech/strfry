@@ -24,10 +24,8 @@ misc
   ? warn when run as root
 
 web
-  - messed up top-bar on mobile
-  - slightly grey out visited links
-  - dark mode
+  - flag support
   - if nostr:npub1... appears in note content when users is posting, add it as p-tag "mention"
-  - clicking new post when on a topic should add #topic tag
-  - unpack nostr:nevent and nostr:nprofile into note and npub links
-  - increase weighting for oddbean posts. show special oddbean indicator?
+    - same with #tags
+  ? messed up top-bar on mobile
+  ? slightly grey out visited links
