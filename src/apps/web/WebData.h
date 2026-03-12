@@ -2,6 +2,8 @@
 
 #include "re2/re2.h"
 
+#include "hoytech/parser.h"
+
 #include "Bech32Utils.h"
 #include "WebUtils.h"
 #include "WebTemplates.h"
@@ -330,8 +332,26 @@ struct Event {
 };
 
 
+inline std::string decodeNip19Tag0(std::string_view v) {
+    LI << "HMM " << to_hex(v);
+    hoytech::Parser parser(v);
+
+    while (!parser.isEof()) {
+        auto tag = parser.getByte();
+        auto len = parser.getByte();
+        auto val = parser.getBytes(len);
+        if (tag == 0) {
+            if (val.size() != 32) throw herr("invalid length for tag 0");
+            return std::string(val);
+        }
+    }
+
+    throw herr("couldn't find tag 0");
+}
+
+
 inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
-    static RE2 matcher(R"((?is)(.*?)(\bhttps?://\S+|\bnostr:(?:note|npub)1\w+|#\[\d+\]|#\w+))");
+    static RE2 matcher(R"((?is)(.*?)(\bhttps?://\S+|\bnostr:(?:note|npub|nevent|nprofile)1\w+|#\[\d+\]|#\w+))");
 
     std::string output;
 
@@ -363,6 +383,35 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
             try {
                 const auto *u = userCache.getUser(txn, decomp, decodeBech32Simple(sv(match).substr(6)));
                 appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
+                didTransform = true;
+            } catch(std::exception &e) {
+                //LW << "parse error: " << e.what();
+            }
+
+            if (!didTransform) output += sv(match);
+        } else if (match.starts_with("nostr:nevent1")) {
+            bool didTransform = false;
+
+            try {
+                std::string decoded = decodeBech32(match.substr(6));
+                auto note = encodeBech32Simple("note", decodeNip19Tag0(decoded));
+                appendLink(std::string("/e/") + note, std::string(sv(match).substr(0, 24)) + "...");
+                didTransform = true;
+            } catch(std::exception &e) {
+                //LW << "parse error: " << e.what();
+            }
+
+            if (!didTransform) output += sv(match);
+        } else if (match.starts_with("nostr:nprofile1")) {
+            bool didTransform = false;
+
+            try {
+                std::string decoded = decodeBech32(match.substr(6));
+                auto pubkey = decodeNip19Tag0(decoded);
+
+                const auto *u = userCache.getUser(txn, decomp, pubkey);
+                appendLink(std::string("/u/") + u->npubId, std::string("@") + u->username);
+
                 didTransform = true;
             } catch(std::exception &e) {
                 //LW << "parse error: " << e.what();
