@@ -72,7 +72,7 @@ struct WriterPipeline {
                     } catch (std::exception &e) {
                         if (verboseReject) {
                             jsonStr = tao::json::to_string(m.eventJson).substr(0,200);
-                            LW << "Rejected event: " << jsonStr << " reason: " << e.what();
+                            LI << "Rejected event: " << jsonStr << " reason: " << e.what();
                         }
                         numLive--;
                         totalRejected++;
