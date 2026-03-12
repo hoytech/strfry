@@ -19,7 +19,8 @@
                     </a>
                 </span>
 
-                <a href="/post" class="new-post-link">new post</a>
+                <a href="/post" class="new-post-link">new post</a> ?(ctx.topic.size() == 0)
+                <a href="/post?t=$(ctx.topic)" class="new-post-link">new post</a> ?(ctx.topic.size() != 0)
 
                 <a href="/about" class="about">about</a>
             </span>

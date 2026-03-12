@@ -120,7 +120,9 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
     }
 
-    auto handleTopic = [&](const std::string &topic) {
+    std::string topic;
+
+    auto handleTopic = [&]() {
         uint64_t resumeTime = MAX_U64;
         uint64_t n = 1;
         bool showAll = false;
@@ -144,14 +146,14 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
     if (u.path.size() == 0) {
         title = "homepage";
-        auto topicEvents = handleTopic("");
+        auto topicEvents = handleTopic();
         topicEvents.process(txn, decomp);
         body = topicEvents.render();
     } else if (u.path[0] == "t") {
         if (u.path.size() == 2) {
-            std::string topic = std::string(u.path[1]);
+            topic = std::string(u.path[1]);
             title = std::string("/t/") + topic;
-            auto topicEvents = handleTopic(topic);
+            auto topicEvents = handleTopic();
             topicEvents.process(txn, decomp);
             body = topicEvents.render();
         }
@@ -266,7 +268,28 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             body = tmpl::searchPage(ctx);
         }
     } else if (u.path[0] == "post") {
-        body = tmpl::newPost(nullptr);
+        auto topicParam = u.lookupQuery("t");
+        std::string topicRaw;
+        std::string topicRendered;
+
+        if (topicParam) {
+            topicRaw = std::string(*topicParam);
+
+            topicRendered = "#";
+            topicRendered += topicRaw;
+        } else {
+            topicRendered = "homepage";
+        }
+
+        struct {
+            const std::string &topicRaw;
+            const std::string &topicRendered;
+        } ctx = {
+            topicRaw,
+            topicRendered,
+        };
+
+        body = tmpl::newPost(ctx);
     } else if (u.path[0] == "static" && u.path.size() >= 2) {
         httpResp.extraHeaders += "Cache-Control: max-age=31536000\r\n";
 
@@ -306,6 +329,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             std::string_view staticOddbeanCssHash;
             std::string_view staticOddbeanJsHash;
             std::string_view staticOddbeanSvgHash;
+            std::string_view topic;
         } ctx = {
             *body,
             title,
@@ -313,6 +337,7 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             oddbeanStatic__oddbean_css__hash().substr(0, 16),
             oddbeanStatic__oddbean_js__hash().substr(0, 16),
             oddbeanStatic__oddbean_svg__hash().substr(0, 16),
+            topic,
         };
 
         responseData = std::move(tmpl::main(ctx).str);

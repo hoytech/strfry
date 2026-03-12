@@ -8,6 +8,10 @@ function decodeBech32(inp) {
     return base16.encode(bech32Ctx.fromWords(bech32Ctx.decode(inp).words)).toLowerCase();
 }
 
+function defaultTags() {
+    return [['C', 'oddbean'],['client', 'oddbean']];
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('obLogin', () => ({
         loggedIn: false,
@@ -59,6 +63,8 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('newPost', () => ({
         init() {
+            let topicAttr = this.$el.getAttribute('data-topic');
+            if (topicAttr) this.topic = topicAttr;
         },
 
         async submit() {
@@ -67,9 +73,11 @@ document.addEventListener('alpine:init', () => {
             let ev = {
                 created_at: Math.floor(((new Date()) - 0) / 1000),
                 kind: 1,
-                tags: [['t', 'oddbean'],['client', 'oddbean']],
+                tags: defaultTags(),
                 content: this.$refs.post.value,
             };
+
+            if (this.topic) ev.tags.push(['t', this.topic]);
 
             ev = await window.nostr.signEvent(ev);
 
@@ -105,7 +113,7 @@ document.addEventListener('alpine:init', () => {
             let ev = {
                 created_at: Math.floor(((new Date()) - 0) / 1000),
                 kind: 1,
-                tags: [['client', 'oddbean']],
+                tags: defaultTags(),
                 content: this.$refs.post.value,
             };
 

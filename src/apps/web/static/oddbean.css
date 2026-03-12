@@ -252,6 +252,13 @@ table.vert {
 /* new post */
 
 .new-post {
+    .title-bar {
+        margin-top: 10px;
+        margin-bottom: 20px;
+        font-weight: bold;
+        font-size: 110%;
+    }
+
     .submit-button {
         margin-top: 20px;
         margin-bottom: 20px;
