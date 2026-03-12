@@ -12,6 +12,28 @@ function defaultTags() {
     return [['C', 'oddbean'],['client', 'oddbean']];
 }
 
+function getRootETag(tags) {
+    let rootId;
+
+    for (let t of tags) {
+        if (t[0] === 'e' && t[3] === 'root') {
+            rootId = t[1];
+            break;
+        }
+    }
+
+    if (!rootId) {
+        for (let t of tags) {
+            if (t[0] === 'e') {
+                rootId = t[1];
+                break;
+            }
+        }
+    }
+
+    return rootId;
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('obLogin', () => ({
         loggedIn: false,
@@ -120,22 +142,7 @@ document.addEventListener('alpine:init', () => {
             {
                 // e tags
 
-                let rootId;
-                for (let t of this.repliedTo.tags) {
-                    if (t[0] === 'e' && t[3] === 'root') {
-                        rootId = t[1];
-                        break;
-                    }
-                }
-
-                if (!rootId) {
-                    for (let t of this.repliedTo.tags) {
-                        if (t[0] === 'e') {
-                            rootId = t[1];
-                            break;
-                        }
-                    }
-                }
+                let rootId = getRootETag(this.repliedTo.tags);
 
                 if (rootId) {
                     ev.tags.push(['e', rootId, '', 'root']);
@@ -211,8 +218,11 @@ document.addEventListener("click", async (e) => {
             let response = await fetch(`/e/${note}/raw.json`);
             let liked = await response.json();
 
-            ev.tags.push(['e', liked.id]);
+            let rootId = getRootETag(liked.tags);
+
+            ev.tags.push(['e', liked.id, '', 'reply']);
             ev.tags.push(['p', liked.pubkey]);
+            if (rootId) ev.tags.push(['e', rootId, '', 'root']);
         }
 
         ev = await window.nostr.signEvent(ev);
