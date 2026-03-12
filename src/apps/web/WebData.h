@@ -379,6 +379,22 @@ inline std::string decodeNip19Tag0(std::string_view v) {
 }
 
 
+void trimInPlace(std::string &s) {
+    if (s.empty()) return;
+
+    auto start = std::find_if_not(s.begin(), s.end(), [](unsigned char c) { return std::isspace(c); });
+    auto end = std::find_if_not(s.rbegin(), s.rend(), [](unsigned char c) { return std::isspace(c); }).base();
+
+    if (start >= end) {
+        s.clear();
+        return;
+    }
+
+    s.erase(end, s.end());
+    s.erase(s.begin(), start);
+}
+
+
 inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const Event &ev, UserCache &userCache, std::string &content) {
     static RE2 matcher(R"((?is)(.*?)(\bhttps?://\S+|\bnostr:(?:note|npub|nevent|nprofile)1\w+|#\[\d+\]|#\w+))");
 
@@ -480,6 +496,8 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
         output += std::string_view(input.data(), input.size());
         std::swap(output, content);
     }
+
+    trimInPlace(content);
 }
 
 
