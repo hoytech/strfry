@@ -35,6 +35,11 @@
     </div>
 </div>
 
+<div> ?(ctx.events.size() == 0)
+    <>End of events.</> ?(ctx.startN > 1)
+    <>No events found for this topic. Why not post one?</> ?(ctx.startN == 1)
+</div>
+
 <div class="more-notes"> ?(ctx.nextResumeTime)
     <a href="$(ctx.urlBase)?next=$(*ctx.nextResumeTime)&n=$(ctx.startN + ctx.events.size())$(ctx.showAllQueryString())">More notes for $(ctx.topicRendered)</a>
 </div>

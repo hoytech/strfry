@@ -186,12 +186,6 @@ table.vert {
         margin-bottom: 30px;
         border-bottom: 1px solid black;
     }
-
-    .more-notes {
-        margin-top: 20px;
-        margin-left: 20px;
-        margin-bottom: 20px;
-    }
 }
 
 
@@ -360,6 +354,12 @@ table.vert {
 
 
 /* misc */
+
+.more-notes {
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
 
 .topic-chip {
     color: white;
