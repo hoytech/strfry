@@ -1,12 +1,11 @@
 <div class='event $(ctx.abbrev ? "abbrev" : "")'>
     <> ?(ctx.eventPresent)
-        <div class="event-present vote-context" data-note="$(ctx.ev->getNoteId())">
+        <div class="event-header vote-context" data-note="$(ctx.ev->getNoteId())">
             <div class="vote-buttons">
-                <span class="u">▲</span>
-                <span class="d">▼</span>
+                <span class="u" title="Upvote this post">▲</span>
             </div>
 
-            <div class="header">
+            <div>
                 <a class='$(ctx.highlight ? "highlight" : "")' href="/u/$(ctx.user->npubId)">$(ctx.user->username)</a>
                 | <a href="/e/$(ctx.ev->getNoteId())">$(ctx.timestamp)</a>
                   (<a href="/e/$(ctx.ev->getNoteId())/raw.json">raw</a>)
@@ -25,6 +24,8 @@
                 <>+$(ctx.ev->upVotes)</> ?(ctx.ev->upVotes)
                 <>-$(ctx.ev->downVotes)</> ?(ctx.ev->downVotes)
             </div>
+
+            <div class="oddbean-post" title="Created with Oddbean!"></div> ?(ctx.isOddbean)
         </div>
 
         <pre class="content">
@@ -32,8 +33,6 @@
         </pre>
 
         <div class="topic-links">
-            <span class="oddbean-post" title="Created with Oddbean!"></span>
-
             <span class="topic-chip"> @(const auto &topic : ctx.topics)
                 <a href="/t/$(topic)">#$(topic)</a>
             </span>

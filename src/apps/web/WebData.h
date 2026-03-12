@@ -48,6 +48,19 @@ inline void preprocessMetaFieldContent(std::string &content) {
 }
 
 
+inline bool isEventPostedByOddbean(const PackedEventView &packed) {
+    bool isOddbean = false;
+
+    // Assumes C-tag is always first in array
+    packed.foreachTag([&](char tagName, std::string_view tagVal){
+        if (tagName == 'C' && tagVal == "oddbean") isOddbean = true;
+        return false;
+    });
+
+    return isOddbean;
+}
+
+
 struct User {
     std::string pubkey;
 
@@ -243,7 +256,7 @@ struct Event {
     // FIXME: Don't truncate UTF-8 mid-sequence
     // FIXME: Don't put ellipsis if truncated text ends in punctuation
 
-    std::string summaryHtml() const {
+    std::string summaryHtml(std::string_view noteIdAltLink = "") const {
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
 
@@ -254,6 +267,10 @@ struct Event {
         textAbbrev(content, 100);
         content = templarInternal::htmlEscape(content, true);
 
+        auto fillEmptyContent = [&]{
+            if (std::all_of(content.begin(), content.end(), [](unsigned char c) { return std::isspace(c); })) content = "[no content]";
+        };
+
         if (firstUrl.size()) {
             while (content.size() && isspace(content.back())) content.pop_back();
             if (content.empty()) {
@@ -262,7 +279,20 @@ struct Event {
                 content = templarInternal::htmlEscape(content, true);
             }
 
+            fillEmptyContent();
+
             return std::string("<a href=\"") + templarInternal::htmlEscape(firstUrl, true) + "\">" + content + "</a>";
+        }
+
+        fillEmptyContent();
+
+        if (noteIdAltLink.size() != 0) {
+            std::string link = "<a href=\"/e/";
+            link += templarInternal::htmlEscape(noteIdAltLink, true);
+            link += "\">";
+            link += content;
+            link += "</a>";
+            std::swap(content, link);
         }
 
         return content;
@@ -333,7 +363,6 @@ struct Event {
 
 
 inline std::string decodeNip19Tag0(std::string_view v) {
-    LI << "HMM " << to_hex(v);
     hoytech::Parser parser(v);
 
     while (!parser.isEof()) {
@@ -496,6 +525,7 @@ struct RenderedEventCtx {
     bool abbrev = false;
     bool highlight = false;
     bool showActions = true;
+    bool isOddbean = false;
     std::vector<ReplyCtx> replies;
     std::vector<std::string> topics;
 };
@@ -610,6 +640,8 @@ struct EventThread {
                     ctx.content = templarInternal::htmlEscape(elem.json.at("content").get_string(), false);
                     preprocessEventContent(txn, decomp, elem, userCache, ctx.content);
                 }
+
+                ctx.isOddbean = isEventPostedByOddbean(PackedEventView(elem.ev.buf));
 
                 ctx.ev = &elem;
 
@@ -800,12 +832,7 @@ struct TopicEventScores {
             return true;
         }, true);
 
-        // Assumes C-tag is always first in array
-
-        packed.foreachTag([&](char tagName, std::string_view tagVal){
-            if (tagName == 'C' && tagVal == "oddbean") isOddbean = true;
-            return false;
-        });
+        isOddbean = isEventPostedByOddbean(packed);
 
         score = comments + upVotes;
     }
@@ -855,6 +882,7 @@ struct TopicEvents {
             auto ev = lookupEventByLevId(txn, levId);
             PackedEventView packed(ev.buf);
 
+            if (packed.created_at() > now) return true;
             if (!isRootEvent(txn, packed)) return true;
 
             eventsAll.push_back(TopicEventScores(txn, ev, packed));
@@ -893,6 +921,14 @@ struct TopicEvents {
         if (showAll) {
             // nothing
         } else {
+            // time decay
+            for (auto &e : eventsAll) {
+                double age = (double)now - e.timestamp;
+                double scale = (double)LOOKBACK_SECONDS - age;
+                if (scale < 0.0) scale = 0.0;
+                e.score = e.score * scale;
+            }
+
             std::sort(eventsAll.begin(), eventsAll.end(), [](auto &a, auto &b){ return a.score > b.score; });
 
             if (eventsAll.size() > EVENTS_PER_PAGE) eventsAll.erase(eventsAll.begin() + EVENTS_PER_PAGE, eventsAll.end());
@@ -915,7 +951,8 @@ struct TopicEvents {
                 Event event(eScore.eventView);
                 event.populateJson(txn, decomp);
                 rendered.noteId = event.getNoteId();
-                rendered.summaryHtml = event.summaryHtml();
+
+                rendered.summaryHtml = event.summaryHtml(rendered.noteId);
             }
 
             {

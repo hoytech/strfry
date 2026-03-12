@@ -201,16 +201,19 @@ table.vert {
     margin-bottom: 20px;
     overflow-x: clip;
 
-    .event-present {
-        display: flex;
-        flex-direction: row;
-    }
-
     .event-not-present {
         color: red;
     }
 
-    .header {
+    .event-header {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 15px;
+
+        .oddbean-post {
+            margin-left: 20px;
+        }
     }
 
     .topic-links {
@@ -225,16 +228,6 @@ table.vert {
         > span {
             margin-right: 10px;
             margin-top: 5px;
-        }
-
-        .oddbean-post {
-            height: 20px;
-            width: 20px;
-
-            background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
-            background-size: 20px 20px;
-            background-repeat: no-repeat;
-            background-position: center;
         }
     }
 
@@ -300,7 +293,7 @@ table.vert {
 }
 
 .topic-item {
-    margin-bottom: 8px;
+    padding-bottom: 8px;
     overflow: hidden;
 
     display: flex;
@@ -323,14 +316,7 @@ table.vert {
     }
 
     .oddbean-post {
-        height: 13px;
-        width: 13px;
         margin-top: 3px;
-
-        background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
-        background-size: 13px 13px;
-        background-repeat: no-repeat;
-        background-position: center;
     }
 }
 
@@ -384,4 +370,14 @@ table.vert {
     >a {
         color: white;
     }
+}
+
+.oddbean-post {
+    height: 13px;
+    width: 13px;
+
+    background-image: url('/static/oddbean.svg?7b162b894c8bdf0f');
+    background-size: 13px 13px;
+    background-repeat: no-repeat;
+    background-position: center;
 }
