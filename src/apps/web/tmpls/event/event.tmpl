@@ -32,7 +32,7 @@
             $!(ctx.content)
         </pre>
 
-        <div class="topic-links">
+        <div class="topic-links"> ?(ctx.topics.size() > 0)
             <span class="topic-chip"> @(const auto &topic : ctx.topics)
                 <a href="/t/$(topic)">#$(topic)</a>
             </span>

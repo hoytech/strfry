@@ -17,14 +17,23 @@
     }
 }
 
+
+
 body {
     font-family: sans-serif;
+    background-color: white;
+    @media (prefers-color-scheme: dark) {
+        background-color: black;
+        color: #aaa;
+    }
 }
 
 a:link, a:visited {
     text-decoration: none;
     color: green;
 }
+
+
 
 a:hover {
     text-decoration: underline;
@@ -43,6 +52,7 @@ h2 {
 
 #ob-header {
     background-color: #65cb25;
+    @media (prefers-color-scheme: dark) { background-color: #3ea000; }
     height: 26px;
     padding: 2px;
 
@@ -88,6 +98,7 @@ h2 {
     .login {
         margin-left: 20px;
         margin-right: 5px;
+        color: black;
     }
 
     .no-js {
@@ -106,6 +117,7 @@ h2 {
 #ob-page {
     padding: 10px 10px 10px 10px;
     background-color: #f6f6ef;
+    @media (prefers-color-scheme: dark) { background-color: #151515; }
 }
 
 #ob-footer {
@@ -243,6 +255,7 @@ table.vert {
         margin-top: 20px;
         padding-left: 20px;
         border-left: 1px dotted black;
+        @media (prefers-color-scheme: dark) { border-left: 1px dotted #ccc; }
     }
 }
 
@@ -283,11 +296,12 @@ table.vert {
 
     .nav-current {
         font-weight: bold;
+        @media (prefers-color-scheme: dark) { color: #aaa; }
     }
 }
 
 .topic-item {
-    padding-bottom: 8px;
+    padding-bottom: 10px;
     overflow: hidden;
 
     display: flex;
@@ -301,6 +315,7 @@ table.vert {
     .summary > a:link, .summary > a:visited {
         text-decoration: none;
         color: black;
+        @media (prefers-color-scheme: dark) { color: #aaa; }
     }
 
     .info {
@@ -364,11 +379,18 @@ table.vert {
 .topic-chip {
     color: white;
     background-color: #730097;
+    @media (prefers-color-scheme: dark) {
+        color: #aaa;
+    }
+
     padding: 2px 8px 2px 8px;
     border-radius: 5px;
 
     >a {
         color: white;
+        @media (prefers-color-scheme: dark) {
+            color: #aaa;
+        }
     }
 }
 
