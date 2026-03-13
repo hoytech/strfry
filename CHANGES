@@ -47,6 +47,8 @@
   * There is now a hot-reloadable config flag "verbose" in the router config
     to allow reducing the verbosity of strfry router logs (requested by kulak)
   * New --verbosity flag that controls how chatty strfry's logging output is.
+  * --range flag for strfry sync, which is a more convenient way to specify
+    since and until in your nostr filter.
 
 1.0.4
   * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
