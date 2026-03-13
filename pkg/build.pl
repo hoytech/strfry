@@ -16,23 +16,20 @@ BuildLib::fpm({
     description => 'strfry',
     files => {
         'strfry' => '/usr/local/bin/strfry',
-        'strfry.conf' => '/etc/strfry.conf',
     },
     dirs => {
     },
     config_files => [
-        '/etc/strfry.conf',
     ],
-    #postinst => 'pkg/scripts/postinst',
-    # ssl dev pkg so we don't hard-code openssl ABI version (works with multiple)
+    # -dev packages so we don't have to hard-code ABI versions
     deps => [qw/
         zlib1g
         libssl-dev
-        liblmdb0
-        libflatbuffers2
-        libsecp256k1-1
-        libzstd1
-        libre2-9
+        liblmdb-dev
+        libflatbuffers-dev
+        libsecp256k1-dev
+        libzstd-dev
+        libre2-dev
         systemd-coredump
     /],
 });
