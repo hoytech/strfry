@@ -44,7 +44,8 @@
   * HTML landing page improvements: Only show relay info fields that have
     configured values, make URLs actual links, render pubkeys as npubs instead
     of 32-byte hex, show relay uptime in days, add a favicon.ico.
-  * Reduced verbosity of strfry router logs (requested by kulak)
+  * There is now a hot-reloadable config flag "verbose" in the router config
+    to allow reducing the verbosity of strfry router logs (requested by kulak)
   * New --verbosity flag that controls how chatty strfry's logging output is.
 
 1.0.4
