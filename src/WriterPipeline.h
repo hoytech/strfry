@@ -30,6 +30,8 @@ struct WriterPipeline {
     std::atomic<uint64_t> totalWritten = 0;
     std::atomic<uint64_t> totalRejected = 0;
     std::atomic<uint64_t> totalDups = 0;
+    std::atomic<uint64_t> totalReplaced = 0;
+    std::atomic<uint64_t> totalDeleted = 0;
 
   private:
     hoytech::protected_queue<WriterPipelineInput> validatorInbox;
@@ -105,7 +107,7 @@ struct WriterPipeline {
                 bool isVerbose = verboseCommit();
                 auto newEvents = writerInbox.pop_all();
 
-                uint64_t written = 0, dups = 0;
+                uint64_t written = 0, dups = 0, replaced = 0, deleted = 0;
 
                 // Collect a certain amount of records in a batch, push the rest back into the writerInbox
                 // Pre-filter out dups in a read-only txn as an optimisation
@@ -155,16 +157,22 @@ struct WriterPipeline {
                         if (ev.status == EventWriteStatus::Written) {
                             written++;
                             totalWritten++;
-                        } else {
+                        } else if (ev.status == EventWriteStatus::Duplicate) {
                             dups++;
                             totalDups++;
+                        } else if (ev.status == EventWriteStatus::Replaced) {
+                            replaced++;
+                            totalReplaced++;
+                        } else if (ev.status == EventWriteStatus::Deleted) {
+                            deleted++;
+                            totalDeleted++;
                         }
                     }
 
                     if (onCommit) onCommit(written);
                 }
 
-                if (isVerbose) LI << "Writer: added: " << written << " dups: " << dups;
+                if (isVerbose) LI << "Writer: added: " << written << " dups: " << dups << " replaced: " << replaced << " deleted: " << deleted;
 
                 if (shutdownComplete) {
                     flushInbox.push_move(true);
