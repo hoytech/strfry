@@ -20,14 +20,37 @@
 static const char USAGE[] =
 R"(
     Usage:
-      sync <url> [--filter=<filter>] [--dir=<dir>] [--frame-size-limit=<frame-size-limit>]
+      sync <url> [--filter=<filter>] [--dir=<dir>] [--range=<range>] [--frame-size-limit=<frame-size-limit>]
 
     Options:
       --filter=<filter>  Nostr filter (either single filter object or array of filters)
       --dir=<dir>        Direction: both, down, up, none [default: both]
+      --range=<range>    Add since and until fields to filter. Format: START-END
+                         Examples: 2M- (last 2 months), 1Y-3w (from 1 year 3 weeks old)
+                         Units: s=seconds, m=minutes, h=hours, d=days, w=weeks, M=months, Y=years
       --frame-size-limit=<frame-size-limit>  Limit outgoing negentropy message size (default 60k, 0 for no limit)
 )";
 
+
+static uint64_t parseTime(const std::string &str) {
+    if (str.size() == 0) throw herr("invalid time");
+
+    char unit = str.back();
+    double scale;
+
+    if (unit == 's') scale = 1;
+    else if (unit == 'm') scale = 60;
+    else if (unit == 'h') scale = 60 * 60;
+    else if (unit == 'd') scale = 86400;
+    else if (unit == 'w') scale = 86400 * 7;
+    else if (unit == 'M') scale = 86400 * 30.5;
+    else if (unit == 'Y') scale = 86400 * 365.2425;
+    else throw herr("unknow time unit: ", unit);
+
+    double seconds = std::stod(str.substr(0, str.size() - 1)) * scale;
+
+    return (uint64_t)seconds;
+}
 
 
 void cmd_sync(const std::vector<std::string> &subArgs) {
@@ -38,8 +61,32 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::string filterStr;
     if (args["--filter"]) filterStr = args["--filter"].asString();
     else filterStr = "{}";
+    tao::json::value filterJson = tao::json::from_string(filterStr);
+
     std::string dir = args["--dir"] ? args["--dir"].asString() : "both";
     if (dir != "both" && dir != "up" && dir != "down" && dir != "none") throw herr("invalid direction: ", dir, ". Should be one of both/up/down/none");
+
+    if (args["--range"]) {
+        if (filterJson.get_object().contains("since") || filterJson.get_object().contains("until")) throw herr("can't specify a --range AND since/until in filter");
+
+        std::string rangeStr = args["--range"].asString();
+
+        std::vector<std::string_view> segments;
+        size_t endPos = rangeStr.find('-');
+
+        if (endPos == std::string_view::npos) throw herr("range param is missing -");
+        std::string sinceStr = rangeStr.substr(0, endPos);
+        std::string untilStr = rangeStr.substr(endPos + 1);
+
+        auto now = hoytech::curr_time_s();
+
+        if (sinceStr.size()) filterJson["since"] = now - parseTime(sinceStr);
+        if (untilStr.size()) filterJson["until"] = now - parseTime(untilStr);
+
+        if (sinceStr.size() && untilStr.size()) {
+            if (filterJson["since"].get_unsigned() > filterJson["until"].get_unsigned()) throw herr("since can't be after until");
+        }
+    }
 
     uint64_t frameSizeLimit = 60'000; // default frame limit is 128k. Halve that (hex encoding) and subtract a bit (JSON msg overhead)
     if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
@@ -48,7 +95,6 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     const bool doDown = dir == "both" || dir == "down";
 
 
-    tao::json::value filterJson = tao::json::from_string(filterStr);
     auto filterCompiled = NostrFilterGroup::unwrapped(filterJson);
 
     std::optional<uint64_t> treeId;
