@@ -20,8 +20,9 @@ struct WriterPipeline {
     uint64_t writeBatchSize = 1'000;
     bool verifyMsg = true;
     bool verifyTime = true;
-    bool verboseReject = true;
     std::function<void(uint64_t)> onCommit;
+    std::function<bool()> verboseReject = []{ return true; };
+    std::function<bool()> verboseCommit = []{ return true; };
 
     // For logging:
 
@@ -70,7 +71,7 @@ struct WriterPipeline {
                     try {
                         parseAndVerifyEvent(m.eventJson, secpCtx, verifyMsg, verifyTime, packedStr, jsonStr);
                     } catch (std::exception &e) {
-                        if (verboseReject) {
+                        if (verboseReject()) {
                             jsonStr = tao::json::to_string(m.eventJson).substr(0,200);
                             LI << "Rejected event: " << jsonStr << " reason: " << e.what();
                         }
@@ -101,6 +102,7 @@ struct WriterPipeline {
                     }
                 }
 
+                bool isVerbose = verboseCommit();
                 auto newEvents = writerInbox.pop_all();
 
                 uint64_t written = 0, dups = 0;
@@ -145,7 +147,7 @@ struct WriterPipeline {
                 if (newEventsToProc.size()) {
                     {
                         auto txn = env.txn_rw();
-                        writeEvents(txn, neFilterCache, newEventsToProc);
+                        writeEvents(txn, neFilterCache, newEventsToProc, isVerbose);
                         txn.commit();
                     }
 
@@ -162,7 +164,7 @@ struct WriterPipeline {
                     if (onCommit) onCommit(written);
                 }
 
-                LD << "Writer: added: " << written << " dups: " << dups;
+                if (isVerbose) LI << "Writer: added: " << written << " dups: " << dups;
 
                 if (shutdownComplete) {
                     flushInbox.push_move(true);

@@ -54,7 +54,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
     writer.writeBatchSize = writeBatch;
     writer.verifyMsg = !noVerify;
     writer.verifyTime = false;
-    writer.verboseReject = showRejected;
+    writer.verboseReject = [=]{ return showRejected; };
     writer.onCommit = [&](uint64_t numCommitted){
         LI << "Committed " << numCommitted
            << ". Processed " << writer.totalProcessed << " lines. " << writer.totalWritten << " added, " << writer.totalRejected << " rejected, " << writer.totalDups << " dups";

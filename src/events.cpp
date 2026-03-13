@@ -249,7 +249,7 @@ static bool isEventABeforeEventB(const PackedEventView &a, const PackedEventView
 }
 
 
-void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel) {
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, bool logDeletions) {
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
         auto aC = a.createdAt();
         auto bC = b.createdAt();
@@ -300,7 +300,7 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                         if (isEventABeforeEventB(packed, otherPacked)) {
                             ev.status = EventWriteStatus::Replaced;
                         } else {
-                            if (logLevel >= 1) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                            if (logDeletions) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
                             levIdsToDelete.push_back(otherEv.primaryKeyId);
                         }
 
@@ -333,7 +333,7 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                     if (tagName == 'e') {
                         auto otherEv = lookupEventById(txn, tagVal);
                         if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
-                            if (logLevel >= 1) LI << "Deleting event (kind 5). id=" << to_hex(tagVal);
+                            if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
                             levIdsToDelete.push_back(otherEv->primaryKeyId);
                         }
                     } else if (tagName == 'a') {
@@ -350,7 +350,7 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                                     auto otherPacked = PackedEventView(otherEv.buf);
 
                                     if (otherPacked.created_at() <= packed.created_at()) {
-                                        if (logLevel >= 1) LI << "Deleting replaceable event (kind 5). id=" << to_hex(otherPacked.id());
+                                        if (logDeletions) LI << "Deleting replaceable event (kind 5, a-tag). id=" << to_hex(otherPacked.id());
                                         levIdsToDelete.push_back(otherEv.primaryKeyId);
                                     }
 

@@ -220,6 +220,8 @@ struct Router {
     std::string routerConfigFile;
     const uint64_t defaultConnectionTimeoutUs = 20'000'000;
     uint64_t connectionTimeoutUs = 0;
+    bool defaultVerbose = true;
+    bool verbose = true;
 
     WriterPipeline writer;
     Decompressor decomp;
@@ -234,6 +236,9 @@ struct Router {
 
 
     Router(std::string routerConfigFile) : routerConfigFile(routerConfigFile) {
+        writer.verboseReject = [&]{ return verbose; };
+        writer.verboseCommit = [&]{ return verbose; };
+
         {
             auto txn = env.txn_ro();
             currEventId = getMostRecentLevId(txn);
@@ -308,6 +313,18 @@ struct Router {
                 connectionTimeoutUs = newTimeoutUs;
                 LI << "Using connection timeout: " << (connectionTimeoutUs / 1'000'000) << " seconds";
                 // FIXME: this won't actually update the cron.repeat() frequency, so no hot reconfigs
+            }
+
+            // verbose
+
+            bool newVerbose = defaultVerbose;
+            if (routerConfig.get_object().contains("verbose")) {
+                newVerbose = routerConfig.at("verbose").get_boolean();
+            }
+
+            if (verbose != newVerbose) {
+                verbose = newVerbose;
+                LI << "Verbose mode: " << (verbose ? "true" : "false");
             }
 
             // load streamGroups

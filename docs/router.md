@@ -12,13 +12,15 @@ The `strfry router` command takes one argument: A path to a config file (in [tao
 
 When the router starts, it will read the config file. If there are any parse errors it will fail immediately. Otherwise, it will connect to all specified relays and begin streaming. If any relay cannot be connected to, the router will wait 5 or 10 seconds and attempt to re-connect, forever.
 
-If the config file is modified, then the router will load and parse this new file. If there are any errors, a message will be logged and it will continue with the old configuration. On success, the router will determine the minimally invasive modifications required to reconcile its current state with the newly specified configuration. For example, if a new relay is added, it will not interrupt live connections to any other relays, but simply open a new connection.
+If the config file is modified, then the router will load and parse this new file (a "hot reconfig"). If there are any errors, a message will be logged and it will continue with the old configuration. On success, the router will determine the minimally invasive modifications required to reconcile its current state with the newly specified configuration. For example, if a new relay is added, it will not interrupt live connections to any other relays, but simply open a new connection.
 
 The config file must have a section `streams`. Within that, you may have as many stream sections as desired, with whatever names you choose. Inside each stream section, various parameters can be specified. Only `dir` and `urls` are required.
 
 ### Example
 
     connectionTimeout = 20
+
+    verbose = false
 
     streams {
         ## Stream down events from our friend relays
@@ -56,9 +58,23 @@ The config file must have a section `streams`. Within that, you may have as many
         }
     }
 
+### Top-Level Fields
+
+#### `connectionTimeout`
+
+How long in seconds before an attemped connection to a relay is aborted. A new connection will be tried again after approximately `connectionTimeout * 2` seconds.
+
+Default is 20 seconds.
+
+#### `verbose`
+
+If the router should print detailed information about the events it is accepting/sending.
+
+Default is `true`. You can change this field without restarting the router ("hot reconfig").
+
 ### Stream Section Fields
 
-#### dir
+#### `dir`
 
 This is short for "direction", and must be one of `up`, `down`, or `both`.
 
@@ -68,11 +84,11 @@ Changing the `dir` field in the config file will currently close and re-open the
 
 With `both` it will currently echo back an event to a relay it has just downloaded it from (which will typically then reject it as a duplicate). This is inefficient and may be fixed eventually.
 
-#### urls
+#### `urls`
 
 This is an non-empty array of websocket URLs. The relay will connect to *all* of these and apply the same policies to each of these connections.
 
-#### filter
+#### `filter`
 
 This is a nostr filter that can be used to narrow the set of events streamed. By default it is `{}`, which matches all events.
 
@@ -82,7 +98,7 @@ When a filter is applied to a section with direction `up` or `both`, before uplo
 
 Changing the `filter` field in the config file will currently close and re-open the connections within this section. This may be fixed eventually.
 
-#### pluginDown/pluginUp
+#### `pluginDown`/`pluginUp`
 
 These fields are paths to [plugins](plugins.md), or shell commands to invoke plugins.
 
