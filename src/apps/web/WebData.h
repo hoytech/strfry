@@ -20,8 +20,7 @@ inline void preprocessMetaFieldContent(std::string &content) {
 
     std::string output;
 
-    std::string_view contentSv(content);
-    re2::StringPiece input(contentSv);
+    re2::StringPiece input(content.data(), content.size());
     re2::StringPiece prefix, match;
 
     auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
@@ -400,8 +399,7 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
 
     std::string output;
 
-    std::string_view contentSv(content);
-    re2::StringPiece input(contentSv);
+    re2::StringPiece input(content.data(), content.size());
     re2::StringPiece prefix, match;
 
     auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
@@ -438,7 +436,7 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
             bool didTransform = false;
 
             try {
-                std::string decoded = decodeBech32(match.substr(6));
+                std::string decoded = decodeBech32(sv(match.substr(6)));
                 auto note = encodeBech32Simple("note", decodeNip19Tag0(decoded));
                 appendLink(std::string("/e/") + note, std::string(sv(match).substr(0, 24)) + "...");
                 didTransform = true;
@@ -451,7 +449,7 @@ inline void preprocessEventContent(lmdb::txn &txn, Decompressor &decomp, const E
             bool didTransform = false;
 
             try {
-                std::string decoded = decodeBech32(match.substr(6));
+                std::string decoded = decodeBech32(sv(match.substr(6)));
                 auto pubkey = decodeNip19Tag0(decoded);
 
                 const auto *u = userCache.getUser(txn, decomp, pubkey);
@@ -507,8 +505,7 @@ inline std::string stripUrls(std::string &content) {
     std::string output;
     std::string firstUrl;
 
-    std::string_view contentSv(content);
-    re2::StringPiece input(contentSv);
+    re2::StringPiece input(content.data(), content.size());
     re2::StringPiece prefix, match;
 
     auto sv = [](re2::StringPiece s){ return std::string_view(s.data(), s.size()); };
