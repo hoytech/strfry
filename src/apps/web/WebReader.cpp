@@ -116,9 +116,11 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
 
     std::optional<std::string> rawBody;
 
-    if (u.path.size() == 0 || u.path[0] == "t") {
-        httpResp.extraHeaders += "Cache-Control: max-age=600\r\n";
-    }
+    auto cacheControl = [&](std::string_view seconds){
+        httpResp.extraHeaders += "Cache-Control: max-age=";
+        httpResp.extraHeaders += seconds;
+        httpResp.extraHeaders += "\r\n";
+    };
 
     std::string topic;
 
@@ -140,6 +142,11 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
         try {
             if (u.lookupQuery("all")) showAll = true;
         } catch(...) {}
+
+        if (!showAll) {
+            if (topic == "") cacheControl("600");
+            else cacheControl("60");
+        }
 
         return TopicEvents(topic, showAll, n, resumeTime);
     };
