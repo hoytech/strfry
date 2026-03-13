@@ -3,6 +3,7 @@
 #include "re2/re2.h"
 
 #include "hoytech/parser.h"
+#include "hoytech/truncate.h"
 
 #include "Bech32Utils.h"
 #include "WebUtils.h"
@@ -79,7 +80,7 @@ struct User {
         }
 
         if (username.size() == 0) username = to_hex(pubkey.substr(0,4));
-        if (username.size() > 50) username = username.substr(0, 50) + "...";
+        else hoytech::truncateInPlace(username, 50);
     }
 
     std::optional<tao::json::value> loadKindJson(lmdb::txn &txn, Decompressor &decomp, uint64_t kind) {
@@ -252,15 +253,13 @@ struct Event {
     }
 
     // FIXME: Use "subject" tag if present?
-    // FIXME: Don't truncate UTF-8 mid-sequence
-    // FIXME: Don't put ellipsis if truncated text ends in punctuation
 
     std::string summaryHtml(std::string_view noteIdAltLink = "") const {
         std::string content = json.at("content").get_string();
         auto firstUrl = stripUrls(content);
 
         auto textAbbrev = [](std::string &str, size_t maxLen){
-            if (str.size() > maxLen) str = str.substr(0, maxLen-3) + "...";
+            hoytech::truncateInPlace(str, maxLen);
         };
 
         textAbbrev(content, 100);
