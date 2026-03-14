@@ -894,6 +894,7 @@ struct TopicEvents {
             auto ev = lookupEventByLevId(txn, levId);
             PackedEventView packed(ev.buf);
 
+            if (packed.kind() != 1) return true;
             if (packed.created_at() > now) return true;
             if (!isRootEvent(txn, packed)) return true;
 

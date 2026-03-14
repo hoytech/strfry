@@ -123,6 +123,7 @@ h2 {
 #ob-footer {
     margin-top: 30px;
     padding-top: 20px;
+    padding-bottom: 20px;
     border-top: 1px solid #65cb25;
     text-align: center;
 }
@@ -206,10 +207,6 @@ table.vert {
 .event {
     margin-bottom: 20px;
     overflow-x: clip;
-
-    .event-not-present {
-        color: red;
-    }
 
     .event-header {
         display: flex;
@@ -369,6 +366,14 @@ table.vert {
 
 
 /* misc */
+
+.warning-indicator {
+    color: red;
+    font-size: 110%;
+    margin-top: 20px;
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
 
 .more-notes {
     margin-top: 20px;

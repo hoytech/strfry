@@ -169,27 +169,37 @@ HTTPResponse WebServer::generateReadResponse(lmdb::txn &txn, Decompressor &decom
             EventThread et(txn, decomp, decodeBech32Simple(u.path[1]));
             body = et.render(txn, decomp, userCache);
         } else if (u.path.size() == 3) {
-            if (u.path[2] == "reply") {
-                auto ev = Event::fromIdExternal(txn, u.path[1]);
-                ev.populateJson(txn, decomp);
+            std::optional<Event> evOpt;
 
-                RenderedEventCtx ctx;
+            try {
+                evOpt = Event::fromIdExternal(txn, u.path[1]);
+            } catch(...) {}
 
-                ctx.timestamp = renderTimestamp(startTime / 1'000'000, ev.getCreatedAt());
-                ctx.content = templarInternal::htmlEscape(ev.json.at("content").get_string(), false);
-                ctx.ev = &ev;
-                ctx.user = userCache.getUser(txn, decomp, ev.getPubkey());
-                ctx.showActions = false;
+            if (!evOpt) {
+                body = TemplarResult{ "<div class=\"warning-indicator\">Event not found</div>" };
+            } else {
+                auto &ev = *evOpt;
 
-                body = tmpl::event::reply(ctx);
-            } else if (u.path[2] == "raw.json") {
-                auto ev = Event::fromIdExternal(txn, u.path[1]);
-                ev.populateJson(txn, decomp);
-                rawBody = tao::json::to_string(ev.json, 4);
-                contentType = "application/json; charset=utf-8";
-            } else if (u.path[2] == "export.jsonl") {
-                rawBody = exportEventThread(txn, decomp, decodeBech32Simple(u.path[1]));
-                contentType = "application/jsonl+json; charset=utf-8";
+                if (u.path[2] == "reply") {
+                    ev.populateJson(txn, decomp);
+
+                    RenderedEventCtx ctx;
+
+                    ctx.timestamp = renderTimestamp(startTime / 1'000'000, ev.getCreatedAt());
+                    ctx.content = templarInternal::htmlEscape(ev.json.at("content").get_string(), false);
+                    ctx.ev = &ev;
+                    ctx.user = userCache.getUser(txn, decomp, ev.getPubkey());
+                    ctx.showActions = false;
+
+                    body = tmpl::event::reply(ctx);
+                } else if (u.path[2] == "raw.json") {
+                    ev.populateJson(txn, decomp);
+                    rawBody = tao::json::to_string(ev.json, 4);
+                    contentType = "application/json; charset=utf-8";
+                } else if (u.path[2] == "export.jsonl") {
+                    rawBody = exportEventThread(txn, decomp, decodeBech32Simple(u.path[1]));
+                    contentType = "application/jsonl+json; charset=utf-8";
+                }
             }
         }
     } else if (u.path[0] == "u") {
