@@ -24,8 +24,10 @@ misc
   ? warn when run as root
 
 web
-  - flag support
+  - whitelabeling of website, merge to master
+  - flag/moderation support
+  - improve homepage algo
   - if nostr:npub1... appears in note content when users is posting, add it as p-tag "mention"
     - same with #tags
-  ? messed up top-bar on mobile
+  ? user comments aren't sorted in timestamp descending?
   ? slightly grey out visited links
