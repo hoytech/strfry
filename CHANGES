@@ -1,4 +1,5 @@
 1.1.0
+  * DEPRECATE stream command. Instead, suggest using strfry router
   * Support for the COUNT command, NIP-45. Note that this is not yet complete
     support for NIP-45 since it doesn't implement HyperLogLog. COUNT can
     be disabled by setting relay.maxFilterLimitCount to 0.
@@ -6,6 +7,8 @@
     it will return an AUTH challenge. The user must reply with a valid kind 22242
     event, after which the protected event can be re-sent. Authentication state
     is available to write policy plugins via `authed`. (fiatjaf and zk-bits)
+  * New upload and download convenience commands for uploading/downloading
+    events from a remote nostr relay.
   * New `/metrics/` endpoint for Prometheus monitoring (alexgleason)
   * Limit subId length to 64, as per new NIP-01 clarification (alltheseas)
   * Added missing NIP-11 fields such as banner, privacy_policy, etc (1-leo)
@@ -49,6 +52,8 @@
   * New --verbosity flag that controls how chatty strfry's logging output is.
   * --range flag for strfry sync, which is a more convenient way to specify
     since and until in your nostr filter.
+  * Bugfix: Allow strfry import to import large events if the maxEventSize
+    config param has been increased
 
 1.0.4
   * New config: maxReqFilterSize. This allows REQs with many more filters (jb55)
