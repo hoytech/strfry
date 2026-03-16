@@ -31,7 +31,8 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Importing data](#importing-data)
     * [Exporting data](#exporting-data)
         * [Fried Exports](#fried-exports)
-    * [Stream](#stream)
+    * [Upload](#upload)
+    * [Download](#download)
     * [Sync](#sync)
 * [Monitoring](#monitoring)
     * [Prometheus Metrics](#prometheus-metrics)
@@ -145,26 +146,44 @@ This can be especially useful for upgrading strfry to a new, incompatible databa
 
 
 
-### Stream
+### Upload
 
-This command opens a websocket connection to the specified relay and makes a nostr `REQ` request with filter `{"limit":0}`:
+This command uses the regular nostr websocket protocol to upload events to a remote relay. The events are read from stdin, and are assumed to be in minified JSONL format (one event per line).
 
-    ./strfry stream wss://relay.example.com
+For example:
 
-All events that are streamed back are inserted into the DB (after validation, checking for duplicates, etc). If the connection is closed for any reason, the command will try reconnecting every 5 seconds.
+    cat my-events.jsonl | ./strfry upload wss://relay.example.com
 
-You can also run it in the opposite direction, which monitors your local DB for any new events and posts them to the specified relay:
+This command will try to maintain 50 events in-flight at once. This "pipeline depth" can be increased or decreased with the `--pipeline` argument.
 
-    ./strfry stream wss://relay.example.com --dir up
+If you want to send events from your own local strfry DB, you can use either [`strfry export`](#exporting-data) or the `strfry scan` command if you want to use an arbitrary filter. For example:
 
-Both of these operations can be concurrently multiplexed over the same websocket:
+    ./strfry scan '{"kinds":[0]}' | ./strfry upload wss://relay.example.com
 
-    ./strfry stream wss://relay.example.com --dir both
+Note that `strfry upload` will exit once it has completed reading the full input stream. If you want a process that stays running and continuously uploads events added to your DB, use [`strfry router`](#router).
 
-`strfry stream` will compress messages with permessage-deflate in both directions, if supported by the remote relay. Sliding window compression is not supported for now.
+### Download
 
-If you want to open many concurrent streams, see the [strfry router](#router) command for an easier and more efficient approach.
+This command is the complement of upload. It connects to a remote relay, performs a `REQ` request to retrieve events matching a filter, and then prints them to stdout.
 
+For example:
+
+    ./strfry download wss://relay.example.com > my-events.jsonl
+
+The above uses the default "everything" filter (`{}`). To specify a more narrow filter, use the `--filter` flag:
+
+    ./strfry download wss://relay.example.com --filter '{"kinds":[0]}' > my-events.jsonl
+
+Note that many relays will put an implicit limit on the number of events you can retrieve with a single REQ. To retrieve more, typically you would do "pagination" by setting the `until` field to the oldest event's `created_at` and then performing another query.
+
+`strfry download` also has a `--range` that can be used to conveniently specify `since/until` filter flags. Some examples:
+
+    --range 2h-    ## since 2 hours ago until present
+    --range 1Y-6M  ## since 1 year ago until 6 months ago
+
+The units are: s=seconds, m=minutes, h=hours, d=days, w=weeks, M=months, Y=years
+
+Note that `strfry download` will exit once it has retrieved all of the stored events from the remote relay. If you want a process that stays running and continuously downloads new events as they come in, use [`strfry router`](#router).
 
 ### Sync
 
@@ -187,6 +206,8 @@ This will download all missing events from the remote relay and insert them into
 Instead of a "full DB" sync, you can also sync the result of a nostr filter (or multiple filters, use a JSON array of them):
 
     ./strfry sync wss://relay.example.com --filter '{"authors":["..."]}'
+
+`strfry sync` also supports the `--range` flag documented in [`strfry download`](#download).
 
 Warning: Syncing can consume a lot of memory and bandwidth if the DBs are highly divergent (for example if your local DB is empty and your filter matches many events).
 
@@ -287,9 +308,7 @@ See the [plugin documentation](https://github.com/hoytech/strfry/blob/master/doc
 
 ### Router
 
-If you are building a "mesh" topology of routers, or mirroring events to neighbour relays (up and/or down), you can use [strfry stream](#stream) to stream the events as the come in. However, when handling multiple streams, the efficiency and convenience of this can be improved with the `strfry router` command.
-
-`strfry router` handles many streams in one process, supports pre-filtering events using nostr filters and/or [plugins](#plugins), and more. See the [router documentation](https://github.com/hoytech/strfry/blob/master/docs/router.md) for more details.
+If you are building a "mesh" topology of routers, or mirroring events to neighbour relays (up and/or down), you can use `strfry router`. The router system handles many streams in one process, supports pre-filtering events using nostr filters and/or [plugins](#plugins), and more. See the [router documentation](https://github.com/hoytech/strfry/blob/master/docs/router.md) for more details.
 
 
 
