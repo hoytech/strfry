@@ -39,6 +39,9 @@ void cmd_stream(const std::vector<std::string> &subArgs) {
     PluginEventSifter writePolicyPlugin;
 
 
+    LW << "'strfry stream' is deprecated. Please use 'strfry router' instead.";
+
+
     ws.onConnect = [&]{
         if (dir == "down" || dir == "both") {
             auto encoded = tao::json::to_string(tao::json::value::array({ "REQ", "sub", tao::json::value({ { "limit", 0 } }) }));
