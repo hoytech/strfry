@@ -17,7 +17,9 @@ R"(
 
 
 
-EventToWrite parseFried(std::string &line) {
+EventToWrite parseFried(std::string_view lineSv) {
+    std::string line(lineSv);
+
     if (line.size() < 64) throw herr("fried too small");
     if (!line.ends_with("\"}")) throw herr("fried parse error");
 
@@ -60,7 +62,7 @@ void cmd_import(const std::vector<std::string> &subArgs) {
            << ". Processed " << writer.totalProcessed << " lines. " << writer.totalWritten << " added, " << writer.totalRejected << " rejected, " << writer.totalDups << " dups";
     };
 
-    size_t bufLen = 65536;
+    size_t bufLen = cfg().events__maxEventSize + 1024;
     char *buf = (char*)::malloc(bufLen);
 
     uint64_t currLine = 0;
@@ -69,7 +71,9 @@ void cmd_import(const std::vector<std::string> &subArgs) {
         if (numRead <= 0) break;
         currLine++;
 
-        std::string line(buf, (size_t)numRead-1);
+        if ((uint64_t)numRead > cfg().events__maxEventSize) throw herr("Line larger than configured maxEventSize on line ", currLine);
+
+        std::string_view line(buf, (size_t)numRead-1);
 
         if (fried) {
             if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
