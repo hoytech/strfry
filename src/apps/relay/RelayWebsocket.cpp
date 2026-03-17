@@ -76,6 +76,14 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
     auto getServerInfoHttpResponse = [&supportedNips, ver = uint64_t(0), rendered = std::string("")]() mutable {
         if (ver != cfg().version()) {
+            auto maybeNpub = [](std::string_view sv){
+                if (sv.starts_with("npub1")) {
+                    return to_hex(decodeBech32Simple(sv));
+                } else {
+                    return std::string(sv);
+                }
+            };
+
             tao::json::value nip11 = tao::json::value({
                 { "supported_nips", supportedNips() },
                 { "software", "git+https://github.com/hoytech/strfry.git" },
@@ -91,10 +99,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (cfg().relay__info__name.size()) nip11["name"] = cfg().relay__info__name;
             if (cfg().relay__info__description.size()) nip11["description"] = cfg().relay__info__description;
             if (cfg().relay__info__contact.size()) nip11["contact"] = cfg().relay__info__contact;
-            if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = cfg().relay__info__pubkey;
+            if (cfg().relay__info__pubkey.size()) nip11["pubkey"] = maybeNpub(cfg().relay__info__pubkey);
             if (cfg().relay__info__icon.size()) nip11["icon"] = cfg().relay__info__icon;
             if (cfg().relay__info__banner.size()) nip11["banner"] = cfg().relay__info__banner;
-            if (cfg().relay__info__self.size()) nip11["self"] = cfg().relay__info__self;
+            if (cfg().relay__info__self.size()) nip11["self"] = maybeNpub(cfg().relay__info__self);
             if (cfg().relay__info__privacy.size()) nip11["privacy_policy"] = cfg().relay__info__privacy;
             if (cfg().relay__info__terms.size()) nip11["terms_of_service"] = cfg().relay__info__terms;
 
