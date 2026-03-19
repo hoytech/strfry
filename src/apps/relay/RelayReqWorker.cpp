@@ -11,7 +11,7 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
     };
 
-    queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total){
+    queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total, std::string hllHex){
         if (sub.countOnly) {
             bool limited = false;
 
@@ -25,6 +25,7 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
             });
 
             if (limited) countBody["limited"] = true;
+            if (hllHex.size()) countBody["hll"] = std::move(hllHex);
 
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "COUNT", sub.subId.str(), countBody })));
         } else {
