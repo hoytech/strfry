@@ -185,6 +185,37 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         }
     }
 
+    // NIP-62: Validate kind 62 (Request to Vanish) relay tags
+    if (packed.kind() == 62) {
+        auto idHex = to_hex(packed.id());
+
+        if (!cfg().relay__nip62__enabled) {
+            sendOKResponse(connId, idHex, false, "blocked: NIP-62 not enabled on this relay");
+            return;
+        }
+
+        bool foundMatchingRelay = false;
+        std::string serviceUrl = cfg().relay__auth__serviceUrl;
+
+        for (const auto &tagj : origJson.at("tags").get_array()) {
+            const auto &tag = tagj.get_array();
+            if (tag.size() < 2) continue;
+            auto tagName = tag[0].as<std::string_view>();
+            if (tagName != "relay") continue;
+            auto tagVal = tag[1].as<std::string_view>();
+
+            if (tagVal == "ALL_RELAYS" || (!serviceUrl.empty() && tagVal == serviceUrl)) {
+                foundMatchingRelay = true;
+                break;
+            }
+        }
+
+        if (!foundMatchingRelay) {
+            sendOKResponse(connId, idHex, false, "blocked: vanish request not targeting this relay");
+            return;
+        }
+    }
+
     {
         auto existing = lookupEventById(txn, packed.id());
         if (existing) {
