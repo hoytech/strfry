@@ -671,6 +671,8 @@ struct EventThread {
                     auto p = eventCache.find(childId);
                     if (p != eventCache.end()) timestamp = p->second.getCreatedAt();
 
+                    if (processedLevIds.contains(p->second.ev.primaryKeyId)) continue;
+
                     ctx.replies.emplace_back(timestamp, process(childId));
                 }
 
