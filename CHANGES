@@ -1,3 +1,9 @@
+next
+  * New --print-missing argument for strfry sync. This option tells sync to
+    just print out the event IDs that you have and/or need, instead of actually
+    trying to transfer them.
+  * The amount of bytes sent by negentropy was incorrectly reported in a log.
+
 1.1.0
   * DEPRECATE stream command. Instead, suggest using strfry router
   * Support for the COUNT command, NIP-45. Note that this is not yet complete
