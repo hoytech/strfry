@@ -112,7 +112,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             return;
         }
 
-        LI << "[" << connId << "] negentropy SEND session=" << subId.sv() << " bytesOut=" << msg.size();
+        LI << "[" << connId << "] negentropy SEND session=" << subId.sv() << " bytesOut=" << resp.size();
 
         PROM_INC_RELAY_MSG("NEG-MSG");
         sendToConn(connId, tao::json::to_string(tao::json::value::array({
