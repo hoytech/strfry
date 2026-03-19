@@ -283,14 +283,13 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;
 
         auto filterJson = arr.at(2);
+        if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
         NostrFilterGroup filter = NostrFilterGroup::unwrapped(filterJson, maxFilterLimit);
         Subscription sub(connId, subscriptionStr, std::move(filter));
 
-        if (filterJson.is_object()) {
-            filterJson.get_object().erase("since");
-            filterJson.get_object().erase("until");
-        }
+        filterJson.get_object().erase("since");
+        filterJson.get_object().erase("until");
         std::string filterStr = tao::json::to_string(filterJson);
 
         std::string negPayload = from_hex(jsonGetString(arr.at(3), "negentropy payload not a string"));
