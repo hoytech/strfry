@@ -21,14 +21,15 @@
 static const char USAGE[] =
 R"(
     Usage:
-      sync <url> [--dir=<dir>] [--filter=<filter>] [--range=<range>] [--frame-size-limit=<frame-size-limit>]
+      sync <url> [--dir=<dir>] [--filter=<filter>] [--range=<range>] [--print-missing] [--frame-size-limit=<frame-size-limit>]
 
     Options:
-      --dir=<dir>        Direction: both, down, up, none [default: both]
+      --dir=<dir>        Direction: both, down, up, none (default: both)
       --filter=<filter>  Nostr filter (either single filter object or array of filters)
       --range=<range>    Add since and until fields to filter. Format: START-END
                          Examples: 2M- (last 2 months), 1Y-3w (from 1 year 3 weeks old)
                          Units: s=seconds, m=minutes, h=hours, d=days, w=weeks, M=months, Y=years
+      --print-missing    Instead of performing a sync, just print out missing record IDs. Implies dir=none.
       --frame-size-limit=<frame-size-limit>  Limit outgoing negentropy message size (default 60k, 0 for no limit)
 )";
 
@@ -50,11 +51,17 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::string dir = args["--dir"] ? args["--dir"].asString() : "both";
     if (dir != "both" && dir != "up" && dir != "down" && dir != "none") throw herr("invalid direction: ", dir, ". Should be one of both/up/down/none");
 
-    uint64_t frameSizeLimit = 60'000; // default frame limit is 128k. Halve that (hex encoding) and subtract a bit (JSON msg overhead)
-    if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
+    bool printMissing = args["--print-missing"].asBool();
+    if (printMissing) {
+        if (args["--dir"] && dir != "none") throw herr("--print-missing requires --dir=none");
+        dir = "none";
+    }
 
     const bool doUp = dir == "both" || dir == "up";
     const bool doDown = dir == "both" || dir == "down";
+
+    uint64_t frameSizeLimit = 60'000; // default frame limit is 128k. Halve that (hex encoding) and subtract a bit (JSON msg overhead)
+    if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
 
 
     auto filterCompiled = NostrFilterGroup::unwrapped(filterJson);
@@ -314,6 +321,11 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
         }
 
         if (syncDone && have.size() == 0 && need.size() == 0 && inFlightUp == 0 && !inFlightDown) {
+            if (printMissing) {
+                for (const auto &id : seenHave) std::cout << "have," << to_hex(id.sv()) << "\n";
+                for (const auto &id : seenNeed) std::cout << "need," << to_hex(id.sv()) << "\n";
+            }
+
             doExit(0);
         }
     };
