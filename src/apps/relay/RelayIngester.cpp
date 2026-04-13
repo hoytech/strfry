@@ -235,10 +235,11 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
 static std::string normalizeRelayUrl(std::string_view url) {
     auto pos = url.find("://");
     if (pos != std::string_view::npos) url.remove_prefix(pos + 3);
-    while (url.ends_with("/")) url.remove_suffix(1);
     pos = url.find_first_of("/?#");
     if (pos != std::string_view::npos) url = url.substr(0, pos);
-    return std::string(url);
+    std::string result(url);
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c){ return std::tolower(c); });
+    return result;
 }
 
 void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
