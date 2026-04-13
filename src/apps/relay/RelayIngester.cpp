@@ -232,6 +232,15 @@ void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const ta
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(jsonGetString(arr[1], "CLOSE subscription id was not a string"))}});
 }
 
+static std::string normalizeRelayUrl(std::string_view url) {
+    auto pos = url.find("://");
+    if (pos != std::string_view::npos) url.remove_prefix(pos + 3);
+    while (url.ends_with("/")) url.remove_suffix(1);
+    pos = url.find_first_of("/?#");
+    if (pos != std::string_view::npos) url = url.substr(0, pos);
+    return std::string(url);
+}
+
 void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
     if (cfg().relay__auth__serviceUrl.empty()) throw herr("relay needs serviceUrl to be configured before AUTH can work");
 
@@ -252,12 +261,14 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     bool foundChallenge = false;
     bool foundCorrectRelayUrl = false;
 
+    std::string normalizedServiceUrl = normalizeRelayUrl(cfg().relay__auth__serviceUrl);
+
     for (const auto &tagj : eventJson.at("tags").get_array()) {
         const auto &tag = tagj.get_array();
         if (tag.size() < 2) continue;
         const auto name = tag[0].as<std::string_view>();
         const auto value = tag[1].as<std::string_view>();
-        if (name == "relay" && value == cfg().relay__auth__serviceUrl) {
+        if (name == "relay" && normalizeRelayUrl(value) == normalizedServiceUrl) {
             foundCorrectRelayUrl = true;
         } else if (name == "challenge" && value == as.challengeSv()) {
             foundChallenge = true;
