@@ -49,7 +49,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                     PackedEventView packed(msg->packedStr);
                     auto eventIdHex = to_hex(packed.id());
 
-                    if (okMsg.size()) LI << "[" << msg->connId << "] write policy blocked event " << eventIdHex << ": " << okMsg;
+                    if (okMsg.size()) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] write policy blocked event " << eventIdHex << ": " << okMsg;
 
                     sendOKResponse(msg->connId, eventIdHex, res == PluginEventSifterResult::ShadowReject, okMsg);
                 }
@@ -89,8 +89,10 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             std::string message;
             bool written = false;
 
+            MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
+
             if (newEvent.status == EventWriteStatus::Written) {
-                LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
+                LI << "[" << addEventMsg->connId << " " << renderIP(addEventMsg->ipAddr) << "] Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 written = true;
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";
@@ -102,10 +104,8 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             }
 
             if (newEvent.status != EventWriteStatus::Written) {
-                LI << "Rejected event. " << message << ", id=" << eventIdHex;
+                LI << "[" << addEventMsg->connId << " " << renderIP(addEventMsg->ipAddr) << "] Rejected event. " << message << ", id=" << eventIdHex;
             }
-
-            MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
 
             sendOKResponse(addEventMsg->connId, eventIdHex, written, message);
         }
