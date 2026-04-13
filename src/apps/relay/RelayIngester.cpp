@@ -252,12 +252,24 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     bool foundChallenge = false;
     bool foundCorrectRelayUrl = false;
 
+    // normalize URL: removes ws://, wss://, http://, https:// and strips any trailing slashes
+    auto normalizeRelayUrl = [](std::string_view url) -> std::string_view {
+        auto pos = url.find("://");
+
+        if (pos != std::string_view::npos) url.remove_prefix(pos + 3);
+        while (!url.empty() && url.back() == '/') url.remove_suffix(1);
+
+        return url;
+    };
+
+    auto expectedRelay = normalizeRelayUrl(cfg().relay__auth__serviceUrl);
+
     for (const auto &tagj : eventJson.at("tags").get_array()) {
         const auto &tag = tagj.get_array();
         if (tag.size() < 2) continue;
         const auto name = tag[0].as<std::string_view>();
         const auto value = tag[1].as<std::string_view>();
-        if (name == "relay" && value == cfg().relay__auth__serviceUrl) {
+        if (name == "relay" && normalizeRelayUrl(value) == expectedRelay) {
             foundCorrectRelayUrl = true;
         } else if (name == "challenge" && value == as.challengeSv()) {
             foundChallenge = true;
