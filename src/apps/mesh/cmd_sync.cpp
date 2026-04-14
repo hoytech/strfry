@@ -5,6 +5,9 @@
 #include <negentropy/storage/BTreeLMDB.h>
 #include <negentropy/storage/SubRange.h>
 
+#include <hoytech/timer.h>
+#include <cctype>
+
 #include "golpe.h"
 
 #include "Bytes32.h"
@@ -21,7 +24,7 @@
 static const char USAGE[] =
 R"(
     Usage:
-      sync <url> [--dir=<dir>] [--filter=<filter>] [--range=<range>] [--print-missing] [--frame-size-limit=<frame-size-limit>]
+      sync <url> [--dir=<dir>] [--filter=<filter>] [--range=<range>] [--print-missing] [--frame-size-limit=<frame-size-limit>] [--timeout=<timeout>]
 
     Options:
       --dir=<dir>        Direction: both, down, up, none (default: both)
@@ -31,6 +34,7 @@ R"(
                          Units: s=seconds, m=minutes, h=hours, d=days, w=weeks, M=months, Y=years
       --print-missing    Instead of performing a sync, just print out missing record IDs. Implies dir=none.
       --frame-size-limit=<frame-size-limit>  Limit outgoing negentropy message size (default 60k, 0 for no limit)
+      --timeout=<timeout>  Abort sync if no activity for this many seconds (default: 0, no timeout)
 )";
 
 
@@ -63,6 +67,8 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     uint64_t frameSizeLimit = 60'000; // default frame limit is 128k. Halve that (hex encoding) and subtract a bit (JSON msg overhead)
     if (args["--frame-size-limit"]) frameSizeLimit = args["--frame-size-limit"].asLong();
 
+    uint64_t timeout = 0;
+    if (args["--timeout"]) timeout = args["--timeout"].asLong();
 
     auto filterCompiled = NostrFilterGroup::unwrapped(filterJson);
 
@@ -124,10 +130,13 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     WSConnection ws(url);
     PluginEventSifter writePolicyPlugin;
 
+    std::atomic<uint64_t> lastActivity{0};
+    std::atomic<bool> timedOut{false};
 
     ws.reconnect = false;
 
     ws.onConnect = [&]{
+        lastActivity = hoytech::curr_time_s();
         auto txn = env.txn_ro();
         std::string neMsg;
 
@@ -169,15 +178,19 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     std::vector<Bytes32> have, need;
     flat_hash_set<Bytes32> seenHave, seenNeed;
     bool syncDone = false;
+    bool receivedNegMsg = false;
     uint64_t totalHaves = 0, totalNeeds = 0;
     Decompressor decomp;
 
     ws.onMessage = [&](auto msgStr, uWS::OpCode opCode, size_t compressedSize){
+        lastActivity = hoytech::curr_time_s();
+
         try {
             auto txn = env.txn_ro();
             tao::json::value msg = tao::json::from_string(msgStr);
 
             if (msg.at(0) == "NEG-MSG") {
+                receivedNegMsg = true;
                 uint64_t origHaves = have.size(), origNeeds = need.size();
 
                 std::optional<std::string> neMsg;
@@ -264,12 +277,34 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             } else if (msg.at(0) == "NEG-ERR") {
                 LE << "Got NEG-ERR response from relay: " << msg;
                 doExit(1);
+            } else if (msg.at(0) == "NOTICE") {
+                auto noticeStr = msg.at(1).get_string();
+                LW << "NOTICE from relay: " << noticeStr;
+
+                if (!receivedNegMsg) {
+                    std::string lowerNotice = noticeStr;
+                    std::transform(lowerNotice.begin(), lowerNotice.end(), lowerNotice.begin(),
+                        [](unsigned char c){ return std::tolower(c); });
+
+                    bool isError = false;
+                    for (const char* kw : {"error", "invalid", "unrecognized", "bad msg", "bad message", "could not parse", "disabled", "unsupported", "unknown"}) {
+                        if (lowerNotice.find(kw) != std::string::npos) {
+                            isError = true;
+                            break;
+                        }
+                    }
+
+                    if (isError) {
+                        LE << "Received error NOTICE before any negentropy response, relay likely does not support negentropy syncing";
+                        doExit(1);
+                    }
+                }
             } else {
-                LW << "Unexpected message from relay: " << msg;
+                LW << "Unexpected message from relay: " << tao::json::to_string(msg).substr(0, 512);
             }
         } catch (std::exception &e) {
             LE << "Error processing websocket message: " << e.what();
-            LW << "MSG: " << msgStr;
+            LW << "MSG: " << msgStr.substr(0, 512);
         }
 
         if (doUp && have.size() > 0 && inFlightUp <= lowWaterUp) {
@@ -329,6 +364,29 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
             doExit(0);
         }
     };
+
+    ws.onTrigger = [&]{
+        if (timedOut) {
+            LE << "Sync timed out: no activity for " << timeout << " seconds";
+            doExit(1);
+        }
+    };
+
+    hoytech::timer timeoutTimer;
+
+    if (timeout > 0) {
+        timeoutTimer.setupCb = []{ setThreadName("syncTimeout"); };
+        timeoutTimer.repeat(1'000'000, [&]{ // 1 second
+            if (ws.shutdown) return;
+            auto now = hoytech::curr_time_s();
+            auto last = lastActivity.load();
+            if (last > 0 && now - last >= timeout) {
+                timedOut = true;
+                ws.trigger();
+            }
+        });
+        timeoutTimer.run();
+    }
 
     ws.run();
 }
