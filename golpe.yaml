@@ -150,3 +150,6 @@ config:
   - name: events__maxTagValSize
     desc: "Maximum size for tag values, in bytes"
     default: 1024
+  - name: events__archivalMode
+    desc: "Archival mode: no deleting of events"
+    default: false
