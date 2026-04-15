@@ -3,6 +3,9 @@ next
     just print out the event IDs that you have and/or need, instead of actually
     trying to transfer them.
   * The amount of bytes sent by negentropy was incorrectly reported in a log.
+  * Sync, stream, upload, download, and router now log bytes up/down and
+    compression ratios on disconnect. This mirrors the per-connection bandwidth
+    stats already tracked by the relay server.
 
 1.1.0
   * DEPRECATE stream command. Instead, suggest using strfry router
