@@ -4,6 +4,7 @@
 #include "app_git_version.h"
 #include "Favicon.h"
 #include "Bech32Utils.h"
+#include "PrometheusMetrics.h"
 
 
 
@@ -277,6 +278,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
            << " sliding=" << (compSlidingWindow ? 'Y' : 'N')
         ;
 
+        PrometheusMetrics::getInstance().activeConnections.inc();
+
         if (cfg().relay__enableTcpKeepalive) {
             int optval = 1;
             if (setsockopt(ws->getFd(), SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))) {
@@ -302,6 +305,8 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
         connIdToConnection.erase(connId);
         delete c;
+
+        PrometheusMetrics::getInstance().activeConnections.dec();
 
         if (gracefulShutdown) {
             LI << "Graceful shutdown in progress: " << connIdToConnection.size() << " connections remaining";

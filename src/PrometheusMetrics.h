@@ -27,6 +27,29 @@ public:
         }
     };
 
+    // Gauge for tracking current values that can go up and down
+    class Gauge {
+    private:
+        std::atomic<int64_t> value{0};
+
+    public:
+        void inc(int64_t n = 1) {
+            value.fetch_add(n, std::memory_order_relaxed);
+        }
+
+        void dec(int64_t n = 1) {
+            value.fetch_sub(n, std::memory_order_relaxed);
+        }
+
+        void set(int64_t v) {
+            value.store(v, std::memory_order_relaxed);
+        }
+
+        int64_t get() const {
+            return value.load(std::memory_order_relaxed);
+        }
+    };
+
     // Labeled counter - allows multiple counters with different label values
     class LabeledCounter {
     private:
@@ -75,6 +98,16 @@ public:
     // Nostr event counters (by kind)
     LabeledCounter nostrEventsByKind;
 
+    // Write path performance metrics
+    Counter writtenEventsTotal;
+    Counter rejectedEventsTotal;
+    Counter dupEventsTotal;
+    Counter writeTimeUs;  // total microseconds spent in write transactions
+    Gauge lastWriteBatchSize;
+
+    // Connection tracking
+    Gauge activeConnections;
+
     // Generate Prometheus text format output
     std::string render() const {
         std::ostringstream out;
@@ -102,7 +135,33 @@ public:
         for (const auto& [kind, count] : events) {
             out << "nostr_events_total{kind=\"" << kind << "\"} " << count << "\n";
         }
-        
+
+        // Write path metrics
+        out << "# HELP strfry_write_events_total Total events written to DB\n";
+        out << "# TYPE strfry_write_events_total counter\n";
+        out << "strfry_write_events_total " << writtenEventsTotal.get() << "\n";
+
+        out << "# HELP strfry_write_rejected_total Total events rejected during write\n";
+        out << "# TYPE strfry_write_rejected_total counter\n";
+        out << "strfry_write_rejected_total " << rejectedEventsTotal.get() << "\n";
+
+        out << "# HELP strfry_write_dups_total Total duplicate events skipped\n";
+        out << "# TYPE strfry_write_dups_total counter\n";
+        out << "strfry_write_dups_total " << dupEventsTotal.get() << "\n";
+
+        out << "# HELP strfry_write_time_microseconds_total Total time in write transactions\n";
+        out << "# TYPE strfry_write_time_microseconds_total counter\n";
+        out << "strfry_write_time_microseconds_total " << writeTimeUs.get() << "\n";
+
+        out << "# HELP strfry_write_batch_size Size of last write batch\n";
+        out << "# TYPE strfry_write_batch_size gauge\n";
+        out << "strfry_write_batch_size " << lastWriteBatchSize.get() << "\n";
+
+        // Connection tracking
+        out << "# HELP strfry_connections_current Current number of active WebSocket connections\n";
+        out << "# TYPE strfry_connections_current gauge\n";
+        out << "strfry_connections_current " << activeConnections.get() << "\n";
+
         return out.str();
     }
 
