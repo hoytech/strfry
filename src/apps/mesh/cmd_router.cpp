@@ -41,6 +41,13 @@ struct RouterEvent : NonCopyable {
 struct ConnDesignator {
     std::string groupName;
     std::string url;
+
+    struct Stats {
+        uint64_t bytesUp = 0;
+        uint64_t bytesUpCompressed = 0;
+        uint64_t bytesDown = 0;
+        uint64_t bytesDownCompressed = 0;
+    } stats;
 };
 
 
@@ -164,7 +171,11 @@ struct Router {
                 filterToSend["limit"] = 0;
 
                 auto msg = tao::json::to_string(tao::json::value::array({ "REQ", "X", filterToSend }));
-                ws->send(msg.data(), msg.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);
+                size_t compressedSize;
+                ws->send(msg.data(), msg.size(), uWS::OpCode::TEXT, nullptr, nullptr, true, &compressedSize);
+                auto *desig = (ConnDesignator*) ws->getUserData();
+                desig->stats.bytesUp += msg.size();
+                desig->stats.bytesUpCompressed += compressedSize;
             }
         }
 
@@ -209,7 +220,13 @@ struct Router {
             auto res = pluginUp.acceptEvent(pluginUpCmd, evJson, EventSourceType::Stored, "", Bytes32(), okMsg);
             if (res == PluginEventSifterResult::Accept) {
                 for (auto &[url, c] : conns) {
-                    if (c.ws) c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true);
+                    if (c.ws) {
+                        size_t compressedSize;
+                        c.ws->send(responseStr.data(), responseStr.size(), uWS::OpCode::TEXT, nullptr, nullptr, true, &compressedSize);
+                        auto *desig = (ConnDesignator*) c.ws->getUserData();
+                        desig->stats.bytesUp += responseStr.size();
+                        desig->stats.bytesUpCompressed += compressedSize;
+                    }
                 }
             } else {
                 if (okMsg.size()) LI << groupName << " : pluginUp blocked event " << evJson.at("id").get_string() << ": " << okMsg;
@@ -261,7 +278,14 @@ struct Router {
 
         hubGroup->onDisconnection([&](uWS::WebSocket<uWS::CLIENT> *ws, int code, char *message, size_t length) {
             auto *desig = (ConnDesignator*) ws->getUserData();
-            LI << desig->groupName << ": Disconnected from " << desig->url;
+
+            auto &st = desig->stats;
+            auto upComp = renderPercent(st.bytesUp ? 1.0 - (double)st.bytesUpCompressed / st.bytesUp : 0);
+            auto downComp = renderPercent(st.bytesDown ? 1.0 - (double)st.bytesDownCompressed / st.bytesDown : 0);
+
+            LI << desig->groupName << ": Disconnected from " << desig->url
+               << " UP: " << renderSize(st.bytesUp) << " (" << upComp << " compressed)"
+               << " DN: " << renderSize(st.bytesDown) << " (" << downComp << " compressed)";
 
             if (streamGroups.contains(desig->groupName)) {
                 streamGroups.at(desig->groupName).connClose(desig->url, ws);
@@ -277,8 +301,10 @@ struct Router {
             delete desig;
         });
 
-        hubGroup->onMessage2([&](uWS::WebSocket<uWS::CLIENT> *ws, char *message, size_t length, uWS::OpCode, size_t) {
+        hubGroup->onMessage2([&](uWS::WebSocket<uWS::CLIENT> *ws, char *message, size_t length, uWS::OpCode, size_t compressedSize) {
             auto *desig = (ConnDesignator*) ws->getUserData();
+            desig->stats.bytesDown += length;
+            desig->stats.bytesDownCompressed += compressedSize;
 
             if (!streamGroups.contains(desig->groupName)) {
                 ws->close();

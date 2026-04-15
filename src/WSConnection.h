@@ -18,6 +18,13 @@ class WSConnection : NonCopyable {
 
   public:
 
+    struct Stats {
+        uint64_t bytesUp = 0;
+        uint64_t bytesUpCompressed = 0;
+        uint64_t bytesDown = 0;
+        uint64_t bytesDownCompressed = 0;
+    } stats;
+
     WSConnection(const std::string &url) : url(url) {}
 
     std::function<void()> onConnect;
@@ -42,7 +49,11 @@ class WSConnection : NonCopyable {
     // Should only be called from the websocket thread (ie within an onConnect or onMessage callback)
     void send(std::string_view msg, uWS::OpCode op = uWS::OpCode::TEXT, size_t *compressedSize = nullptr) {
         if (currWs) {
-            currWs->send(msg.data(), msg.size(), op, nullptr, nullptr, true, compressedSize);
+            size_t localCompressedSize;
+            size_t *csPtr = compressedSize ? compressedSize : &localCompressedSize;
+            currWs->send(msg.data(), msg.size(), op, nullptr, nullptr, true, csPtr);
+            stats.bytesUp += msg.size();
+            stats.bytesUpCompressed += *csPtr;
         } else {
             LI << "Tried to send message, but websocket is disconnected";
         }
@@ -72,6 +83,7 @@ class WSConnection : NonCopyable {
                 currWs = nullptr;
             }
 
+            stats = Stats{};
             remoteAddr = ws->getAddress().address;
             LI << "Connected to " << url << " (" << remoteAddr << ")";
 
@@ -93,7 +105,12 @@ class WSConnection : NonCopyable {
         });
 
         hubGroup->onDisconnection([&](uWS::WebSocket<uWS::CLIENT> *ws, int code, char *message, size_t length) {
-            LI << "Disconnected from " << url << " : " << code << "/" << (message ? std::string_view(message, length) : "-");
+            auto upComp = renderPercent(stats.bytesUp ? 1.0 - (double)stats.bytesUpCompressed / stats.bytesUp : 0);
+            auto downComp = renderPercent(stats.bytesDown ? 1.0 - (double)stats.bytesDownCompressed / stats.bytesDown : 0);
+
+            LI << "Disconnected from " << url << " : " << code << "/" << (message ? std::string_view(message, length) : "-")
+               << " UP: " << renderSize(stats.bytesUp) << " (" << upComp << " compressed)"
+               << " DN: " << renderSize(stats.bytesDown) << " (" << downComp << " compressed)";
 
             if (shutdown) return;
 
@@ -115,6 +132,9 @@ class WSConnection : NonCopyable {
         });
 
         hubGroup->onMessage2([&](uWS::WebSocket<uWS::CLIENT> *ws, char *message, size_t length, uWS::OpCode opCode, size_t compressedSize) {
+            stats.bytesDown += length;
+            stats.bytesDownCompressed += compressedSize;
+
             if (!onMessage) return;
 
             try {
