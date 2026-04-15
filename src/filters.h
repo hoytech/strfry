@@ -203,7 +203,7 @@ struct NostrFilter {
             }
         }
 
-        if (tags.size() > 3) throw herr("too many tags in filter"); // O(N^2) in matching, so prevent it from being too large
+        if (tags.size() > cfg().relay__maxTagsPerFilter) throw herr("too many tags in filter"); // O(N^2) in matching, so prevent it from being too large
 
         if (limit > maxFilterLimit) limit = maxFilterLimit;
 

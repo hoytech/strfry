@@ -73,6 +73,9 @@ config:
   - name: relay__maxFilterLimit
     desc: "Maximum records that can be returned per filter"
     default: 500
+  - name: relay__maxTagsPerFilter
+    desc: "Maximum number of tag filters allowed per filter (O(N^2) in matching, so keep it small)"
+    default: 3
   - name: relay__maxFilterLimitCount
     desc: "Maximum records that can be counted by a COUNT request (set 0 to disable COUNT)"
     default: 1000000

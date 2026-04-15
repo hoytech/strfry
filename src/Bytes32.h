@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -47,8 +48,9 @@ namespace std {
     template<> struct hash<Bytes32> {
         std::size_t operator()(Bytes32 const &b) const {
             static_assert(sizeof(b.buf) == 32);
-            uint64_t *p = (size_t*)&b.buf;
-            return size_t(p[0] ^ p[1] ^ p[2] ^ p[3]);
+            uint64_t words[4];
+            ::memcpy(words, b.buf, sizeof(words));
+            return size_t(words[0] ^ words[1] ^ words[2] ^ words[3]);
         }
     };
 }

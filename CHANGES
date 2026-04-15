@@ -3,9 +3,16 @@ next
     just print out the event IDs that you have and/or need, instead of actually
     trying to transfer them.
   * The amount of bytes sent by negentropy was incorrectly reported in a log.
-  * Sync, stream, upload, download, and router now log bytes up/down and
-    compression ratios on disconnect. This mirrors the per-connection bandwidth
-    stats already tracked by the relay server.
+  * New --timeout flag for strfry sync. Aborts sync after the specified number
+    of seconds of inactivity, preventing the process from hanging indefinitely
+    when a relay does not support negentropy syncing.
+  * strfry sync now handles NOTICE messages from relays. If a NOTICE is
+    received before any negentropy response, the sync exits with an error,
+    since this indicates the relay does not support the negentropy protocol.
+  * Rejected events no longer log event content. Only the event ID and
+    rejection reason are logged, preventing a potential DoS vector where
+    oversized events could fill disks with log data.
+  * Truncate large messages in sync error/warning logs to 512 bytes.
 
 1.1.0
   * DEPRECATE stream command. Instead, suggest using strfry router

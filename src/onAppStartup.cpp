@@ -16,6 +16,14 @@
 
 
 void onPreStartup(int argc, char **argv) {
+    if (getuid() == 0) {
+        if (isatty(fileno(stderr))) {
+            std::cerr << "\x1b[1;35mWARNING: Running as root is not recommended\x1b[0m" << std::endl;
+        } else {
+            std::cerr << "WARNING: Running as root is not recommended" << std::endl;
+        }
+    }
+
     if (argc > 1) return;
 
     if (isatty(fileno(stdout))) {
