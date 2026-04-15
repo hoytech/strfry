@@ -162,6 +162,12 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     };
 
     auto doExit = [&](int status){
+        auto &st = ws.stats;
+        auto upComp = renderPercent(st.bytesUp ? 1.0 - (double)st.bytesUpCompressed / st.bytesUp : 0);
+        auto downComp = renderPercent(st.bytesDown ? 1.0 - (double)st.bytesDownCompressed / st.bytesDown : 0);
+        LI << "Sync transfer stats  UP: " << renderSize(st.bytesUp) << " (" << upComp << " compressed)"
+           << "  DN: " << renderSize(st.bytesDown) << " (" << downComp << " compressed)";
+
         if (doDown) writer.flush();
         ::exit(status);
     };
