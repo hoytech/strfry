@@ -252,30 +252,29 @@ struct NostrFilterGroup {
 
     NostrFilterGroup() {}
 
-    // Note that this expects the full array, so the first two items are "REQ" and the subId
-    NostrFilterGroup(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
-        const auto &arr = req.get_array();
-        if (arr.size() < 3) throw herr("too small");
-
-        for (size_t i = 2; i < arr.size(); i++) {
-            filters.emplace_back(arr[i], maxFilterLimit);
-            if (filters.back().neverMatch) filters.pop_back();
-        }
-    }
-
-    // FIXME refactor: Make unwrapped the default constructor
-    static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+    NostrFilterGroup(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
             filter = tao::json::value::array({ filter });
         }
 
-        tao::json::value pretendReqQuery = tao::json::value::array({ "REQ", "junkSub" });
-
         for (auto &e : filter.get_array()) {
-            pretendReqQuery.push_back(e);
+            filters.emplace_back(e, maxFilterLimit);
+            if (filters.back().neverMatch) filters.pop_back();
+        }
+    }
+
+    static NostrFilterGroup fromReq(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+        const auto &arr = req.get_array();
+        if (arr.size() < 3) throw herr("too small");
+
+        NostrFilterGroup fg;
+
+        for (size_t i = 2; i < arr.size(); i++) {
+            fg.filters.emplace_back(arr[i], maxFilterLimit);
+            if (fg.filters.back().neverMatch) fg.filters.pop_back();
         }
 
-        return NostrFilterGroup(pretendReqQuery, maxFilterLimit);
+        return fg;
     }
 
     bool doesMatch(PackedEventView ev) const {

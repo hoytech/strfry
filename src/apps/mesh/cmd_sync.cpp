@@ -70,7 +70,7 @@ void cmd_sync(const std::vector<std::string> &subArgs) {
     uint64_t timeout = 0;
     if (args["--timeout"]) timeout = args["--timeout"].asLong();
 
-    auto filterCompiled = NostrFilterGroup::unwrapped(filterJson);
+    auto filterCompiled = NostrFilterGroup(filterJson);
 
     std::optional<uint64_t> treeId;
     negentropy::storage::Vector storageVector;

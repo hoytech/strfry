@@ -296,7 +296,7 @@ struct DBQuery : NonCopyable {
     uint64_t totalWork = 0;
 
     DBQuery(Subscription &sub) : sub(std::move(sub)) {}
-    DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup::unwrapped(filter, maxLimit))) {}
+    DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup(filter, maxLimit))) {}
 
     // If scan is complete, returns true
     bool process(lmdb::txn &txn, const std::function<void(const Subscription &, uint64_t)> &cb, uint64_t timeBudgetMicroseconds = MAX_U64, bool logMetrics = false) {
