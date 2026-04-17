@@ -2,13 +2,11 @@
 
 #include <hoytech/protected_queue.h>
 
-
 template <typename M>
 struct ThreadPool {
-    uint64_t numThreads;
 
     struct Thread {
-        uint64_t id;
+        uint64_t id = 0;
         std::thread thread;
         hoytech::protected_queue<M> inbox;
     };
@@ -19,46 +17,79 @@ struct ThreadPool {
         join();
     }
 
-    void init(std::string name, uint64_t numThreads_, const std::function<void(Thread &t)> &cb) {
-        if (numThreads_ == 0) throw herr("must have more than 0 threads");
+    size_t size() const {
+        return pool.size();
+    }
 
-        numThreads = numThreads_;
+    bool empty() const {
+        return pool.empty();
+    }
 
-        for (size_t i = 0; i < numThreads; i++) {
+    void init(const std::string& name,
+              uint64_t numThreads,
+              const std::function<void(Thread &)> &cb)
+    {
+        if (numThreads == 0) {
+            throw herr("must have more than 0 threads");
+        }
+
+        if (!pool.empty()) {
+            throw herr("ThreadPool already initialized");
+        }
+
+        for (uint64_t i = 0; i < numThreads; i++) {
             std::string myName = name;
             if (numThreads != 1) {
-                myName += std::string(" ");
+                myName += ' ';
                 myName += std::to_string(i);
             }
 
             pool.emplace_back();
-            auto &t = pool.back();
+            Thread* t = &pool.back();
 
-            t.id = i;
-            t.thread = std::thread([&t, cb, myName]() {
+            t->id = i;
+
+            t->thread = std::thread([t, cb, myName]() {
                 setThreadName(myName.c_str());
-                cb(t);
+                cb(*t);
             });
         }
     }
 
     void dispatch(uint64_t key, M &&m) {
-        uint64_t who = key % numThreads;
-        pool[who].inbox.push_move(std::move(m));
+        if (pool.empty()) {
+            throw herr("ThreadPool not initialized");
+        }
+
+        auto &t = pool[key % pool.size()];
+        t.inbox.push_move(std::move(m));
     }
 
     void dispatchMulti(uint64_t key, std::vector<M> &m) {
-        uint64_t who = key % numThreads;
-        pool[who].inbox.push_move_all(m);
+        if (pool.empty()) {
+            throw herr("ThreadPool not initialized");
+        }
+
+        auto &t = pool[key % pool.size()];
+        t.inbox.push_move_all(m);
     }
 
     void dispatchToAll(const std::function<M()> &cb) {
-        for (size_t i = 0; i < numThreads; i++) pool[i].inbox.push_move(cb());
+        if (pool.empty()) {
+            throw herr("ThreadPool not initialized");
+        }
+
+        for (auto &t : pool) {
+            t.inbox.push_move(cb());
+        }
     }
 
     void join() {
-        for (size_t i = 0; i < numThreads; i++) {
-            pool[i].thread.join();
+        for (auto &t : pool) {
+            if (t.thread.joinable()) {
+                t.thread.join();
+            }
         }
+        pool.clear();
     }
 };
