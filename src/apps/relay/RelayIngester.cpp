@@ -43,7 +43,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessAuth(rsctx, msg->connId, arr[1]);
                             } catch (std::exception &e) {
-                                sendNoticeError(msg->connId, std::string("auth failed: ") + e.what());
+                                sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
+                                               false, std::string("error: ") + e.what());
                             }
                         } else if (cmd == "REQ" || cmd == "COUNT") {
                             PROM_INC_CLIENT_MSG(cmd);
