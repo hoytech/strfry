@@ -1,9 +1,22 @@
 #include <iostream>
+#include <cstring>
 
 #include <docopt.h>
 #include "golpe.h"
 
 #include "events.h"
+
+
+static void friedSwapEndian(std::string &packed) {
+    if constexpr (std::endian::native != std::endian::little) {
+        for (size_t offset : {64, 72, 80}) {
+            uint64_t val;
+            std::memcpy(&val, packed.data() + offset, 8);
+            val = __builtin_bswap64(val);
+            std::memcpy(packed.data() + offset, &val, 8);
+        }
+    }
+}
 
 
 static const char USAGE[] =
@@ -31,7 +44,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     if (dbVersion == 0) throw herr("migration from DB version 0 not supported by this version of strfry");
 
     if (fried) {
-        if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
         if (dbVersion < 3) throw herr("can't export old DB version with --fried: please downgrade to 0.9.7");
     }
 
@@ -54,13 +66,15 @@ void cmd_export(const std::vector<std::string> &subArgs) {
 
         if (fried) {
             auto ev = lookupEventByLevId(txn, levId);
+            std::string packed(ev.buf);
+            friedSwapEndian(packed);
 
             o.clear();
-            o.reserve(json.size() + ev.buf.size() * 2 + 100);
+            o.reserve(json.size() + packed.size() * 2 + 100);
             o = json;
             o.resize(o.size() - 1);
             o += ",\"fried\":\"";
-            o += to_hex(ev.buf);
+            o += to_hex(packed);
             o += "\"}\n";
 
             std::cout << o;

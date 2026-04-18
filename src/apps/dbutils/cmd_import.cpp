@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 
 #include <iostream>
 
@@ -7,6 +8,18 @@
 #include "golpe.h"
 
 #include "WriterPipeline.h"
+
+
+static void friedSwapEndian(std::string &packed) {
+    if constexpr (std::endian::native != std::endian::little) {
+        for (size_t offset : {64, 72, 80}) {
+            uint64_t val;
+            std::memcpy(&val, packed.data() + offset, 8);
+            val = __builtin_bswap64(val);
+            std::memcpy(packed.data() + offset, &val, 8);
+        }
+    }
+}
 
 
 static const char USAGE[] =
@@ -29,6 +42,7 @@ EventToWrite parseFried(std::string_view lineSv) {
     if (!std::string_view(line).substr(0, i + 1).ends_with(",\"fried\":\"")) throw herr("fried parse error");
 
     std::string packed = from_hex(std::string_view(line).substr(i + 1, line.size() - i - 3));
+    friedSwapEndian(packed);
 
     line[i - 9] = '}';
     line.resize(i - 8);
@@ -76,8 +90,6 @@ void cmd_import(const std::vector<std::string> &subArgs) {
         std::string_view line(buf, (size_t)numRead-1);
 
         if (fried) {
-            if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
-
             try {
                 writer.write(parseFried(line));
             } catch (std::exception &e) {
