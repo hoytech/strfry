@@ -1,0 +1,40 @@
+name: macos
+
+on: [push, pull_request]
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    name: A job to build and run strfry on macOS
+    steps:
+      - name: Checkout strfry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install pkg-config libtool openssl zlib lmdb flatbuffers secp256k1 zstd libuv perl
+
+      - name: Build strfry
+        env:
+          PKG_CONFIG_PATH: /opt/homebrew/opt/openssl/lib/pkgconfig
+          LDFLAGS: -L/opt/homebrew/lib
+          CPPFLAGS: -I/opt/homebrew/include
+        run: |
+          git submodule update --init
+          make setup-golpe
+          make -j4
+          if ! [ -f ./strfry ]; then
+             echo "Strfry build failed."
+             exit 1
+          fi
+
+      - name: Run strfry
+        run: |
+          sw_vers
+          mkdir -p strfry-db
+          ./strfry relay &
+          sleep 2
+          kill %1 || true
