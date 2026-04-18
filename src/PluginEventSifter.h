@@ -12,14 +12,21 @@
 
 #include <memory>
 
+#ifdef __APPLE__
+#define st_mtim st_mtimespec
+#endif
+
 #include "hoytech/stream.h"
 
 #include "golpe.h"
 
 #include "events.h"
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__)
 extern char **environ;
+#elif defined(__APPLE__)
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
 #endif
 
 

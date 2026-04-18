@@ -5,6 +5,9 @@ OPT  ?= -O3 -g
 include golpe/rules.mk
 
 LDLIBS += -lsecp256k1 -lzstd
+ifeq ($(shell uname -s),Darwin)
+LDLIBS += -luv
+endif
 INCS += -Iexternal/negentropy/cpp
 
 build/StrfryTemplates.h: $(shell find src/tmpls/ -type f -name '*.tmpl')
