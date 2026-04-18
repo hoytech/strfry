@@ -18,10 +18,6 @@ jobs:
           brew install pkg-config libtool openssl zlib lmdb flatbuffers secp256k1 zstd libuv perl
 
       - name: Build strfry
-        env:
-          PKG_CONFIG_PATH: /opt/homebrew/opt/openssl/lib/pkgconfig
-          LDFLAGS: -L/opt/homebrew/lib
-          CPPFLAGS: -I/opt/homebrew/include
         run: |
           git submodule update --init
           make setup-golpe

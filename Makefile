@@ -7,6 +7,11 @@ include golpe/rules.mk
 LDLIBS += -lsecp256k1 -lzstd
 ifeq ($(shell uname -s),Darwin)
 LDLIBS += -luv
+BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+ifneq ($(BREW_PREFIX),)
+INCS    += -I$(BREW_PREFIX)/include -I$(BREW_PREFIX)/opt/openssl/include
+LDFLAGS += -L$(BREW_PREFIX)/lib -L$(BREW_PREFIX)/opt/openssl/lib
+endif
 endif
 INCS += -Iexternal/negentropy/cpp
 
