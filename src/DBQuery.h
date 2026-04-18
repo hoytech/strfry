@@ -4,7 +4,42 @@
 
 #include "Subscription.h"
 #include "filters.h"
+#include "HyperLogLog.h"
 #include "events.h"
+
+
+// Returns HLL offset (8–23) from a filter, or -1 if not eligible for HLL.
+inline int computeHllOffset(const NostrFilter &filter) {
+    if (filter.tags.size() != 1) return -1;
+
+    auto it = filter.tags.begin();
+    char tagChar = it->first;
+    const auto &filterSet = it->second;
+    if (filterSet.size() != 1) return -1;
+
+    std::string val = filterSet.at(0);
+
+    int offset;
+
+    if (tagChar == 'e' || tagChar == 'p') {
+        // Stored as 32 raw bytes (hex-decoded)
+        if (val.size() != 32) return -1;
+        offset = (((uint8_t)val[16]) >> 4) + 8;
+    } else {
+        // Stored as string — must be 64-char hex to derive offset
+        if (val.size() != 64) return -1;
+        char c = val[32];
+        int nibble;
+        if (c >= '0' && c <= '9') nibble = c - '0';
+        else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
+        else return -1;
+        offset = nibble + 8;
+    }
+
+    if (offset < 8 || offset > 23) return -1;
+    return offset;
+}
 
 
 struct DBScan : NonCopyable {
@@ -295,7 +330,13 @@ struct DBQuery : NonCopyable {
     uint64_t totalTime = 0;
     uint64_t totalWork = 0;
 
-    DBQuery(Subscription &sub) : sub(std::move(sub)) {}
+    int hllOffset = -1;
+    HyperLogLog hll;
+
+    DBQuery(Subscription &sub) : sub(std::move(sub)) {
+        if (this->sub.countOnly && this->sub.filterGroup.size() == 1)
+            hllOffset = computeHllOffset(this->sub.filterGroup.filters[0]);
+    }
     DBQuery(const tao::json::value &filter, uint64_t maxLimit = MAX_U64) : sub(Subscription(1, ".", NostrFilterGroup::unwrapped(filter, maxLimit))) {}
 
     // If scan is complete, returns true
@@ -316,6 +357,11 @@ struct DBQuery : NonCopyable {
                 if (sentEventsFull.find(levId) == sentEventsFull.end()) {
                     sentEventsFull.insert(levId);
                     cb(sub, levId);
+
+                    if (hllOffset >= 0) {
+                        auto view = env.lookup_Event(txn, levId);
+                        if (view) hll.addPubkeyBytes((const uint8_t *)PackedEventView(view->buf).pubkey().data(), hllOffset);
+                    }
                 }
 
                 sentEventsCurr.insert(levId);

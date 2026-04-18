@@ -137,7 +137,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         }
     };
 
-    queries.onComplete = [&](lmdb::txn &txn, Subscription &sub, uint64_t){
+    queries.onComplete = [&](lmdb::txn &txn, Subscription &sub, uint64_t, std::string){
         auto *userView = views.findView(sub.connId, sub.subId);
         if (!userView) return;
 
