@@ -10,13 +10,18 @@ LDLIBS += -luv
 BREW_PREFIX    := $(shell brew --prefix 2>/dev/null)
 OPENSSL_PREFIX := $(shell brew --prefix openssl 2>/dev/null)
 ifneq ($(BREW_PREFIX),)
-INCS    += -I$(BREW_PREFIX)/include
-LDFLAGS += -L$(BREW_PREFIX)/lib
+BREW_INCS += -I$(BREW_PREFIX)/include
+BREW_LIBS += -L$(BREW_PREFIX)/lib
 endif
 ifneq ($(OPENSSL_PREFIX),)
-INCS    += -I$(OPENSSL_PREFIX)/include
-LDFLAGS += -L$(OPENSSL_PREFIX)/lib
+BREW_INCS += -I$(OPENSSL_PREFIX)/include
+BREW_LIBS += -L$(OPENSSL_PREFIX)/lib
 endif
+INCS      += $(BREW_INCS)
+LDFLAGS   += $(BREW_LIBS)
+# Propagate to sub-makes (e.g. uWebSockets) that honor XCXXFLAGS / XLDFLAGS
+export XCXXFLAGS += $(BREW_INCS)
+export XLDFLAGS  += $(BREW_LIBS)
 endif
 INCS += -Iexternal/negentropy/cpp
 
