@@ -33,6 +33,7 @@ struct QueryScheduler : NonCopyable {
         }
 
         DBQuery *q = new DBQuery(sub);
+        q->maxTotalEvents = cfg().relay__maxTotalEventsPerReq;
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);
