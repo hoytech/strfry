@@ -34,6 +34,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             uint64_t bytesUpCompressed = 0;
             uint64_t bytesDown = 0;
             uint64_t bytesDownCompressed = 0;
+            // Application bytes handed to uWS that have not yet been fully drained
+            // to the kernel (either still queued in uWS or in-flight in a partial
+            // send). Useful for diagnosing slow or stalled clients.
+            uint64_t pendingOutbound = 0;
         } stats;
 
         Connection(uWS::WebSocket<uWS::SERVER> *p, uint64_t connId_)
@@ -299,6 +303,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
            << " (" << code << "/" << (message ? std::string_view(message, length) : "-") << ")"
            << " UP: " << renderSize(c->stats.bytesUp) << " (" << upComp << " compressed)"
            << " DN: " << renderSize(c->stats.bytesDown) << " (" << downComp << " compressed)"
+           << " Pending: " << renderSize(c->stats.pendingOutbound)
         ;
 
         tpIngester.dispatch(connId, MsgIngester{MsgIngester::CloseConn{connId}});
@@ -335,10 +340,34 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (it == connIdToConnection.end()) return;
             auto &c = *it->second;
 
+            // Track bytes still inside uWS's outbound path (either queued or
+            // partially sent). Increment before send(), decrement in the
+            // completion callback. The payload size is smuggled through the
+            // callback's user-data pointer so the callback captures nothing and
+            // decays to a plain function pointer.
+            const size_t payloadSize = payload.size();
+            c.stats.pendingOutbound += payloadSize;
+
             size_t compressedSize;
-            auto cb = [](uWS::WebSocket<uWS::SERVER> *webSocket, void *data, bool cancelled, void *reserved){};
-            c.websocket->send(payload.data(), payload.size(), opCode, cb, nullptr, true, &compressedSize);
-            c.stats.bytesUp += payload.size();
+
+            auto cb = [](uWS::WebSocket<uWS::SERVER> *ws, void *data, bool /*cancelled*/, void * /*reserved*/){
+                // uWS invokes this exactly once per send() on every path:
+                //   - immediate send success          (ws != nullptr, cancelled=false)
+                //   - immediate send failure          (ws != nullptr, cancelled=true)
+                //   - queued drain success            (ws != nullptr, cancelled=false)
+                //   - socket teardown (onEnd flush)   (ws == nullptr, cancelled=true)
+                // The teardown path runs after our onDisconnection handler has
+                // already logged and deleted the Connection, so we must not
+                // dereference anything via ws in that case. Gate on ws.
+                if (!ws) return;
+                auto *conn = static_cast<Connection*>(ws->getUserData());
+                if (!conn) return;
+                conn->stats.pendingOutbound -= reinterpret_cast<uintptr_t>(data);
+            };
+            c.websocket->send(payload.data(), payloadSize, opCode, cb,
+                              reinterpret_cast<void*>(static_cast<uintptr_t>(payloadSize)),
+                              true, &compressedSize);
+            c.stats.bytesUp += payloadSize;
             c.stats.bytesUpCompressed += compressedSize;
         };
 
