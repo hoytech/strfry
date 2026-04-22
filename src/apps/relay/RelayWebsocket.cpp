@@ -272,6 +272,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
 
         if (c->ipAddr.size() == 0) c->ipAddr = ws->getAddressBytes();
 
+        {
+            std::unique_lock lock(connIdToIpMutex);
+            connIdToIp[connId] = c->ipAddr;
+        }
+
         ws->setUserData((void*)c);
         connIdToConnection.emplace(connId, c);
 
@@ -307,6 +312,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         ;
 
         tpIngester.dispatch(connId, MsgIngester{MsgIngester::CloseConn{connId}});
+
+        {
+            std::unique_lock lock(connIdToIpMutex);
+            connIdToIp.erase(connId);
+        }
 
         connIdToConnection.erase(connId);
         delete c;
