@@ -1,7 +1,16 @@
 #include <pthread.h>
 #include <signal.h>
 
+#include <docopt.h>
+
 #include "RelayServer.h"
+
+
+static const char USAGE[] =
+R"(
+    Usage:
+      relay
+)";
 
 
 
@@ -24,6 +33,8 @@ static void checkConfig() {
 
 
 void cmd_relay(const std::vector<std::string> &subArgs) {
+    docopt::docopt(USAGE, subArgs, true, "");
+
     RelayServer s;
     s.run();
 }
