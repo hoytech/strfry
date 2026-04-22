@@ -82,6 +82,9 @@ config:
   - name: relay__maxSubsPerConnection
     desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
     default: 200
+  - name: relay__maxPendingOutboundBytes
+    desc: "Per-connection cap on unsent outbound bytes buffered inside the websocket library (0 = unlimited). Connections exceeding this are terminated to bound memory used by slow/stalled clients."
+    default: 0
 
   - name: relay__writePolicy__plugin
     desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"

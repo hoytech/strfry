@@ -107,6 +107,7 @@ public:
 
     // Connection tracking
     Gauge activeConnections;
+    Counter slowClientTerminations;
 
     // Generate Prometheus text format output
     std::string render() const {
@@ -161,6 +162,10 @@ public:
         out << "# HELP strfry_connections_current Current number of active WebSocket connections\n";
         out << "# TYPE strfry_connections_current gauge\n";
         out << "strfry_connections_current " << activeConnections.get() << "\n";
+
+        out << "# HELP strfry_slow_client_terminations_total Connections closed for exceeding relay.maxPendingOutboundBytes\n";
+        out << "# TYPE strfry_slow_client_terminations_total counter\n";
+        out << "strfry_slow_client_terminations_total " << slowClientTerminations.get() << "\n";
 
         return out.str();
     }

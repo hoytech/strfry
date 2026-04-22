@@ -369,6 +369,23 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                               true, &compressedSize);
             c.stats.bytesUp += payloadSize;
             c.stats.bytesUpCompressed += compressedSize;
+
+            // Back-pressure: if a client is too slow to read and the outbound
+            // backlog inside uWS exceeds the configured cap, drop the connection
+            // to bound memory. terminate() synchronously invokes our
+            // onDisconnection (which logs and deletes the Connection) and then
+            // drains the queued sends with cancellation callbacks, so no queue
+            // entries leak. c is dangling after terminate(), so we must return.
+            const uint64_t maxPending = cfg().relay__maxPendingOutboundBytes;
+            if (maxPending > 0 && c.stats.pendingOutbound > maxPending) {
+                LW << "[" << c.connId << "] Slow client: pendingOutbound "
+                   << renderSize(c.stats.pendingOutbound)
+                   << " exceeds relay.maxPendingOutboundBytes "
+                   << renderSize(maxPending) << ", terminating";
+                PrometheusMetrics::getInstance().slowClientTerminations.inc();
+                c.websocket->terminate();
+                return;
+            }
         };
 
         for (auto &newMsg : newMsgs) {
