@@ -104,7 +104,7 @@ struct Router {
                 if (newFilterStr != filterStr) needsReconnect = true;
 
                 filterStr = newFilterStr;
-                filterCompiled = NostrFilterGroup::unwrapped(newFilter);
+                filterCompiled = NostrFilterGroup(newFilter);
                 filter = newFilter;
             }
 

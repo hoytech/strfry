@@ -214,7 +214,7 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
         maxFilterLimit = cfg().relay__maxFilterLimit;
     }
 
-    NostrFilterGroup filterGroup(arr, maxFilterLimit);
+    NostrFilterGroup filterGroup = NostrFilterGroup::fromReq(arr, maxFilterLimit);
 
     try {
         rsctx.filterValidator.validate(filterGroup);
@@ -298,7 +298,7 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         auto filterJson = arr.at(2);
         if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
-        NostrFilterGroup filter = NostrFilterGroup::unwrapped(filterJson, maxFilterLimit);
+        NostrFilterGroup filter(filterJson, maxFilterLimit);
         Subscription sub(connId, subscriptionStr, std::move(filter));
 
         filterJson.get_object().erase("since");
