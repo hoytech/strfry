@@ -247,6 +247,8 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     if (cfg().relay__auth__serviceUrl.empty()) throw herr("relay needs serviceUrl to be configured before AUTH can work");
 
     std::string packedStr, jsonStr;
+    // Note: kind 22242 is ephemeral, so parseAndVerifyEvent() also applies
+    // the stricter ephemeral recency check here.
     parseAndVerifyEvent(eventJson, rsctx.secpCtx, true, true, packedStr, jsonStr);
 
     PackedEventView packed(packedStr);
