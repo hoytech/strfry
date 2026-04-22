@@ -252,14 +252,13 @@ struct NostrFilterGroup {
 
     NostrFilterGroup() {}
 
-    NostrFilterGroup(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+    NostrFilterGroup(const tao::json::value &filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
-            filter = tao::json::value::array({ filter });
-        }
-
-        for (auto &e : filter.get_array()) {
-            filters.emplace_back(e, maxFilterLimit);
-            if (filters.back().neverMatch) filters.pop_back();
+            addFilter(filter, maxFilterLimit);
+        } else {
+            for (const auto &e : filter.get_array()) {
+                addFilter(e, maxFilterLimit);
+            }
         }
     }
 
@@ -270,11 +269,15 @@ struct NostrFilterGroup {
         NostrFilterGroup fg;
 
         for (size_t i = 2; i < arr.size(); i++) {
-            fg.filters.emplace_back(arr[i], maxFilterLimit);
-            if (fg.filters.back().neverMatch) fg.filters.pop_back();
+            fg.addFilter(arr[i], maxFilterLimit);
         }
 
         return fg;
+    }
+
+    void addFilter(const tao::json::value &filterItem, uint64_t maxFilterLimit) {
+        filters.emplace_back(filterItem, maxFilterLimit);
+        if (filters.back().neverMatch) filters.pop_back();
     }
 
     bool doesMatch(PackedEventView ev) const {
