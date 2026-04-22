@@ -45,7 +45,6 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Syncing](#syncing)
     * [Compression Dictionaries](#compression-dictionaries)
 * [Learn More](#learn-more)
-* [Community Integrations](#community-integrations)
 * [Author and Copyright](#author-and-copyright)
 
 <!-- END OF TOC -->
@@ -304,6 +303,8 @@ In addition to write-policy plugins, plugins can also be used inside [strfry rou
 
 See the [plugin documentation](https://github.com/hoytech/strfry/blob/master/docs/plugins.md) for details and examples.
 
+See the file [docs/community.md](https://github.com/hoytech/strfry/blob/master/docs/community.md) for a list of community plugins. Please create a PR to add your own!
+
 
 
 
@@ -374,19 +375,7 @@ To report issues or submit pull requests, please visit the [strfry github page](
 
 To chat with the strfry devs and community, please [join our telegram chat](https://t.me/strfry_users).
 
-
-
-## Community Integrations
-
-These are third-party projects built around strfry. They are not maintained by the strfry authors.
-
-**Namecoin identity**
-
-* [strfry-namecoin-policy](https://github.com/mstrofnone/strfry-namecoin-policy) - write-policy plugin that verifies `.bit` [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md) identities against the Namecoin blockchain via ElectrumX, so the relay only accepts `kind:0` events whose claimed `.bit` identity is backed on-chain.
-* [strfry-nip05-namecoin](https://github.com/mstrofnone/strfry-nip05-namecoin) - HTTP sidecar that serves `/.well-known/nostr.json` from Namecoin `.bit` records, letting conventional NIP-05 clients verify `.bit`-backed identities with no Namecoin-specific support.
-* [namecoin-nostr-bridge](https://github.com/mstrofnone/namecoin-nostr-bridge) - daemon that republishes Namecoin `d/*` identity records as Nostr events, turning the Namecoin chain into a Nostr-queryable identity index.
-
-If you know of other integrations worth listing here, please open a PR.
+There is a list of community contributions in [docs/community.md](https://github.com/hoytech/strfry/blob/master/docs/community.md). Please create a PR to add your own!
 
 
 
