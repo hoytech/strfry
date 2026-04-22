@@ -67,7 +67,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
                             }
-                        } else if (cmd.starts_with("NEG-")) {
+                        } else if (cmd == "NEG-OPEN" || cmd == "NEG-MSG" || cmd == "NEG-CLOSE") {
                             PROM_INC_CLIENT_MSG(cmd);
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
