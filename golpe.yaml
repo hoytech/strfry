@@ -110,6 +110,12 @@ tablesRaw:
   EventPayload:
     flags: 'MDB_INTEGERKEY'
 
+  ## NIP-62: Tracks pubkeys that have requested vanishing
+  ## keys are 32-byte binary pubkeys
+  ## vals are uint64_t vanish timestamp (max created_at from vanish requests)
+  VanishPubkey:
+    flags: ''
+
 config:
   - name: db
     desc: "Directory that contains the strfry LMDB database"

@@ -63,6 +63,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (cfg().relay__auth__enabled && cfg().relay__auth__serviceUrl.size() > 0) output.push_back(42);
         if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
         if (cfg().relay__negentropy__enabled) output.push_back(77);
+        if (cfg().relay__nip62__enabled) output.push_back(62);
 
         std::sort(output.get_array().begin(), output.get_array().end());
 

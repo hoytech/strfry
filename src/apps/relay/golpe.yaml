@@ -139,6 +139,10 @@ config:
     desc: "Maximum records that sync will process before returning an error"
     default: 1000000
 
+  - name: relay__nip62__enabled
+    desc: "Enable NIP-62 Request to Vanish support"
+    default: true
+
   - name: relay__filterValidation__enabled
     desc: "Enable strict filter validation for REQ messages"
     default: false

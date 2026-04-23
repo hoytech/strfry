@@ -271,9 +271,40 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 continue;
             }
 
-            if (env.lookup_Event__deletion(txn, std::string(packed.id()) + std::string(packed.pubkey()))) {
+            if (packed.kind() != 62 && env.lookup_Event__deletion(txn, std::string(packed.id()) + std::string(packed.pubkey()))) {
                 ev.status = EventWriteStatus::Deleted;
                 continue;
+            }
+
+            // NIP-62: Reject events from vanished pubkeys (except kind 62 itself)
+            {
+                std::string_view vanishVal;
+                if (packed.kind() != 62 && env.dbi_VanishPubkey.get(txn, packed.pubkey(), vanishVal)) {
+                    uint64_t vanishTs = lmdb::from_sv<uint64_t>(vanishVal);
+                    if (packed.created_at() <= vanishTs) {
+                        ev.status = EventWriteStatus::Deleted;
+                        continue;
+                    }
+                }
+            }
+
+            // NIP-62: Reject gift wraps addressed to vanished pubkeys
+            if (packed.kind() == 1059) {
+                bool vanished = false;
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == 'p') {
+                        std::string_view vanishVal;
+                        if (env.dbi_VanishPubkey.get(txn, tagVal, vanishVal)) {
+                            vanished = true;
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+                if (vanished) {
+                    ev.status = EventWriteStatus::Deleted;
+                    continue;
+                }
             }
 
             if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
@@ -332,9 +363,12 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 packed.foreachTag([&](char tagName, std::string_view tagVal){
                     if (tagName == 'e') {
                         auto otherEv = lookupEventById(txn, tagVal);
-                        if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
-                            if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
-                            levIdsToDelete.push_back(otherEv->primaryKeyId);
+                        if (otherEv) {
+                            PackedEventView otherPacked(otherEv->buf);
+                            if (otherPacked.pubkey() == packed.pubkey() && otherPacked.kind() != 62) {
+                                if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
+                                levIdsToDelete.push_back(otherEv->primaryKeyId);
+                            }
                         }
                     } else if (tagName == 'a') {
                         try { // parsing a-tag can fail
@@ -363,6 +397,20 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
 
                     return true;
                 });
+            }
+
+            // NIP-62: Set vanish marker for kind 62 events
+            if (packed.kind() == 62 && cfg().relay__nip62__enabled) {
+                std::string_view existingVal;
+                uint64_t existingTs = 0;
+                if (env.dbi_VanishPubkey.get(txn, packed.pubkey(), existingVal)) {
+                    existingTs = lmdb::from_sv<uint64_t>(existingVal);
+                }
+                if (packed.created_at() > existingTs) {
+                    uint64_t newTs = packed.created_at();
+                    env.dbi_VanishPubkey.put(txn, packed.pubkey(), lmdb::to_sv<uint64_t>(newTs));
+                    LI << "NIP-62 vanish marker set for pubkey=" << to_hex(packed.pubkey()) << " ts=" << newTs;
+                }
             }
 
             if (ev.status == EventWriteStatus::Pending) {
