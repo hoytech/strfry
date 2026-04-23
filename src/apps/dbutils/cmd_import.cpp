@@ -7,19 +7,8 @@
 #include <docopt.h>
 #include "golpe.h"
 
+#include "PackedEvent.h"
 #include "WriterPipeline.h"
-
-
-static void friedSwapEndian(std::string &packed) {
-    if constexpr (std::endian::native != std::endian::little) {
-        for (size_t offset : {64, 72, 80}) {
-            uint64_t val;
-            std::memcpy(&val, packed.data() + offset, 8);
-            val = __builtin_bswap64(val);
-            std::memcpy(packed.data() + offset, &val, 8);
-        }
-    }
-}
 
 
 static const char USAGE[] =
@@ -42,7 +31,8 @@ EventToWrite parseFried(std::string_view lineSv) {
     if (!std::string_view(line).substr(0, i + 1).ends_with(",\"fried\":\"")) throw herr("fried parse error");
 
     std::string packed = from_hex(std::string_view(line).substr(i + 1, line.size() - i - 3));
-    friedSwapEndian(packed);
+    if (packed.size() < PACKED_EVENT_HEADER_SIZE) throw herr("fried packed too short");
+    friedSwapEndianInPlace(packed);
 
     line[i - 9] = '}';
     line.resize(i - 8);

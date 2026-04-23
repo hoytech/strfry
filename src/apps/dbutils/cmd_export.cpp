@@ -5,18 +5,7 @@
 #include "golpe.h"
 
 #include "events.h"
-
-
-static void friedSwapEndian(std::string &packed) {
-    if constexpr (std::endian::native != std::endian::little) {
-        for (size_t offset : {64, 72, 80}) {
-            uint64_t val;
-            std::memcpy(&val, packed.data() + offset, 8);
-            val = __builtin_bswap64(val);
-            std::memcpy(packed.data() + offset, &val, 8);
-        }
-    }
-}
+#include "PackedEvent.h"
 
 
 static const char USAGE[] =
@@ -67,7 +56,8 @@ void cmd_export(const std::vector<std::string> &subArgs) {
         if (fried) {
             auto ev = lookupEventByLevId(txn, levId);
             std::string packed(ev.buf);
-            friedSwapEndian(packed);
+            // Events produced by strfry always have the full fixed header; no bounds check needed on export path.
+            friedSwapEndianInPlace(packed);
 
             o.clear();
             o.reserve(json.size() + packed.size() * 2 + 100);
