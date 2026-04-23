@@ -112,9 +112,6 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
 
     PackedEventView packed(packedStr);
     Bytes32 authedPubkey;
-    
-    // Track event kind metrics
-    PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
 
     {
         // discard reposts that embed protected events
