@@ -2,6 +2,7 @@
 
 #include "golpe.h"
 
+#include "Bytes32.h"
 #include "jsonParseUtils.h"
 
 
@@ -297,32 +298,33 @@ struct NostrFilterGroup {
     }
 };
 
+inline void parseCommaSeparatedKinds(std::string_view str, flat_hash_set<uint64_t> &out) {
+    out.clear();
+    if (str.empty()) return;
+
+    size_t pos = 0;
+    while (pos < str.size()) {
+        size_t nextComma = str.find(',', pos);
+        if (nextComma == std::string::npos) nextComma = str.size();
+
+        std::string_view kindStr = str.substr(pos, nextComma - pos);
+        size_t start = kindStr.find_first_not_of(" \t");
+        size_t end = kindStr.find_last_not_of(" \t");
+        if (start != std::string::npos && end != std::string::npos) {
+            kindStr = kindStr.substr(start, end - start + 1);
+            if (!kindStr.empty()) out.insert(std::stoull(std::string(kindStr)));
+        }
+
+        pos = nextComma + 1;
+    }
+}
+
 struct FilterValidator {
     uint64_t configVer = 0;
     flat_hash_set<uint64_t> allowedKinds;
 
     void setupValidator() {
-        allowedKinds.clear();
-
-        std::string allowedKindsStr = cfg().relay__filterValidation__allowedKinds;
-
-        if (!allowedKindsStr.empty()) {
-            size_t pos = 0;
-            while (pos < allowedKindsStr.size()) {
-                size_t nextComma = allowedKindsStr.find(',', pos);
-                if (nextComma == std::string::npos) nextComma = allowedKindsStr.size();
-
-                std::string kindStr = allowedKindsStr.substr(pos, nextComma - pos);
-                size_t start = kindStr.find_first_not_of(" \t");
-                size_t end = kindStr.find_last_not_of(" \t");
-                if (start != std::string::npos && end != std::string::npos) {
-                    kindStr = kindStr.substr(start, end - start + 1);
-                    if (!kindStr.empty()) allowedKinds.insert(std::stoull(kindStr));
-                }
-
-                pos = nextComma + 1;
-            }
-        }
+        parseCommaSeparatedKinds(cfg().relay__filterValidation__allowedKinds, allowedKinds);
     }
 
     void validate(const NostrFilterGroup &fg) {
@@ -371,5 +373,60 @@ struct FilterValidator {
                 }
             }
         }
+    }
+};
+
+struct ReadAuthGate {
+    uint64_t configVer = 0;
+    flat_hash_set<uint64_t> restrictedKinds;
+
+    void setup() {
+        parseCommaSeparatedKinds(cfg().relay__auth__restrictedReadKinds, restrictedKinds);
+    }
+
+    void ensureSetup() {
+        if (configVer != cfg().version()) {
+            setup();
+            configVer = cfg().version();
+        }
+    }
+
+    bool empty() const {
+        return restrictedKinds.empty();
+    }
+
+    // Absent "kinds" matches all kinds and is treated as restricted.
+    bool isFilterRestricted(const NostrFilter &f) const {
+        if (restrictedKinds.empty()) return false;
+        if (!f.kinds) return true;
+        for (size_t i = 0; i < f.kinds->size(); i++) {
+            if (restrictedKinds.contains(f.kinds->at(i))) return true;
+        }
+        return false;
+    }
+
+    bool isGroupRestricted(const NostrFilterGroup &fg) const {
+        if (restrictedKinds.empty()) return false;
+        for (const auto &f : fg.filters) {
+            if (isFilterRestricted(f)) return true;
+        }
+        return false;
+    }
+
+    // True iff every restricted filter has authedPubkey in authors or #p.
+    bool authedInvolvedInAllRestrictedFilters(const NostrFilterGroup &fg, const Bytes32 &authedPubkey) const {
+        auto sv = authedPubkey.sv();
+        for (const auto &f : fg.filters) {
+            if (!isFilterRestricted(f)) continue;
+
+            bool involved = false;
+            if (f.authors && f.authors->doesMatch(sv)) involved = true;
+            if (!involved) {
+                auto it = f.tags.find('p');
+                if (it != f.tags.end() && it->second.doesMatch(sv)) involved = true;
+            }
+            if (!involved) return false;
+        }
+        return true;
     }
 };

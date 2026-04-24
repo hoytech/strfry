@@ -21,6 +21,12 @@ config:
   - name: relay__auth__serviceUrl
     desc: "External relay URL (beginning with wss://). Required in order to validate challenge responses."
     default: ""
+  - name: relay__auth__restrictedReadKinds
+    desc: "Comma-separated list of event kinds that require NIP-42 AUTH to read via REQ/COUNT/NEG-OPEN. A filter with no 'kinds' field is treated as restricted. Example for DMs: '4,1059'."
+    default: ""
+  - name: relay__auth__restrictReadToInvolvedPubkey
+    desc: "When a filter matches restrictedReadKinds, also require the authenticated pubkey to appear in its 'authors' or '#p' set."
+    default: true
 
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"
