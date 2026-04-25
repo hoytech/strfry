@@ -328,7 +328,10 @@ struct FilterValidator {
     void validate(const NostrFilterGroup &fg) {
         if (!cfg().relay__filterValidation__enabled) return;
 
-        if (configVer != cfg().version()) setupValidator();
+        if (configVer != cfg().version()) {
+            setupValidator();
+            configVer = cfg().version();
+        }
 
         size_t numFilters = fg.filters.size();
         if (numFilters < cfg().relay__filterValidation__minFiltersPerReq ||
