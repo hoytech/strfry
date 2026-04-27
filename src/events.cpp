@@ -2,6 +2,7 @@
 
 #include "events.h"
 #include "jsonParseUtils.h"
+#include "search/SearchProvider.h"
 
 
 std::string nostrJsonToPackedEvent(const tao::json::value &v) {
@@ -248,8 +249,8 @@ static bool isEventABeforeEventB(const PackedEventView &a, const PackedEventView
     return a.created_at() < b.created_at() || (a.created_at() == b.created_at() && a.id() > b.id());
 }
 
-
-void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, bool logDeletions) {
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel, ISearchProvider *searchProvider) {
+    bool logDeletions = logLevel > 0;
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
         auto aC = a.createdAt();
         auto bC = b.createdAt();
@@ -384,6 +385,16 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                     if (!evToDel) continue; // already deleted
                     updateNegentropy(PackedEventView(evToDel->buf), false);
                     deleteEventBasic(txn, levId);
+
+                    // Remove from search index
+                    if (searchProvider && searchProvider->healthy()) {
+                        try {
+                            searchProvider->deleteEvent(levId);
+                        } catch (std::exception &e) {
+                            // Don't fail deletions if search removal fails, just log
+                            LE << "Search delete failed for levId=" << levId << ": " << e.what();
+                        }
+                    }
                 }
 
                 levIdsToDelete.clear();
