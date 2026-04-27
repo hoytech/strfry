@@ -57,12 +57,17 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     tempBuf.reserve(cfg().events__maxEventSize + MAX_SUBID_SIZE + 100);
 
 
-    auto supportedNips = []{
-        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 28, 40, 70 });
+    auto supportedNips = [this]{
+        tao::json::value output = tao::json::value::array({ 1, 2, 4, 9, 11, 22, 28, 40, 70, 77 });
 
         if (cfg().relay__auth__enabled && cfg().relay__auth__serviceUrl.size() > 0) output.push_back(42);
         if (cfg().relay__maxFilterLimitCount > 0) output.push_back(45);
-        if (cfg().relay__negentropy__enabled) output.push_back(77);
+
+        // Add NIP-50 (search) if provider is healthy
+        // healthy() checks: enabled, backend configured, and index caught up (within 1000 events of head)
+        if (searchProvider && searchProvider->healthy()) {
+            output.get_array().push_back(50);
+        }
 
         std::sort(output.get_array().begin(), output.get_array().end());
 
