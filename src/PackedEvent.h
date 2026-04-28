@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bit>
+#include <cstring>
 #include <string_view>
 
 #include "golpe.h"
@@ -17,6 +19,36 @@
 //   0: tag char (1)
 //   1: length (1)
 //   2: value (variable)
+
+// Fixed-header layout used by the --fried import/export byte-swapper below.
+static constexpr size_t PACKED_EVENT_HEADER_SIZE    = 88;
+static constexpr size_t PACKED_EVENT_CREATED_AT_OFF = 64;
+static constexpr size_t PACKED_EVENT_KIND_OFF       = 72;
+static constexpr size_t PACKED_EVENT_EXPIRATION_OFF = 80;
+
+// Byte-swap the three uint64_t fields (created_at, kind, expiration) in the
+// fixed header of a packed event between native byte order and little-endian.
+// The --fried wire format is defined as always little-endian, so callers on
+// big-endian systems invoke this to serialise/deserialise.
+//
+// On little-endian hosts this is a compile-time no-op (the whole body is
+// discarded by `if constexpr`), giving zero runtime cost on x86/ARM-LE.
+//
+// Callers must ensure `packed.size() >= PACKED_EVENT_HEADER_SIZE` before
+// invoking this — untrusted input (e.g. hex-decoded from an imported file)
+// may be shorter.
+inline void friedSwapEndianInPlace(std::string &packed) {
+    if constexpr (std::endian::native != std::endian::little) {
+        for (size_t offset : {PACKED_EVENT_CREATED_AT_OFF, PACKED_EVENT_KIND_OFF, PACKED_EVENT_EXPIRATION_OFF}) {
+            uint64_t val;
+            std::memcpy(&val, packed.data() + offset, 8);
+            val = __builtin_bswap64(val);
+            std::memcpy(packed.data() + offset, &val, 8);
+        }
+    } else {
+        (void)packed;
+    }
+}
 
 struct PackedEventView {
     std::string_view buf;

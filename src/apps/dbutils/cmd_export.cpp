@@ -1,9 +1,11 @@
 #include <iostream>
+#include <cstring>
 
 #include <docopt.h>
 #include "golpe.h"
 
 #include "events.h"
+#include "PackedEvent.h"
 
 
 static const char USAGE[] =
@@ -31,7 +33,6 @@ void cmd_export(const std::vector<std::string> &subArgs) {
     if (dbVersion == 0) throw herr("migration from DB version 0 not supported by this version of strfry");
 
     if (fried) {
-        if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
         if (dbVersion < 3) throw herr("can't export old DB version with --fried: please downgrade to 0.9.7");
     }
 
@@ -54,13 +55,16 @@ void cmd_export(const std::vector<std::string> &subArgs) {
 
         if (fried) {
             auto ev = lookupEventByLevId(txn, levId);
+            std::string packed(ev.buf);
+            // Events produced by strfry always have the full fixed header; no bounds check needed on export path.
+            friedSwapEndianInPlace(packed);
 
             o.clear();
-            o.reserve(json.size() + ev.buf.size() * 2 + 100);
+            o.reserve(json.size() + packed.size() * 2 + 100);
             o = json;
             o.resize(o.size() - 1);
             o += ",\"fried\":\"";
-            o += to_hex(ev.buf);
+            o += to_hex(packed);
             o += "\"}\n";
 
             std::cout << o;
