@@ -100,6 +100,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 written = true;
                 PrometheusMetrics::getInstance().writtenEventsTotal.inc();
+                PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";
                 written = true;
