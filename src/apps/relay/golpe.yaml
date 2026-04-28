@@ -50,7 +50,7 @@ config:
     desc: "NIP-11: Terms of service URL"
     default: ""
   - name: relay__info__nips
-    desc: "List of supported lists as JSON array, or empty string to use default. Example: \"[1,2]\""
+    desc: "NIP-11: Supported NIPs as JSON array, or empty string for auto-detection. WARNING: Setting this OVERRIDES all auto-detection including NIP-50 (search) gating. Example: \"[1,2,50]\""
     default: ""
 
   - name: relay__maxWebsocketPayloadSize
@@ -157,3 +157,43 @@ config:
   - name: relay__filterValidation__requireAuthorOrTag
     desc: "Require at least one author, p tag, or e tag in each filter"
     default: false
+
+  - name: relay__search__enabled
+    desc: "Enable NIP-50 search capability (requires search backend)"
+    default: false
+  - name: relay__search__backend
+    desc: "Search backend to use: lmdb, noop (or external in future)"
+    default: "lmdb"
+  - name: relay__search__maxQueryTerms
+    desc: "Maximum number of search terms allowed in a query"
+    default: 16
+  - name: relay__search__indexedKinds
+    desc: "Comma-separated kinds/ranges to index. Supports: single (1), ranges (1000-1999), wildcard (*), exclusions (-5000-5999)"
+    default: "1, 30023"
+  - name: relay__search__maxPostingsPerToken
+    desc: "Maximum number of postings (documents) per search token"
+    default: 100000
+  - name: relay__search__maxCandidateDocs
+    desc: "Maximum candidate documents to fetch during search (multiple of limit)"
+    default: 1000
+  - name: relay__search__recencyBoostPercent
+    desc: "Recency tie-breaker percent (0–100); 1 = 1% boost"
+    default: 0
+  - name: relay__search__overfetchFactor
+    desc: "Over-fetch multiplier to compensate for post-filtering (candidates = limit × factor, bounded by maxCandidateDocs)"
+    default: 5
+  - name: relay__search__candidateRanking
+    desc: "Candidate ranking order before scoring: terms-tf-recency | terms-recency-tf | tf-terms-recency | tf-recency-terms | recency-terms-tf | recency-tf-terms"
+    default: "terms-tf-recency"
+  - name: relay__search__candidateRankMode
+    desc: "Candidate ranking mode: order | weighted"
+    default: "order"
+  - name: relay__search__rankWeightTerms
+    desc: "Weighted mode: weight for matched terms component"
+    default: 100
+  - name: relay__search__rankWeightTf
+    desc: "Weighted mode: weight for aggregate term frequency component"
+    default: 50
+  - name: relay__search__rankWeightRecency
+    desc: "Weighted mode: weight for recency component"
+    default: 10
