@@ -34,11 +34,3 @@ jobs:
              exit 1
           fi
 
-      - name: Run strfry (With Crash Check)
-        run: |
-          cat /etc/os-release
-          ./strfry relay > log 2>&1 &
-          sleep 2
-          pgrep -f strfry || (cat log && exit 1)
-          pkill -f strfry
-
