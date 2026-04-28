@@ -39,13 +39,12 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
-        const bool pluginEnabled = !cfg().relay__writePolicy__plugin.empty();
-        tao::json::value evJson;
-        if (pluginEnabled) evJson = tao::json::from_string(msg->jsonStr);
-
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
                 std::string okMsg;
-                auto res = pluginEnabled ? writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, sourceType, msg->ipAddr, msg->authed, okMsg) : PluginEventSifterResult::Accept;
+                const std::string &plugin = cfg().relay__writePolicy__plugin;
+
+                auto res = writePolicyPlugin.acceptEvent(plugin, plugin.empty() ? tao::json::empty_object : tao::json::from_string(msg->jsonStr), sourceType, msg->ipAddr, msg->authed, okMsg);
+
                 if (res == PluginEventSifterResult::Accept) {
                     newEvents.emplace_back(std::move(msg->packedStr), std::move(msg->jsonStr), msg);
                 } else {
