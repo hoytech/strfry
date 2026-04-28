@@ -287,14 +287,19 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
 }
 
 void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
-    const auto &subscriptionStr = jsonGetString(arr[1], "NEG-OPEN subscription id was not a string");
+    const auto &vals = arr.get_array();
 
-    if (arr.at(0) == "NEG-OPEN") {
-        if (arr.get_array().size() < 4) throw herr("negentropy query missing elements");
+    if (vals.size() < 2) throw herr("negentropy query missing elements");
+
+    const auto &cmd = jsonGetString(vals[0], "negentropy command was not a string");
+    const auto &subscriptionStr = jsonGetString(vals[1], "NEG subscription id was not a string");
+
+    if (cmd == "NEG-OPEN") {
+        if (vals.size() < 4) throw herr("negentropy query missing elements");
 
         auto maxFilterLimit = cfg().relay__negentropy__maxSyncEvents + 1;
 
-        auto filterJson = arr.at(2);
+        auto filterJson = vals[2];
         if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
         NostrFilterGroup filter(filterJson, maxFilterLimit);
@@ -304,13 +309,15 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         filterJson.get_object().erase("until");
         std::string filterStr = tao::json::to_string(filterJson);
 
-        std::string negPayload = from_hex(jsonGetString(arr.at(3), "negentropy payload not a string"));
+        std::string negPayload = from_hex(jsonGetString(vals[3], "negentropy payload not a string"));
 
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegOpen{std::move(sub), std::move(filterStr), std::move(negPayload)}});
-    } else if (arr.at(0) == "NEG-MSG") {
-        std::string negPayload = from_hex(jsonGetString(arr.at(2), "negentropy payload not a string"));
+    } else if (cmd == "NEG-MSG") {
+        if (vals.size() < 3) throw herr("negentropy message missing elements");
+
+        std::string negPayload = from_hex(jsonGetString(vals[2], "negentropy payload not a string"));
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegMsg{connId, SubId(subscriptionStr), std::move(negPayload)}});
-    } else if (arr.at(0) == "NEG-CLOSE") {
+    } else if (cmd == "NEG-CLOSE") {
         tpNegentropy.dispatch(connId, MsgNegentropy{MsgNegentropy::NegClose{connId, SubId(subscriptionStr)}});
     } else {
         throw herr("unknown command");
