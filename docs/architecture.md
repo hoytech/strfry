@@ -159,3 +159,39 @@ There is a simple but inefficient filter implementation in `test/dumbFilter.pl` 
 Next, we need to verify that monitoring for "new" records will function also. For this, in a loop we create a set of hundreds of random filters and install them in the monitoring engine. One of which is selected as a sample. The entire DB's worth of events is "posted to the relay" (actually just iterated over in the DB using `strfry monitor`), and we record which events were matched. This is then compared against a full-DB scan using the same query.
 
 Both of these tests have run for several hours with no observed failures.
+
+## ReqMonitor
+
+After the `ReqWorker` thread completes the initial "old data" stage for a subscription, that subscription transitions to the **monitoring** stage and is handed off to a `ReqMonitor` thread.
+
+`ReqMonitor` is responsible for delivering newly written events to active subscribers in real time. Its primary data structure is the **ActiveMonitors** set — an inverted index that maps from event field values (pubkeys, kinds, event IDs, tags) to the set of subscriptions that have filters matching those values.
+
+When a new event is written to the DB, `ReqMonitor` is notified and must determine which active subscriptions should receive that event. It does this by iterating over the event's indexed fields and performing lookups in the ActiveMonitors sets. Specifically, for each field present in the event (pubkey, kind, id, and any indexed tags), a binary search is performed over the sorted monitor sets to find matching subscriptions.
+
+This approach scales well for most real-world workloads. Under extremely high concurrent subscription counts, the per-event cost of the ActiveMonitors lookup grows with the number of active subscriptions that have filters matching common fields (e.g., many subscriptions watching the same popular pubkey). The `queryTimesliceBudgetMicroseconds` configuration parameter controls how long a ReqWorker is allowed to spend on a single query before pausing it, which prevents slow subscribers from affecting delivery to fast ones.
+
+## Negentropy / Sync
+
+The `strfry sync` command uses the [negentropy](https://github.com/hoytech/negentropy) protocol for efficient set reconciliation between a local DB and a remote relay. Instead of transferring all events or even all event IDs, negentropy uses a range-based algorithm that identifies only the differences between the two sets, requiring bandwidth proportional to the difference size rather than the total dataset size.
+
+Negentropy reconciliation can operate in two modes:
+- **Stateless queries:** Each round trip is self-contained; suitable for one-shot sync operations.
+- **Stateful queries:** Maintains state across rounds; more efficient for large diffs.
+
+The underlying algorithm is described in detail in [docs/negentropy.md](negentropy.md) and the [Range-Based Set Reconciliation article](https://logperiodic.com/rbsr.html).
+
+## Performance-Relevant Configuration
+
+The following `strfry.conf` parameters directly affect relay performance and are worth understanding before tuning a production deployment:
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `relay.queryTimesliceBudgetMicroseconds` | 10000 (10ms) | Max time a ReqWorker spends on a single query per timeslice before pausing to serve other requests. Lower values improve responsiveness under concurrent load at the cost of higher total query time. |
+| `relay.maxFilterLimit` | 500 | Maximum `limit` value in a REQ filter. Higher values allow clients to retrieve more events per request but increase per-query DB load. |
+| `relay.maxReqFilterSize` | 200 | Maximum number of filter items (e.g. pubkeys, ids) in a single REQ. |
+| `relay.nofiles` | 0 (system default) | Sets `RLIMIT_NOFILE` — the maximum number of open file descriptors. Should be increased for relays expecting many concurrent connections. |
+| `relay.realIpHeader` | (empty) | If behind a reverse proxy, set this to the header that contains the real client IP (e.g. `X-Forwarded-For`) so that logs and rate limits reflect the correct origin. |
+| Ingester thread count | (auto) | Controlled by the number of ingester threads spawned at startup. Increasing ingester count helps under high write rates where signature verification is the bottleneck. |
+| `relay.compression.enabled` | true | Enables permessage-deflate WebSocket compression. Reduces bandwidth at the cost of additional CPU on the WebSocket thread. |
+| `relay.compression.slidingWindow` | false | Enables sliding-window compression, which achieves better ratios for nostr's serial redundancy (repeated pubkeys, event IDs in subscription responses) but uses more memory per connection. |
+
