@@ -145,6 +145,7 @@ struct WriterPipeline {
                             continue;
                         }
 
+                        event.preChecked = true; // pre-filter above already ran lookupEventById in ro txn
                         newEventsToProc.emplace_back(std::move(event));
                     }
                 }

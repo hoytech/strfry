@@ -266,7 +266,10 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
 
             PackedEventView packed(ev.packedStr);
 
-            if (lookupEventById(txn, packed.id()) || (i != 0 && ev.id() == evs[i-1].id())) {
+            bool isDup = (i != 0 && ev.id() == evs[i-1].id());
+            if (!isDup && !ev.preChecked) isDup = (bool) lookupEventById(txn, packed.id());
+
+            if (isDup) {
                 ev.status = EventWriteStatus::Duplicate;
                 continue;
             }
