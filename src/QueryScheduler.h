@@ -6,7 +6,7 @@
 struct QueryScheduler : NonCopyable {
     std::function<void(lmdb::txn &txn, const Subscription &sub, uint64_t levId, std::string_view eventPayload)> onEvent;
     std::function<void(lmdb::txn &txn, const Subscription &sub, const std::vector<uint64_t> &levIds)> onEventBatch;
-    std::function<void(lmdb::txn &txn, Subscription &sub, uint64_t total)> onComplete;
+    std::function<void(lmdb::txn &txn, Subscription &sub, uint64_t total, bool hitMaxTotalEvents)> onComplete;
 
     // If false, then levIds returned to above callbacks can be stale (because they were deleted)
     // If false, then onEvent's eventPayload will always be ""
@@ -33,6 +33,7 @@ struct QueryScheduler : NonCopyable {
         }
 
         DBQuery *q = new DBQuery(sub);
+        q->maxTotalEvents = cfg().relay__maxTotalEventsPerReq;
 
         connQueries.try_emplace(q->sub.subId, q);
         running.push_front(q);
@@ -101,7 +102,7 @@ struct QueryScheduler : NonCopyable {
             auto connId = q->sub.connId;
             removeSub(connId, q->sub.subId);
 
-            if (onComplete) onComplete(txn, q->sub, q->sentEventsFull.size());
+            if (onComplete) onComplete(txn, q->sub, q->sentEventsFull.size(), q->hitMaxTotalEvents);
 
             delete q;
         } else {

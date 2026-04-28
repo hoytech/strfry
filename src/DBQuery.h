@@ -290,6 +290,8 @@ struct DBQuery : NonCopyable {
     flat_hash_set<uint64_t> sentEventsCurr;
     uint64_t lastWorkChecked = 0;
 
+    uint64_t maxTotalEvents = 0;
+    bool hitMaxTotalEvents = false;
     uint64_t currScanTime = 0;
     uint64_t currScanSaveRestores = 0;
     uint64_t totalTime = 0;
@@ -319,6 +321,7 @@ struct DBQuery : NonCopyable {
                 }
 
                 sentEventsCurr.insert(levId);
+                if (maxTotalEvents > 0 && sentEventsFull.size() >= maxTotalEvents) return true;
                 return sentEventsCurr.size() >= f.limit;
             }, [&](uint64_t approxWork){
                 if (approxWork > lastWorkChecked + 2'000) {
@@ -355,6 +358,12 @@ struct DBQuery : NonCopyable {
 
             currScanTime = 0;
             currScanSaveRestores = 0;
+
+            if (maxTotalEvents > 0 && sentEventsFull.size() >= maxTotalEvents) {
+                LW << "[" << sub.connId << "] REQ='" << sub.subId.sv() << "' hit maxTotalEventsPerReq limit (" << maxTotalEvents << ")";
+                hitMaxTotalEvents = true;
+                break;
+            }
         }
 
         if (logMetrics) {
