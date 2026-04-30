@@ -11,7 +11,7 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
     };
 
-    queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total){
+    queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total, bool hitMaxTotalEvents){
         if (sub.countOnly) {
             bool limited = false;
 
@@ -27,6 +27,11 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
             if (limited) countBody["limited"] = true;
 
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "COUNT", sub.subId.str(), countBody })));
+        } else if (hitMaxTotalEvents) {
+            // Per NIP-01, terminate with CLOSED + a machine-readable "rate-limited:"
+            // reason so historical-sync clients don't mistake a truncated result
+            // for a complete one.
+            sendClosed(sub.connId, sub.subId.str(), "rate-limited: max aggregate events reached for request");
         } else {
             PROM_INC_RELAY_MSG("EOSE");
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({ "EOSE", sub.subId.str() })));

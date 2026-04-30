@@ -73,6 +73,9 @@ config:
   - name: relay__maxFilterLimit
     desc: "Maximum records that can be returned per filter"
     default: 500
+  - name: relay__maxTotalEventsPerReq
+    desc: "Maximum total events returned across all filters in a REQ (0 = unlimited)"
+    default: 2000
   - name: relay__maxTagsPerFilter
     desc: "Maximum number of tag filters allowed per filter (O(N^2) in matching, so keep it small)"
     default: 3
