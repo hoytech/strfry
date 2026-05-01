@@ -132,6 +132,28 @@ The `strfry import` command reads line-delimited JSON (jsonl) from its standard 
 
 * By default, it will verify the signatures and other fields of the events. If you know the messages are valid, you can speed up the import a bit by passing the `--no-verify` flag.
 
+For local testing/development, this repo includes a deterministic seed-data generator:
+
+    scripts/generate-seed-data.sh
+
+This wrapper runs `scripts/generate-seed-data.pl`, which produces line-delimited JSON suitable for `strfry import`. With defaults it generates around 100k events.
+
+Useful options:
+
+* `--seed <int>`: deterministic random seed (same seed + same args => same dataset)
+* `--users <int>`: number of distinct authors
+* `--kind1-notes <int>`: number of kind 1 notes
+* `--output <path>`: output file path (`-` means stdout)
+* `--deletions`, `--replaceable`, `--param-replaceable`, `--ephemeral`, etc: tune event mix by scenario
+
+To ingest generated data:
+
+    cat seeds/events.jsonl | ./strfry import --no-verify
+
+To see all generator options:
+
+    scripts/generate-seed-data.sh --help
+
 ### Exporting data
 
 The `strfry export` command will print events from the DB to standard output in jsonl, ordered by their `created_at` field (ascending).
