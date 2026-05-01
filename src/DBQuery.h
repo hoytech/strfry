@@ -36,10 +36,16 @@ struct DBScan : NonCopyable {
             return resumeKey.size() > 0;
         }
 
+        uint64_t collectCount = 0;
+        uint64_t totalCollectTimeUs = 0;
+        uint64_t maxCollectTimeUs = 0;
+
         uint64_t collect(lmdb::txn &txn, DBScan &s, uint64_t scanIndex, uint64_t limit, std::deque<CandidateEvent> &output) {
             uint64_t added = 0;
 
             while (active() && limit > 0) {
+                uint64_t collectStart = hoytech::curr_time_us();
+
                 bool finished = env.generic_foreachFull(txn, s.indexDbi, resumeKey, lmdb::to_sv<uint64_t>(resumeVal), [&](auto k, auto v) {
                     if (limit == 0) {
                         resumeKey = std::string(k);
@@ -82,6 +88,11 @@ struct DBScan : NonCopyable {
                     return true;
                 }, true);
 
+                uint64_t collectTimeUs = hoytech::curr_time_us() - collectStart;
+                totalCollectTimeUs += collectTimeUs;
+                if (collectTimeUs > maxCollectTimeUs) maxCollectTimeUs = collectTimeUs;
+                collectCount++;
+
                 if (finished) resumeKey = "";
             }
 
@@ -100,6 +111,15 @@ struct DBScan : NonCopyable {
     uint64_t refillScanDepth;
     uint64_t nextInitIndex = 0;
     uint64_t approxWork = 0;
+
+    // Reusable buffers to avoid per-refill allocation churn
+    std::deque<CandidateEvent> refillBuffer;
+    std::deque<CandidateEvent> mergeBuffer;
+
+    // Diagnostic counters for refill timing
+    uint64_t refillCount = 0;
+    uint64_t totalRefillTimeUs = 0;
+    uint64_t maxRefillTimeUs = 0;
 
     DBScan(const NostrFilter &f) : f(f) {
         indexOnly = f.indexOnlyScans;
@@ -268,12 +288,19 @@ struct DBScan : NonCopyable {
             cursors[ev.scanIndex()].outstanding--;
 
             if (cursors[ev.scanIndex()].outstanding == 0) {
-                std::deque<CandidateEvent> moreEvents;
-                std::deque<CandidateEvent> newEventQueue;
-                approxWork += cursors[ev.scanIndex()].collect(txn, *this, ev.scanIndex(), refillScanDepth, moreEvents);
+                refillBuffer.clear();
+                mergeBuffer.clear();
 
-                std::merge(eventQueue.begin(), eventQueue.end(), moreEvents.begin(), moreEvents.end(), std::back_inserter(newEventQueue), cmp);
-                eventQueue.swap(newEventQueue);
+                uint64_t refillStart = hoytech::curr_time_us();
+                approxWork += cursors[ev.scanIndex()].collect(txn, *this, ev.scanIndex(), refillScanDepth, refillBuffer);
+                uint64_t refillTimeUs = hoytech::curr_time_us() - refillStart;
+
+                totalRefillTimeUs += refillTimeUs;
+                if (refillTimeUs > maxRefillTimeUs) maxRefillTimeUs = refillTimeUs;
+                refillCount++;
+
+                std::merge(eventQueue.begin(), eventQueue.end(), refillBuffer.begin(), refillBuffer.end(), std::back_inserter(mergeBuffer), cmp);
+                eventQueue.swap(mergeBuffer);
             }
         }
     }
@@ -339,13 +366,29 @@ struct DBQuery : NonCopyable {
             totalWork += scanner->approxWork;
 
             if (logMetrics) {
+                // Aggregate cursor-level collect diagnostics
+                uint64_t totalCollects = 0;
+                uint64_t totalCollectTimeUs = 0;
+                uint64_t maxCollectTimeUs = 0;
+                for (const auto &c : scanner->cursors) {
+                    totalCollects += c.collectCount;
+                    totalCollectTimeUs += c.totalCollectTimeUs;
+                    if (c.maxCollectTimeUs > maxCollectTimeUs) maxCollectTimeUs = c.maxCollectTimeUs;
+                }
+
                 LI << "[" << sub.connId << "] REQ='" << sub.subId.sv() << "'"
                    << " scan=" << scanner->desc
                    << " indexOnly=" << scanner->indexOnly
                    << " time=" << currScanTime << "us"
                    << " saveRestores=" << currScanSaveRestores
                    << " recsFound=" << sentEventsCurr.size()
-                   << " work=" << scanner->approxWork;
+                   << " work=" << scanner->approxWork
+                   << " refills=" << scanner->refillCount
+                   << " avgRefillUs=" << (scanner->refillCount ? scanner->totalRefillTimeUs / scanner->refillCount : 0)
+                   << " maxRefillUs=" << scanner->maxRefillTimeUs
+                   << " collects=" << totalCollects
+                   << " avgCollectUs=" << (totalCollects ? totalCollectTimeUs / totalCollects : 0)
+                   << " maxCollectUs=" << maxCollectTimeUs;
                 ;
             }
 
