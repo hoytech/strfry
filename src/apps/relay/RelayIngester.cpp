@@ -18,7 +18,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                     if (msg->payload.starts_with('[')) {
                         auto payload = tao::json::from_string(msg->payload);
 
-                        if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAll: " << msg->payload; 
+                        if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] dumpInAll: " << msg->payload; 
 
                         auto &arr = jsonGetArray(payload, "message is not an array");
                         if (arr.size() < 2) throw herr("too few array elements");
@@ -27,18 +27,18 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
 
                         if (cmd == "EVENT") {
                             PROM_INC_CLIENT_MSG(cmd);
-                            if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << "] dumpInEvent: " << msg->payload; 
+                            if (cfg().relay__logging__dumpInEvents) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] dumpInEvent: " << msg->payload; 
 
                             try {
                                 ingesterProcessEvent(txn, rsctx, msg->connId, msg->ipAddr, arr[1], writerMsgs);
                             } catch (std::exception &e) {
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("invalid: ") + e.what());
-                                if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
+                                if (cfg().relay__logging__invalidEvents) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] Rejected invalid event: " << e.what();
                             }
                         } else if (cmd == "AUTH") {
                             PROM_INC_CLIENT_MSG(cmd);
-                            if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAuth: " << msg->payload;
+                            if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] dumpInAuth: " << msg->payload;
 
                             try {
                                 ingesterProcessAuth(rsctx, msg->connId, arr[1]);
@@ -48,7 +48,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             }
                         } else if (cmd == "REQ" || cmd == "COUNT") {
                             PROM_INC_CLIENT_MSG(cmd);
-                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
+                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] dumpInReq: " << msg->payload; 
 
                             std::string subIdStr;
 
@@ -60,7 +60,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             }
                         } else if (cmd == "CLOSE") {
                             PROM_INC_CLIENT_MSG(cmd);
-                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << "] dumpInReq: " << msg->payload; 
+                            if (cfg().relay__logging__dumpInReqs) LI << "[" << msg->connId << " " << renderIP(msg->ipAddr) << "] dumpInReq: " << msg->payload; 
 
                             try {
                                 ingesterProcessClose(txn, msg->connId, arr);
@@ -118,7 +118,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         if (packed.kind() == 6 || packed.kind() == 16) {
             if (origJson.at("content").get_string().find("[\"-\"]") != std::string::npos) {
                 auto idHex = to_hex(packed.id());
-                LI << "Repost embedded a protected event, blocking: " << idHex;
+                LI << "[" << connId << " " << renderIP(ipAddr) << "] Repost embedded a protected event, blocking: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: reposts can't embed protected events");
                 return;
             }
@@ -141,14 +141,14 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
             auto idHex = to_hex(packed.id());
 
             if (!cfg().relay__auth__enabled) {
-                LI << "[" << connId << "] Protected event and auth disabled, rejecting: " << idHex;
+                LI << "[" << connId << " " << renderIP(ipAddr) << "] Protected event and auth disabled, rejecting: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
 
             if (cfg().relay__auth__serviceUrl.empty()) {
                 // If we don't have a serviceUrl, just fail
-                LI << "[" << connId << "] Protected event and no serviceUrl configured, rejecting: " << idHex;
+                LI << "[" << connId << " " << renderIP(ipAddr) << "] Protected event and no serviceUrl configured, rejecting: " << idHex;
                 sendOKResponse(connId, idHex, false, "blocked: event marked as protected");
                 return;
             }
@@ -159,7 +159,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 auto challenge = rsctx.challengeGenerator.get();
                 rsctx.connIdToAuthStatus.emplace(connId, challenge);
 
-                LI << "[" << connId << "] Protected event, requesting AUTH: " << idHex;
+                LI << "[" << connId << " " << renderIP(ipAddr) << "] Protected event, requesting AUTH: " << idHex;
                 sendAuthChallenge(connId, challenge);
                 sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
@@ -169,7 +169,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
 
             if (!as.isAuthed()) {
                 // not authenticated
-                LI << "[" << connId << "] Protected event, AUTH already requested: " << idHex;
+                LI << "[" << connId << " " << renderIP(ipAddr) << "] Protected event, AUTH already requested: " << idHex;
                 sendOKResponse(connId, idHex, false, "auth-required: event marked as protected");
                 return;
             } else if (as.authed != packed.pubkey()) {
@@ -187,7 +187,7 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         auto existing = lookupEventById(txn, packed.id());
         if (existing) {
             auto hexId = to_hex(packed.id());
-            LI << "[" << connId << "] Duplicate event, skipping: " << hexId;
+            LI << "[" << connId << " " << renderIP(ipAddr) << "] Duplicate event, skipping: " << hexId;
             sendOKResponse(connId, hexId, true, "duplicate: have this event");
             return;
         }
@@ -282,7 +282,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     // set the connection as authenticated with this pubkey
     as.authed = packed.pubkey();
 
-    LI << "[" << connId << "] AUTHed as " << to_hex(packed.pubkey());
+    LI << "[" << connId << " " << getIpForConn(connId) << "] AUTHed as " << to_hex(packed.pubkey());
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 

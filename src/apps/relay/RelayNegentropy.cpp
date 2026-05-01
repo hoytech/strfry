@@ -99,7 +99,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             Negentropy ne(storage, 500'000);
             resp = ne.reconcile(msg);
         } catch (std::exception &e) {
-            LI << "[" << connId << "] Error parsing negentropy message: " << e.what();
+            LI << "[" << connId << " " << getIpForConn(connId) << "] Error parsing negentropy message: " << e.what();
 
             PROM_INC_RELAY_MSG("NEG-ERR");
             sendToConn(connId, tao::json::to_string(tao::json::value::array({
@@ -112,7 +112,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
             return;
         }
 
-        LI << "[" << connId << "] negentropy SEND session=" << subId.sv() << " bytesOut=" << resp.size();
+        LI << "[" << connId << " " << getIpForConn(connId) << "] negentropy SEND session=" << subId.sv() << " bytesOut=" << resp.size();
 
         PROM_INC_RELAY_MSG("NEG-MSG");
         sendToConn(connId, tao::json::to_string(tao::json::value::array({
@@ -144,11 +144,11 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         auto *view = std::get_if<NegentropyViews::MemoryView>(userView);
         if (!view) throw herr("bad variant, expected memory view");
 
-        LI << "[" << sub.connId << "] negentropy QUERY matched " << view->levIds.size() << " events in "
+        LI << "[" << sub.connId << " " << getIpForConn(sub.connId) << "] negentropy QUERY matched " << view->levIds.size() << " events in "
            << (hoytech::curr_time_us() - view->startTime) << "us";
 
         if (view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
-            LI << "[" << sub.connId << "] negentropy QUERY size exceeded " << cfg().relay__negentropy__maxSyncEvents;
+            LI << "[" << sub.connId << " " << getIpForConn(sub.connId) << "] negentropy QUERY size exceeded " << cfg().relay__negentropy__maxSyncEvents;
 
             PROM_INC_RELAY_MSG("NEG-ERR");
             sendToConn(sub.connId, tao::json::to_string(tao::json::value::array({
@@ -204,7 +204,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     return true;
                 });
 
-                LI << "[" << connId << "] negentropy NEW session=" << subId.sv() << " bytesIn=" << msg->negPayload.size() << " tree=" << (treeId ? std::to_string(*treeId) : "NONE");
+                LI << "[" << connId << " " << getIpForConn(connId) << "] negentropy NEW session=" << subId.sv() << " bytesIn=" << msg->negPayload.size() << " tree=" << (treeId ? std::to_string(*treeId) : "NONE");
 
                 if (treeId) {
                     negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, *treeId);
@@ -242,7 +242,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     continue;
                 }
 
-                LI << "[" << msg->connId << "] negentropy RECV session=" << msg->subId.sv() << " bytesIn=" << msg->negPayload.size();
+                LI << "[" << msg->connId << " " << getIpForConn(msg->connId) << "] negentropy RECV session=" << msg->subId.sv() << " bytesIn=" << msg->negPayload.size();
 
                 if (auto *view = std::get_if<NegentropyViews::MemoryView>(userView)) {
                     if (!view->storageVector.sealed) {
@@ -259,7 +259,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     handleReconcile(msg->connId, msg->subId, subStorage, msg->negPayload);
                 }
             } else if (auto msg = std::get_if<MsgNegentropy::NegClose>(&newMsg.msg)) {
-                LI << "[" << msg->connId << "] negentropy CLOSE session=" << msg->subId.sv();
+                LI << "[" << msg->connId << " " << getIpForConn(msg->connId) << "] negentropy CLOSE session=" << msg->subId.sv();
 
                 queries.removeSub(msg->connId, msg->subId);
                 views.removeView(msg->connId, msg->subId);
