@@ -20,6 +20,7 @@
 #include "jsonParseUtils.h"
 #include "Decompressor.h"
 #include "PrometheusMetrics.h"
+#include "search/SearchProvider.h"
 
 
 
@@ -178,6 +179,9 @@ struct RelayServerCtx {
 struct RelayServer {
     uS::Async *hubTrigger = nullptr;
 
+    // Search Provider
+    std::unique_ptr<ISearchProvider> searchProvider;
+
     // Thread Pools
 
     ThreadPool<MsgWebsocket> tpWebsocket;
@@ -188,6 +192,8 @@ struct RelayServer {
     ThreadPool<MsgNegentropy> tpNegentropy;
     std::thread cronThread;
     std::thread signalHandlerThread;
+    std::thread searchIndexerThread;
+    std::atomic<bool> searchIndexerRunning{false};
 
     void run();
 
