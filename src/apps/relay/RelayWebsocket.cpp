@@ -267,10 +267,6 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (cfg().relay__realIpHeader.size()) {
             auto header = req.getHeader(cfg().relay__realIpHeader.c_str()).toString(); // not string_view: parseIP needs trailing 0 byte
 
-            // HACK: uWebSockets strips leading : characters, which interferes with IPv6 parsing.
-            // This fixes it for the common ::1 and ::ffff:1.2.3.4 cases. FIXME: fix the underlying library.
-            if (header == "1" || header.starts_with("ffff:")) header = std::string("::") + header;
-
             c->ipAddr = parseIP(header);
             if (c->ipAddr.size() == 0) LW << "Couldn't parse IP from header " << cfg().relay__realIpHeader << ": " << header;
         }
@@ -374,6 +370,23 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                               true, &compressedSize);
             c.stats.bytesUp += payloadSize;
             c.stats.bytesUpCompressed += compressedSize;
+
+            // Back-pressure: if a client is too slow to read and the outbound
+            // backlog inside uWS exceeds the configured cap, drop the connection
+            // to bound memory. terminate() synchronously invokes our
+            // onDisconnection (which logs and deletes the Connection) and then
+            // drains the queued sends with cancellation callbacks, so no queue
+            // entries leak. c is dangling after terminate(), so we must return.
+            const uint64_t maxPending = cfg().relay__maxPendingOutboundBytes;
+            if (maxPending > 0 && c.stats.pendingOutbound > maxPending) {
+                LW << "[" << c.connId << "] Slow client: pendingOutbound "
+                   << renderSize(c.stats.pendingOutbound)
+                   << " exceeds relay.maxPendingOutboundBytes "
+                   << renderSize(maxPending) << ", terminating";
+                PrometheusMetrics::getInstance().slowClientTerminations.inc();
+                c.websocket->terminate();
+                return;
+            }
         };
 
         for (auto &newMsg : newMsgs) {

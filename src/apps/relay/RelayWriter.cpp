@@ -39,10 +39,11 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
-                tao::json::value evJson = tao::json::from_string(msg->jsonStr);
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
                 std::string okMsg;
-                auto res = writePolicyPlugin.acceptEvent(cfg().relay__writePolicy__plugin, evJson, sourceType, msg->ipAddr, msg->authed, okMsg);
+                const std::string &plugin = cfg().relay__writePolicy__plugin;
+
+                auto res = writePolicyPlugin.acceptEvent(plugin, plugin.empty() ? tao::json::empty_object : tao::json::from_string(msg->jsonStr), sourceType, msg->ipAddr, msg->authed, okMsg);
 
                 if (res == PluginEventSifterResult::Accept) {
                     newEvents.emplace_back(std::move(msg->packedStr), std::move(msg->jsonStr), msg);
@@ -116,6 +117,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                 LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
                 written = true;
                 PrometheusMetrics::getInstance().writtenEventsTotal.inc();
+                PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
             } else if (newEvent.status == EventWriteStatus::Duplicate) {
                 message = "duplicate: have this event";
                 written = true;
