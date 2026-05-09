@@ -98,6 +98,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                     { "max_message_length", cfg().relay__maxWebsocketPayloadSize },
                     { "max_subscriptions", cfg().relay__maxSubsPerConnection },
                     { "max_limit", cfg().relay__maxFilterLimit },
+                    { "max_event_tags", cfg().events__maxNumTags },
                 }) },
             });
 
@@ -110,6 +111,11 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             if (cfg().relay__info__self.size()) nip11["self"] = maybeNpub(cfg().relay__info__self);
             if (cfg().relay__info__privacy.size()) nip11["privacy_policy"] = cfg().relay__info__privacy;
             if (cfg().relay__info__terms.size()) nip11["terms_of_service"] = cfg().relay__info__terms;
+            if (cfg().relay__writePolicy__plugin.empty()) {
+                nip11["limitation"]["restricted_writes"] = false;
+            } else if (!cfg().relay__writePolicy__restrictedWrites.empty()) {
+                nip11["limitation"]["restricted_writes"] = cfg().relay__writePolicy__restrictedWrites == "true";
+            }
 
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nip11));
             ver = cfg().version();
