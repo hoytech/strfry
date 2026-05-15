@@ -21,6 +21,13 @@ R"(
 )";
 
 
+static tao::json::value configValueToJson(const tao::config::value &v) {
+    tao::json::events::to_value consumer;
+    tao::json::events::from_value(consumer, v);
+    return std::move(consumer.value);
+}
+
+
 
 struct RouterEvent : NonCopyable {
     struct ConfigFileChange {
@@ -97,14 +104,13 @@ struct Router {
 
             {
                 tao::json::value newFilter = tao::json::empty_object;
-                // FIXME: Must be better way to go from config object to json, instead of round-trip through string
-                if (spec.find("filter")) newFilter = tao::json::from_string(tao::json::to_string(spec.at("filter")));
+                if (spec.find("filter")) newFilter = configValueToJson(spec.at("filter"));
 
                 std::string newFilterStr = tao::json::to_string(newFilter);
                 if (newFilterStr != filterStr) needsReconnect = true;
 
                 filterStr = newFilterStr;
-                filterCompiled = NostrFilterGroup(newFilter);
+                filterCompiled.addFilters(newFilter);
                 filter = newFilter;
             }
 

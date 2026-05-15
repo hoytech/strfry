@@ -7,8 +7,6 @@ ENV TZ=Europe/London
 
 WORKDIR /build
 
-COPY . .
-
 RUN \
   apk --no-cache add \
     linux-headers \
@@ -24,12 +22,16 @@ RUN \
     lmdb-dev \
     flatbuffers-dev \
     libsecp256k1-dev \
-    zstd-dev \
-  && rm -rf /var/cache/apk/* \
-  && git submodule update --init \
-  && make setup-golpe \
-  && make clean \
-  && make -j4
+    zstd-dev
+
+COPY . .
+
+RUN git submodule update --init
+
+RUN make setup-golpe
+
+RUN --mount=type=cache,target=/build/.cache \
+    make -j4
 
 FROM alpine:3.18.3
 
@@ -46,6 +48,8 @@ RUN \
   && rm -rf /var/cache/apk/*
 
 COPY --from=build /build/strfry strfry
+COPY --from=build /build/strfry.conf strfry.conf
+COPY --from=build /build/strfry-db strfry-db
 
 EXPOSE 7777
 
