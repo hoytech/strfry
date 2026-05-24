@@ -87,7 +87,7 @@ struct EventToWrite {
 };
 
 
-void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel = 1, class ISearchProvider *searchProvider = nullptr);
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel = 1, std::vector<uint64_t> *outDeletedLevIds = nullptr);
 bool deleteEventBasic(lmdb::txn &txn, uint64_t levId);
 
 template <typename C>

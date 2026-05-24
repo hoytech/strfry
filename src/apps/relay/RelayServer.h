@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <algorithm>
+#include <cstdint>
 
 #include <hoytech/time.h>
 #include <hoytech/hex.h>
