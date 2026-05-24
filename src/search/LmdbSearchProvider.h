@@ -316,18 +316,26 @@ public:
                 queryTokens.resize(cfg().relay__search__maxQueryTerms);
             }
 
+            // Compute df for each query term first — a missing token short-circuits
+            // the query without paying for the O(N) corpus-stat cursor walks below.
+            std::vector<uint64_t> dfs;
+            dfs.reserve(queryTokens.size());
+            for (const auto &token : queryTokens) {
+                uint64_t df = getDocFreq(txn, token);
+                if (df == 0) return results;
+                dfs.push_back(df);
+            }
+
             // Get corpus statistics
             uint64_t N = getTotalDocs(txn);
             if (N == 0) return results;
 
             float avgDocLen = getAvgDocLen(txn);
 
-            // Compute IDF for each query term
+            // Compute IDF for each query term using already-collected dfs
             std::vector<float> idfs;
-            std::vector<uint64_t> dfs;
-            for (const auto &token : queryTokens) {
-                uint64_t df = getDocFreq(txn, token);
-                dfs.push_back(df);
+            idfs.reserve(dfs.size());
+            for (uint64_t df : dfs) {
                 idfs.push_back(computeIDF(N, df));
             }
 
