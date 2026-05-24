@@ -9,6 +9,7 @@
 #include <tao/json.hpp>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include <thread>
 #include <chrono>
 #include <functional>
@@ -41,13 +42,12 @@ private:
     static constexpr float k1 = 1.2f;
     static constexpr float b = 0.75f;
 
+    mutable std::once_flag kindMatcherOnce;
     mutable KindMatcher kindMatcher;
-    mutable bool kindMatcherInitialized = false;
 
     const KindMatcher& getKindMatcher() const {
-        if (!kindMatcherInitialized) {
+        std::call_once(kindMatcherOnce, [this]() {
             kindMatcher = KindMatcher::parse(cfg().relay__search__indexedKinds);
-            kindMatcherInitialized = true;
 
             if (kindMatcher.hasError()) {
                 LE << "Search indexedKinds config error: " << kindMatcher.getError();
@@ -55,7 +55,7 @@ private:
             } else {
                 LI << "Search indexedKinds: " << kindMatcher.toString();
             }
-        }
+        });
         return kindMatcher;
     }
 
@@ -582,18 +582,25 @@ public:
                 for (uint64_t levId = startLevId; levId <= endLevId && running; levId++) {
                     lastProcessedLevId = levId; // always track progress
                     try {
-                        // Read and decode event from EventPayload
-                        auto rtxn = lmdb::txn::begin(env.lmdb_env, nullptr, MDB_RDONLY);
-                        std::string_view eventPayload;
-                        if (!env.dbi_EventPayload.get(rtxn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
-                            rtxn.commit();
-                            skipped++;
-                            continue; // Event doesn't exist — lastProcessedLevId already advanced
-                        }
+                        // Read event payload and copy decoded JSON to owned string before
+                        // closing the read transaction. The decoded view from
+                        // decodeEventPayload() is only valid until the next txn close or
+                        // decompressor reuse, so we must not use it after rtxn.commit().
+                        std::string json;
+                        {
+                            auto rtxn = lmdb::txn::begin(env.lmdb_env, nullptr, MDB_RDONLY);
+                            std::string_view eventPayload;
+                            if (!env.dbi_EventPayload.get(rtxn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
+                                rtxn.commit();
+                                skipped++;
+                                continue; // Event doesn't exist — lastProcessedLevId already advanced
+                            }
 
-                        // Decode event payload (handles compression)
-                        std::string_view json = decodeEventPayload(rtxn, decomp, eventPayload, nullptr, nullptr);
-                        rtxn.commit();
+                            // Decode and immediately copy: view is invalid after rtxn closes.
+                            std::string_view jsonView = decodeEventPayload(rtxn, decomp, eventPayload, nullptr, nullptr);
+                            json.assign(jsonView.data(), jsonView.size());
+                            rtxn.commit();
+                        }
 
                         // Parse event to get kind and created_at
                         auto eventJson = tao::json::from_string(json);

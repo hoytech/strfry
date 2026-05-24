@@ -132,17 +132,27 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
 
     for (uint64_t levId = resumeFrom; levId <= totalEvents; levId++) {
         try {
-            auto txn = env.txn_ro();
-            std::string_view eventPayload;
+            // Read event payload and copy decoded JSON to an owned string before
+            // closing the read transaction. The decoded view from decodeEventPayload()
+            // is only valid until the next txn close or decompressor reuse, and LMDB
+            // does not allow a read txn and a write txn on the same thread simultaneously
+            // (without MDB_NOTLS). We must close the read txn before indexEventWithTxnHook
+            // opens its write txn.
+            std::string json;
+            {
+                auto txn = env.txn_ro();
+                std::string_view eventPayload;
 
-            if (!env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
-                skipped++;
-                persistStandalone(levId);
-                continue; // Event doesn't exist (sparse levId space)
-            }
+                if (!env.dbi_EventPayload.get(txn, lmdb::to_sv<uint64_t>(levId), eventPayload)) {
+                    skipped++;
+                    persistStandalone(levId);
+                    continue; // Event doesn't exist (sparse levId space)
+                }
 
-            // Decode event payload
-            std::string_view json = decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr);
+                // Decode and immediately copy: view is invalid after txn closes.
+                std::string_view jsonView = decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr);
+                json.assign(jsonView.data(), jsonView.size());
+            } // txn closes here — before any write txn is opened
 
             // Parse event to get kind and created_at
             auto eventJson = tao::json::from_string(json);
