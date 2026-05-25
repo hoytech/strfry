@@ -14,11 +14,15 @@ R"(
     Drops existing search index and re-indexes all events from EventPayload.
 
     Usage:
-      search_reindex [--batch-size=<n>] [--restart]
+      search_reindex [--batch-size=<n>] [--restart] [--from-levid=<n>]
 
     Options:
       --batch-size=<n>  Number of events to index per batch [default: 1000]
       --restart         Discard any in-progress rebuild and start from levId 1
+      --from-levid=<n>  Re-index from levId <n> onward without clearing the
+                        existing index and without updating SearchState.
+                        Use for validating fixes against known-bad ranges
+                        without a full rebuild. Mutually exclusive with --restart.
 )";
 
 
@@ -59,10 +63,28 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
     };
 
     bool restart = args["--restart"].asBool();
+    bool partial = static_cast<bool>(args["--from-levid"]);
+
+    if (restart && partial) {
+        std::cerr << "Error: --restart and --from-levid are mutually exclusive\n";
+        return;
+    }
+
     uint64_t resumeFrom = 1;
     bool resuming = false;
+    bool persistState = !partial;
 
-    {
+    if (partial) {
+        long fromLevId = args["--from-levid"].asLong();
+        if (fromLevId < 1) {
+            std::cerr << "Error: --from-levid must be >= 1\n";
+            return;
+        }
+        resumeFrom = static_cast<uint64_t>(fromLevId);
+        resuming = true; // skip the clear-index branch below
+        std::cout << "Partial reindex requested: starting from levId " << resumeFrom
+                  << " (SearchState will not be updated)\n";
+    } else {
         auto txn = env.txn_ro();
         auto stateView = env.lookup_SearchState(txn, 1);
         if (stateView && !restart && stateView->indexVersion() == 0) {
@@ -99,7 +121,7 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
 
         txn.commit();
         std::cout << "Existing index cleared.\n";
-    } else {
+    } else if (!partial) {
         std::cout << "Resuming search index rebuild from levId " << resumeFrom << "...\n";
     }
 
@@ -112,10 +134,15 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
     }
 
     if (resumeFrom > totalEvents) {
-        auto txn = lmdb::txn::begin(env.lmdb_env);
-        persistSearchState(txn, totalEvents, LmdbSearchProvider::kIndexVersion);
-        txn.commit();
-        std::cout << "Index already up to date.\n";
+        if (persistState) {
+            auto txn = lmdb::txn::begin(env.lmdb_env);
+            persistSearchState(txn, totalEvents, LmdbSearchProvider::kIndexVersion);
+            txn.commit();
+            std::cout << "Index already up to date.\n";
+        } else {
+            std::cout << "Nothing to do: --from-levid=" << resumeFrom
+                      << " is past the largest event (" << totalEvents << ").\n";
+        }
         return;
     }
 
@@ -125,6 +152,7 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
     Decompressor decomp;
 
     auto persistStandalone = [&](uint64_t levId) {
+        if (!persistState) return;
         auto txn = lmdb::txn::begin(env.lmdb_env);
         persistSearchState(txn, levId, 0);
         txn.commit();
@@ -159,10 +187,15 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
             uint64_t kind = eventJson.at("kind").get_unsigned();
             uint64_t created_at = eventJson.at("created_at").get_unsigned();
 
-            // Index the event and persist progress within the same transaction
-            bool wrote = provider.indexEventWithTxnHook(levId, json, kind, created_at, [&, levId](lmdb::txn &wtxn) {
-                persistSearchState(wtxn, levId, 0);
-            });
+            // Index the event and (when not in --from-levid partial mode) persist
+            // progress within the same transaction. In partial mode we deliberately
+            // skip the SearchState update so a real in-progress catch-up is not
+            // overwritten by the partial validation run.
+            bool wrote = persistState
+                ? provider.indexEventWithTxnHook(levId, json, kind, created_at, [&, levId](lmdb::txn &wtxn) {
+                      persistSearchState(wtxn, levId, 0);
+                  })
+                : provider.indexEventWithTxnHook(levId, json, kind, created_at, [](lmdb::txn &) {});
 
             if (wrote) {
                 indexed++;
@@ -184,15 +217,21 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
         }
     }
 
-    // Update SearchState to mark index as fully caught up
-    {
+    // Update SearchState to mark index as fully caught up — skipped in
+    // --from-levid partial mode since we don't claim authoritative progress.
+    if (persistState) {
         auto txn = lmdb::txn::begin(env.lmdb_env);
         persistSearchState(txn, totalEvents, LmdbSearchProvider::kIndexVersion);
         txn.commit();
     }
 
-    std::cout << "\nSearch index rebuild complete!\n";
-    std::cout << "Total events scanned: " << totalEvents << "\n";
+    if (persistState) {
+        std::cout << "\nSearch index rebuild complete!\n";
+        std::cout << "Total events scanned: " << totalEvents << "\n";
+    } else {
+        std::cout << "\nPartial reindex complete (SearchState unchanged).\n";
+        std::cout << "Range scanned: levId " << resumeFrom << " to " << totalEvents << "\n";
+    }
     std::cout << "Events indexed: " << indexed << "\n";
     std::cout << "Events skipped: " << skipped << "\n";
 }
