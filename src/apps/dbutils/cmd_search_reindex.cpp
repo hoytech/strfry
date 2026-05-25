@@ -35,13 +35,11 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
 
     // Check if search is enabled
     if (!cfg().relay__search__enabled) {
-        std::cerr << "Error: Search is not enabled (relay.search.enabled = false)\n";
-        return;
+        throw herr("Search is not enabled (relay.search.enabled = false)");
     }
 
     if (cfg().relay__search__backend != "lmdb") {
-        std::cerr << "Error: LMDB search backend not configured (relay.search.backend != \"lmdb\")\n";
-        return;
+        throw herr("LMDB search backend not configured (relay.search.backend != \"lmdb\")");
     }
 
     // Create LMDB search provider
@@ -66,8 +64,7 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
     bool partial = static_cast<bool>(args["--from-levid"]);
 
     if (restart && partial) {
-        std::cerr << "Error: --restart and --from-levid are mutually exclusive\n";
-        return;
+        throw herr("--restart and --from-levid are mutually exclusive");
     }
 
     // Stale-index guard: if the on-disk indexVersion doesn't match the binary's
@@ -80,11 +77,10 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
         auto stateView = env.lookup_SearchState(txn, 1);
         if (stateView && stateView->indexVersion() != 0 &&
             stateView->indexVersion() != LmdbSearchProvider::kIndexVersion) {
-            std::cerr << "Error: search index is stale (stored version "
-                      << stateView->indexVersion() << ", expected "
-                      << LmdbSearchProvider::kIndexVersion
-                      << "). Re-run with --restart to clear and rebuild.\n";
-            return;
+            throw herr("search index is stale (stored version ",
+                       stateView->indexVersion(), ", expected ",
+                       LmdbSearchProvider::kIndexVersion,
+                       "). Re-run with --restart to clear and rebuild.");
         }
         // indexVersion == 0 indicates an in-progress rebuild from a previous
         // strfry version; if any SearchIndex data exists, it's in the old
@@ -93,10 +89,9 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
             auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
             std::string_view k, v;
             if (cursor.get(k, v, MDB_FIRST)) {
-                std::cerr << "Error: an in-progress rebuild from a previous "
-                          << "strfry version was found. Re-run with --restart "
-                          << "to clear and rebuild.\n";
-                return;
+                throw herr("an in-progress rebuild from a previous strfry "
+                           "version was found. Re-run with --restart to "
+                           "clear and rebuild.");
             }
         }
     }
@@ -108,8 +103,7 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
     if (partial) {
         long fromLevId = args["--from-levid"].asLong();
         if (fromLevId < 1) {
-            std::cerr << "Error: --from-levid must be >= 1\n";
-            return;
+            throw herr("--from-levid must be >= 1");
         }
         resumeFrom = static_cast<uint64_t>(fromLevId);
         resuming = true; // skip the clear-index branch below
