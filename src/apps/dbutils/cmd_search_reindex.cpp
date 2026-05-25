@@ -70,6 +70,37 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
         return;
     }
 
+    // Stale-index guard: if the on-disk indexVersion doesn't match the binary's
+    // kIndexVersion and SearchIndex has any data, the storage format is
+    // incompatible (e.g. v1 host-endian postings vs. v2 big-endian). Mixing
+    // formats would silently corrupt the dup tree. Force the operator to
+    // re-run with --restart, which clears the index before rebuilding.
+    if (!restart) {
+        auto txn = env.txn_ro();
+        auto stateView = env.lookup_SearchState(txn, 1);
+        if (stateView && stateView->indexVersion() != 0 &&
+            stateView->indexVersion() != LmdbSearchProvider::kIndexVersion) {
+            std::cerr << "Error: search index is stale (stored version "
+                      << stateView->indexVersion() << ", expected "
+                      << LmdbSearchProvider::kIndexVersion
+                      << "). Re-run with --restart to clear and rebuild.\n";
+            return;
+        }
+        // indexVersion == 0 indicates an in-progress rebuild from a previous
+        // strfry version; if any SearchIndex data exists, it's in the old
+        // format and must be cleared.
+        if (stateView && stateView->indexVersion() == 0) {
+            auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
+            std::string_view k, v;
+            if (cursor.get(k, v, MDB_FIRST)) {
+                std::cerr << "Error: an in-progress rebuild from a previous "
+                          << "strfry version was found. Re-run with --restart "
+                          << "to clear and rebuild.\n";
+                return;
+            }
+        }
+    }
+
     uint64_t resumeFrom = 1;
     bool resuming = false;
     bool persistState = !partial;
@@ -99,22 +130,12 @@ void cmd_search_reindex(const std::vector<std::string> &subArgs) {
         std::cout << "Clearing existing search index...\n";
         auto txn = lmdb::txn::begin(env.lmdb_env);
 
-        // Clear SearchIndex
-        auto indexCursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
-        std::string_view key, val;
-        if (indexCursor.get(key, val, MDB_FIRST)) {
-            do {
-                indexCursor.del();
-            } while (indexCursor.get(key, val, MDB_NEXT_NODUP));
-        }
-
-        // Clear SearchDocMeta
-        auto docMetaCursor = lmdb::cursor::open(txn, env.dbi_SearchDocMeta);
-        if (docMetaCursor.get(key, val, MDB_FIRST)) {
-            do {
-                docMetaCursor.del();
-            } while (docMetaCursor.get(key, val, MDB_NEXT));
-        }
+        // Empty SearchIndex and SearchDocMeta wholesale via mdb_drop(del=0)
+        // — keeps the DBI handles, empties the data. The previous
+        // cursor.del() loops only deleted one duplicate per key, leaving
+        // most of the DUPSORT data behind.
+        env.dbi_SearchIndex.drop(txn, false);
+        env.dbi_SearchDocMeta.drop(txn, false);
 
         // Mark rebuild as in-progress (indexVersion = 0)
         persistSearchState(txn, 0, 0);

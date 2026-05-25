@@ -13,14 +13,22 @@
 #include <thread>
 #include <chrono>
 #include <functional>
+#include <atomic>
+#include <endian.h>
 
 
-// Pack posting: [levId:48][tf:16] as host-endian uint64
+// Pack posting: [levId:48][tf:16] stored as big-endian uint64 so that
+// MDB_DUPSORT's default memcmp ordering on the raw bytes equals numeric order
+// on the packed value. Without this, host-endian (LE on x86_64) storage causes
+// MDB_APPENDDUP to silently fail (and lmdbxx::dbi_put silently swallows
+// MDB_KEYEXIST) whenever a new levId's byte sequence is less than the previous
+// stored entry — dropping postings across every 256/65536/16M boundary.
 inline uint64_t packPosting(uint64_t levId, uint16_t tf) {
-    return (levId << 16) | tf;
+    return htobe64((levId << 16) | tf);
 }
 
-inline void unpackPosting(uint64_t packed, uint64_t &levId, uint16_t &tf) {
+inline void unpackPosting(uint64_t stored, uint64_t &levId, uint16_t &tf) {
+    uint64_t packed = be64toh(stored);
     levId = packed >> 16;
     tf = static_cast<uint16_t>(packed & 0xFFFF);
 }
@@ -151,12 +159,60 @@ private:
         env.update_SearchState(txn, *stateView, upd);
     }
 
+    // One-shot stale-index detection. Triggered lazily on first use so we
+    // don't need a separate init step. When the on-disk SearchState carries
+    // an indexVersion other than kIndexVersion (and the index has any data),
+    // the binary's pack/unpack format is incompatible with what's stored —
+    // mixing the two would corrupt the dup tree and trigger silent
+    // MDB_APPENDDUP failures. We refuse to index, refuse to serve search,
+    // and log loud instructions to run `search_reindex --restart`.
+    mutable std::once_flag staleCheckOnce;
+    mutable std::atomic<bool> staleIndex{false};
+
+    void checkStale() const {
+        std::call_once(staleCheckOnce, [this]() {
+            try {
+                auto txn = env.txn_ro();
+                auto stateView = env.lookup_SearchState(txn, 1);
+                if (!stateView) return; // no index — fresh start at kIndexVersion
+
+                uint64_t storedVer = stateView->indexVersion();
+                if (storedVer == kIndexVersion) return; // current
+                if (storedVer == 0) {
+                    // In-progress rebuild from an earlier code version.
+                    // If no actual SearchIndex data has been written yet,
+                    // it's safe to proceed (operator will rebuild forward).
+                    auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
+                    std::string_view k, v;
+                    if (!cursor.get(k, v, MDB_FIRST)) return; // truly empty
+                }
+
+                staleIndex.store(true, std::memory_order_relaxed);
+                LE << "Search index is stale (stored version " << storedVer
+                   << ", expected " << kIndexVersion
+                   << "). Run `strfry search_reindex --restart` to rebuild. "
+                   << "Indexing is paused and search queries return no results until rebuild.";
+            } catch (std::exception &e) {
+                LW << "checkStale failed: " << e.what();
+            }
+        });
+    }
+
 public:
-    static constexpr uint64_t kIndexVersion = 1;
+    // Indexing format/layout version. Bumped to 2 when posting bytes switched
+    // from host-endian to big-endian — see packPosting/unpackPosting. Any
+    // increment forces operators to run `search_reindex --restart`.
+    static constexpr uint64_t kIndexVersion = 2;
+
+    bool isStale() const {
+        checkStale();
+        return staleIndex.load(std::memory_order_relaxed);
+    }
 
     bool healthy() const override {
         if (!cfg().relay__search__enabled) return false;
         if (cfg().relay__search__backend != "lmdb") return false;
+        if (isStale()) return false;
 
         // Tolerant readiness:
         // - Treat empty DBs as healthy
@@ -188,6 +244,7 @@ public:
 
     bool indexEventWithTxnHook(uint64_t levId, std::string_view json, uint64_t kind, uint64_t created_at,
                                const std::function<void(lmdb::txn &)> &txnHook = {}) {
+        if (isStale()) return false;
         if (!shouldIndexKind(kind)) return false;
 
         auto eventJson = tao::json::from_string(json);
@@ -215,8 +272,11 @@ public:
         }
 
         uint64_t docMetaPacked = packDocMeta(docLen, static_cast<uint16_t>(kind));
-        env.dbi_SearchDocMeta.put(txn, lmdb::to_sv<uint64_t>(levId),
-                                  lmdb::to_sv<uint64_t>(docMetaPacked));
+        if (!env.dbi_SearchDocMeta.put(txn, lmdb::to_sv<uint64_t>(levId),
+                                       lmdb::to_sv<uint64_t>(docMetaPacked))) {
+            LE << "SearchDocMeta put returned false for levId=" << levId
+               << " (likely MDB_KEYEXIST despite presence check — indicates a bug)";
+        }
 
         uint64_t maxPostings = cfg().relay__search__maxPostingsPerToken;
         auto cursor = lmdb::cursor::open(txn, env.dbi_SearchIndex);
@@ -224,7 +284,11 @@ public:
         for (const auto &token : tokens) {
             uint64_t posting = packPosting(levId, token.tf);
 
-            env.dbi_SearchIndex.put(txn, token.text, lmdb::to_sv<uint64_t>(posting), MDB_APPENDDUP);
+            if (!env.dbi_SearchIndex.put(txn, token.text, lmdb::to_sv<uint64_t>(posting), MDB_APPENDDUP)) {
+                LE << "SearchIndex MDB_APPENDDUP returned false for token=\"" << token.text
+                   << "\" levId=" << levId << " — this should not happen with big-endian "
+                   << "packing; please report.";
+            }
 
             uint64_t count = 0;
             std::string_view key = token.text;
@@ -262,6 +326,7 @@ public:
     }
 
     void deleteEvent(uint64_t levId) override {
+        if (isStale()) return;
         try {
             auto txn = lmdb::txn::begin(env.lmdb_env);
 
@@ -305,6 +370,8 @@ public:
 
     std::vector<SearchHit> query(const SearchQuery& q, lmdb::txn &txn) override {
         std::vector<SearchHit> results;
+
+        if (isStale()) return results;
 
         try {
             // Parse query into tokens
@@ -543,6 +610,10 @@ public:
     // or while indexing was offline. Should be run in a background thread.
     void runCatchupIndexer(std::atomic<bool> &running) {
         try {
+            if (isStale()) {
+                LE << "Search catch-up indexer not starting: index is stale, run `search_reindex --restart`";
+                return;
+            }
             LI << "Search catch-up indexer started";
 
             Decompressor decomp; // For decompressing event payloads
