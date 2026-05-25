@@ -18,3 +18,10 @@ test-subid: build/subid_tests
 
 build/subid_tests: test/SubIdTests.cpp build/golpe.h
 	$(CXX) $(CXXFLAGS) $(INCS) $< -o $@
+
+.PHONY: test-search-posting
+test-search-posting: build/search_posting_tests
+	build/search_posting_tests
+
+build/search_posting_tests: test/SearchPostingTests.cpp
+	$(CXX) $(CXXFLAGS) $< -llmdb -o $@
