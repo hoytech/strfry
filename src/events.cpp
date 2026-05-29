@@ -300,10 +300,11 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                         if (isEventABeforeEventB(packed, otherPacked)) {
                             ev.status = EventWriteStatus::Replaced;
                         } else {
-                            if (logDeletions) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
-                            levIdsToDelete.push_back(otherEv.primaryKeyId);
+                            if (!cfg().events__archivalMode) {
+                                if (logDeletions) LI << "Deleting event (d-tag). id=" << to_hex(otherPacked.id());
+                                levIdsToDelete.push_back(otherEv.primaryKeyId);
+                            }
                         }
-
                         return false;
                     }, true);
 
@@ -333,8 +334,10 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                     if (tagName == 'e') {
                         auto otherEv = lookupEventById(txn, tagVal);
                         if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
-                            if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
-                            levIdsToDelete.push_back(otherEv->primaryKeyId);
+                            if (!cfg().events__archivalMode) {
+                                if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
+                                levIdsToDelete.push_back(otherEv->primaryKeyId);
+                            }
                         }
                     } else if (tagName == 'a') {
                         try { // parsing a-tag can fail
@@ -350,8 +353,10 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                                     auto otherPacked = PackedEventView(otherEv.buf);
 
                                     if (otherPacked.created_at() <= packed.created_at()) {
-                                        if (logDeletions) LI << "Deleting replaceable event (kind 5, a-tag). id=" << to_hex(otherPacked.id());
-                                        levIdsToDelete.push_back(otherEv.primaryKeyId);
+                                        if (!cfg().events__archivalMode) {
+                                            if (logDeletions) LI << "Deleting replaceable event (kind 5, a-tag). id=" << to_hex(otherPacked.id());
+                                            levIdsToDelete.push_back(otherEv.primaryKeyId);
+                                        }
                                     }
 
                                     return false;
