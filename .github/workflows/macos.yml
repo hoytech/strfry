@@ -26,11 +26,3 @@ jobs:
              echo "Strfry build failed."
              exit 1
           fi
-
-      - name: Run strfry
-        run: |
-          sw_vers
-          mkdir -p strfry-db
-          ./strfry relay &
-          sleep 2
-          kill %1 || true
