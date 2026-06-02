@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
 #define st_mtim st_mtimespec
 #endif
 
@@ -22,7 +22,7 @@
 
 #include "events.h"
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
 extern char **environ;
 #elif defined(__APPLE__)
 #include <crt_externs.h>
