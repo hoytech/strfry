@@ -9,7 +9,7 @@ config:
     noReload: true
   - name: relay__nofiles
     desc: "Set OS-limit on maximum number of open files/sockets (if 0, don't attempt to set)"
-    default: 1000000
+    default: 524288
     noReload: true
   - name: relay__realIpHeader
     desc: "HTTP header that contains the client's real IP, before reverse proxying (ie x-real-ip) (MUST be all lower-case)"
@@ -82,6 +82,9 @@ config:
   - name: relay__maxSubsPerConnection
     desc: "Maximum number of subscriptions (concurrent REQs) a connection can have open at any time"
     default: 200
+  - name: relay__maxPendingOutboundBytes
+    desc: "Per-connection cap on unsent outbound bytes buffered inside the websocket library (0 = unlimited). Default 33554432 (32 MiB) aligns with worst-case outbound for one maximal filter under default maxFilterLimit × maxEventSize. Connections exceeding this are terminated to bound memory used by slow/stalled clients."
+    default: 33554432
 
   - name: relay__writePolicy__plugin
     desc: "If non-empty, path to an executable script that implements the writePolicy plugin logic"

@@ -303,6 +303,8 @@ In addition to write-policy plugins, plugins can also be used inside [strfry rou
 
 See the [plugin documentation](https://github.com/hoytech/strfry/blob/master/docs/plugins.md) for details and examples.
 
+See the file [docs/community.md](https://github.com/hoytech/strfry/blob/master/docs/community.md) for a list of community plugins. Please create a PR to add your own!
+
 
 
 
@@ -372,6 +374,8 @@ For details on strfry's architecture, see the [architecture.md](https://github.c
 To report issues or submit pull requests, please visit the [strfry github page](https://github.com/hoytech/strfry).
 
 To chat with the strfry devs and community, please [join our telegram chat](https://t.me/strfry_users).
+
+There is a list of community contributions in [docs/community.md](https://github.com/hoytech/strfry/blob/master/docs/community.md). Please create a PR to add your own!
 
 
 

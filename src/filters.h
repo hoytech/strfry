@@ -5,7 +5,7 @@
 #include "jsonParseUtils.h"
 
 
-struct FilterSetBytes {
+struct FilterSetBytes : NonCopyable {
     struct Item {
         uint16_t offset;
         uint8_t size;
@@ -81,7 +81,7 @@ struct FilterSetBytes {
     }
 };
 
-struct FilterSetUint {
+struct FilterSetUint : NonCopyable {
     std::vector<uint64_t> items;
 
     FilterSetUint(const tao::json::value &arr) {
@@ -108,7 +108,7 @@ struct FilterSetUint {
     }
 };
 
-struct NostrFilter {
+struct NostrFilter : NonCopyable {
     std::optional<FilterSetBytes> ids;
     std::optional<FilterSetBytes> authors;
     std::optional<FilterSetUint> kinds;
@@ -247,35 +247,41 @@ struct NostrFilter {
     }
 };
 
-struct NostrFilterGroup {
+struct NostrFilterGroup : NonCopyable {
     std::vector<NostrFilter> filters;
 
     NostrFilterGroup() {}
 
-    // Note that this expects the full array, so the first two items are "REQ" and the subId
-    NostrFilterGroup(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+    NostrFilterGroup(const tao::json::value &filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+        addFilters(filter, maxFilterLimit);
+    }
+
+    static NostrFilterGroup fromReq(const tao::json::value &req, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         const auto &arr = req.get_array();
         if (arr.size() < 3) throw herr("too small");
 
+        NostrFilterGroup fg;
+
         for (size_t i = 2; i < arr.size(); i++) {
-            filters.emplace_back(arr[i], maxFilterLimit);
-            if (filters.back().neverMatch) filters.pop_back();
+            fg.addFilter(arr[i], maxFilterLimit);
         }
+
+        return fg;
     }
 
-    // FIXME refactor: Make unwrapped the default constructor
-    static NostrFilterGroup unwrapped(tao::json::value filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+    void addFilter(const tao::json::value &filterItem, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
+        filters.emplace_back(filterItem, maxFilterLimit);
+        if (filters.back().neverMatch) filters.pop_back();
+    }
+
+    void addFilters(const tao::json::value &filter, uint64_t maxFilterLimit = cfg().relay__maxFilterLimit) {
         if (!filter.is_array()) {
-            filter = tao::json::value::array({ filter });
+            addFilter(filter, maxFilterLimit);
+        } else {
+            for (const auto &e : filter.get_array()) {
+                addFilter(e, maxFilterLimit);
+            }
         }
-
-        tao::json::value pretendReqQuery = tao::json::value::array({ "REQ", "junkSub" });
-
-        for (auto &e : filter.get_array()) {
-            pretendReqQuery.push_back(e);
-        }
-
-        return NostrFilterGroup(pretendReqQuery, maxFilterLimit);
     }
 
     bool doesMatch(PackedEventView ev) const {
@@ -295,7 +301,7 @@ struct NostrFilterGroup {
     }
 };
 
-struct FilterValidator {
+struct FilterValidator : NonCopyable {
     uint64_t configVer = 0;
     flat_hash_set<uint64_t> allowedKinds;
 
@@ -326,7 +332,10 @@ struct FilterValidator {
     void validate(const NostrFilterGroup &fg) {
         if (!cfg().relay__filterValidation__enabled) return;
 
-        if (configVer != cfg().version()) setupValidator();
+        if (configVer != cfg().version()) {
+            setupValidator();
+            configVer = cfg().version();
+        }
 
         size_t numFilters = fg.filters.size();
         if (numFilters < cfg().relay__filterValidation__minFiltersPerReq ||

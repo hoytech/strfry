@@ -52,9 +52,12 @@ struct PackedEventView {
     void foreachTag(const std::function<bool(char, std::string_view)> &cb) const {
         std::string_view b = buf.substr(88);
 
-        while (b.size()) {
+        while (b.size() >= 2) {
             char tagName = b[0];
             size_t tagLen = (uint8_t)b[1];
+            
+            if (tagLen > b.size() - 2) break;
+
             bool ret = cb(tagName, b.substr(2, tagLen));
             if (!ret) break;
             b = b.substr(2 + tagLen);

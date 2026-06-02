@@ -48,7 +48,7 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
         std::string filterStr = args["<filter>"].asString();
 
         tao::json::value filterJson = tao::json::from_string(filterStr);
-        auto compiledFilter = NostrFilterGroup::unwrapped(filterJson);
+        auto compiledFilter = NostrFilterGroup(filterJson);
 
         if (compiledFilter.filters.size() == 1 && (compiledFilter.filters[0].since != 0 || compiledFilter.filters[0].until != MAX_U64)) {
             throw herr("single filters should not have since/until");

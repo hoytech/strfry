@@ -1,6 +1,15 @@
 name: ubuntu
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ master ]
+    paths-ignore: [ '**.md', 'docs/**' ]
+  pull_request:
+    branches: [ master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ubuntu:
@@ -19,28 +28,9 @@ jobs:
           libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev libsecp256k1-dev libzstd-dev
           git submodule update --init
           make setup-golpe
-          make -j4
+          make -j$(nproc)
           if ! [ -f ./strfry ]; then
              echo "Strfry build failed."
              exit 1
           fi
-
-      - name: Package strfry
-        run: |
-          sudo apt-get install debhelper devscripts -y
-          dpkg-buildpackage --build=binary -us -uc
-          mv ../*.deb .
-          filename=`ls *.deb | grep -v -- -dbgsym`
-          echo "filename=$filename" >> $GITHUB_ENV
-
-      - name: Upload strfry deb
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.filename }}
-          path: ${{ env.filename }}
-
-      - name: Run strfry
-        run: |
-          cat /etc/os-release
-          sudo ./strfry relay &
 

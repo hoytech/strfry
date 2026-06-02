@@ -47,7 +47,7 @@ namespace std {
 
 struct Subscription : NonCopyable {
     Subscription(uint64_t connId_, const std::string &subId_, NostrFilterGroup filterGroup_, bool countOnly_ = false)
-        : connId(connId_), subId(subId_), filterGroup(filterGroup_), countOnly(countOnly_) {}
+        : connId(connId_), subId(subId_), filterGroup(std::move(filterGroup_)), countOnly(countOnly_) {}
 
     // Params
 

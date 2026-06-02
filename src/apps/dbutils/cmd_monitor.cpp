@@ -38,7 +38,7 @@ void cmd_monitor(const std::vector<std::string> &subArgs) {
         auto cmd = msgArr.at(0).get_string();
 
         if (cmd == "sub") {
-            Subscription sub(msgArr.at(1).get_unsigned(), msgArr.at(2).get_string(), NostrFilterGroup::unwrapped(msgArr.at(3)));
+            Subscription sub(msgArr.at(1).get_unsigned(), msgArr.at(2).get_string(), NostrFilterGroup(msgArr.at(3)));
             sub.latestEventId = 0;
             monitors.addSub(txn, std::move(sub), 0);
         } else if (cmd == "removeSub") {

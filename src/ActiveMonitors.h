@@ -101,49 +101,25 @@ struct ActiveMonitors : NonCopyable {
             }
         };
 
-        auto processMonitorsExact = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key, const std::function<bool(const T &)> &matches){
-            auto it = m.upper_bound(key);
-
-            if (it == m.begin()) return;
-            it = std::prev(it);
-
-            while (matches(it->first)) {
-                processMonitorSet(it->second);
-                if (it == m.begin()) break;
-                it = std::prev(it);
-            }
+        // Exact-key lookup only: installLookups keys monitors by id / author / tagSpec /
+        // kind string. Prior code used upper_bound + prev + equality predicate; with
+        // unique btree keys that is equivalent to find() without std::function per call.
+        auto lookupMonitors = [&]<typename T>(btree_map<T, MonitorSet> &m, const T &key) {
+            auto it = m.find(key);
+            if (it != m.end()) processMonitorSet(it->second);
         };
 
         auto packed = PackedEventView(ev.buf);
 
-        {
-            Bytes32 id(packed.id());
-            processMonitorsExact(allIds, id, static_cast<const std::function<bool(const Bytes32&)> &>([&](const Bytes32 &val){
-                return id == val;
-            }));
-        }
-
-        {
-            Bytes32 pubkey(packed.pubkey());
-            processMonitorsExact(allAuthors, pubkey, static_cast<const std::function<bool(const Bytes32&)> &>([&](const Bytes32 &val){
-                return pubkey == val;
-            }));
-        }
+        lookupMonitors(allIds, Bytes32(packed.id()));
+        lookupMonitors(allAuthors, Bytes32(packed.pubkey()));
 
         packed.foreachTag([&](char tagName, std::string_view tagVal){
-            auto &tagSpec = getTagSpec(tagName, tagVal);
-            processMonitorsExact(allTags, tagSpec, static_cast<const std::function<bool(const std::string&)> &>([&](const std::string &val){
-                return tagSpec == val;
-            }));
+            lookupMonitors(allTags, getTagSpec(tagName, tagVal));
             return true;
         });
 
-        {
-            auto kind = packed.kind();
-            processMonitorsExact(allKinds, kind, static_cast<const std::function<bool(const uint64_t&)> &>([&](const uint64_t &val){
-                return kind == val;
-            }));
-        }
+        lookupMonitors(allKinds, packed.kind());
 
         processMonitorSet(allOthers);
 
