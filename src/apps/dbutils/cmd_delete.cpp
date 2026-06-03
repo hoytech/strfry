@@ -5,6 +5,7 @@
 
 #include "DBQuery.h"
 #include "events.h"
+#include "search/SearchProvider.h"
 
 
 static const char USAGE[] =
@@ -73,5 +74,23 @@ void cmd_delete(const std::vector<std::string> &subArgs) {
         deleteEvents(txn, neFilterCache, levIds);
 
         txn.commit();
+    }
+
+    // Remove from search index if search is enabled
+    if (cfg().relay__search__enabled) {
+        auto searchProvider = makeSearchProvider();
+        if (searchProvider && searchProvider->healthy()) {
+            LI << "Removing " << levIds.size() << " events from search index";
+            uint64_t removed = 0;
+            for (uint64_t levId : levIds) {
+                try {
+                    searchProvider->deleteEvent(levId);
+                    removed++;
+                } catch (std::exception &e) {
+                    LE << "Failed to remove event from search index levId=" << levId << ": " << e.what();
+                }
+            }
+            LI << "Removed " << removed << " events from search index";
+        }
     }
 }

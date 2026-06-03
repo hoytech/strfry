@@ -1,0 +1,42 @@
+name: medium
+db:
+  events: 1000000
+  kinds: "1, 30023"
+  avg_event_size: 600
+  keyword_inject_rate: 0.7
+  keywords:
+    - term: nostr
+      weight: 10
+    - term: bitcoin
+      weight: 7
+    - term: lightning
+      weight: 4
+    - term: federation
+      weight: 2
+    - term: "nostr developers"
+      weight: 2
+    - term: "best nostr apps"
+      weight: 1
+server:
+  search_enabled: true
+  search_backend: lmdb
+  config_overrides:
+    relay__logging__dbScanPerf: true
+workload:
+  duration_s: 180
+  warmup_s: 20
+  connections: 200
+  subscriptions_per_conn: 3
+  writers_per_sec: 400
+  req_mix:
+    - type: read
+      filter:
+        kinds: [1]
+        limit: 200
+      weight: 2
+    - type: search
+      filter:
+        kinds: [1]
+        search: "nostr developers"
+        limit: 100
+      weight: 1
