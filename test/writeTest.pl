@@ -347,6 +347,71 @@ doTest({
 
 
 
+## NIP-62: Request to Vanish
+
+doTest({
+    desc => "NIP-62: Vanish blocks re-import of old events",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "vanish" --kind 62 --created-at 6000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "old" --kind 1 --created-at 5500 },
+        qq{--sec $ids->[0]->{sec} --content "new" --kind 1 --created-at 7000 },
+    ],
+    verify => [ 0, 1, 3, ],
+});
+
+doTest({
+    desc => "NIP-62: Vanish does not affect other pubkeys",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "vanish" --kind 62 --created-at 6000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[1]->{sec} --content "hi" --kind 1 --created-at 5000 },
+    ],
+    verify => [ 0, 1, 2, ],
+});
+
+doTest({
+    desc => "NIP-62: Kind 5 cannot delete kind 62",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "vanish" --kind 62 --created-at 5000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "delete" --kind 5 --created-at 6000 -e EV_0 },
+    ],
+    verify => [ 0, 1, ],
+});
+
+doTest({
+    desc => "NIP-62: Multiple vanish requests use max timestamp",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "hi" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "vanish1" --kind 62 --created-at 4000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "between" --kind 1 --created-at 4500 },
+        qq{--sec $ids->[0]->{sec} --content "vanish2" --kind 62 --created-at 6000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "blocked" --kind 1 --created-at 5500 },
+        qq{--sec $ids->[0]->{sec} --content "after" --kind 1 --created-at 7000 },
+    ],
+    verify => [ 0, 1, 2, 3, 5, ],
+});
+
+doTest({
+    desc => "NIP-62: Kind 62 event itself is preserved",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "vanish" --kind 62 --created-at 5000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "vanish2" --kind 62 --created-at 6000 --tag relay "ALL_RELAYS" },
+    ],
+    verify => [ 0, 1, ],
+});
+
+doTest({
+    desc => "NIP-62: Vanish at exact timestamp blocks that timestamp",
+    events => [
+        qq{--sec $ids->[0]->{sec} --content "vanish" --kind 62 --created-at 5000 --tag relay "ALL_RELAYS" },
+        qq{--sec $ids->[0]->{sec} --content "exact" --kind 1 --created-at 5000 },
+        qq{--sec $ids->[0]->{sec} --content "after" --kind 1 --created-at 5001 },
+    ],
+    verify => [ 0, 2, ],
+});
+
+
 print "\nOK\n";
 
 
