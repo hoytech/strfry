@@ -21,7 +21,7 @@ jobs:
         run: |
           git submodule update --init
           make setup-golpe
-          make -j4
+          make -j$(nproc)
           if ! [ -f ./strfry ]; then
              echo "Strfry build failed."
              exit 1
