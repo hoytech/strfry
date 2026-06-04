@@ -80,44 +80,46 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
 
         std::vector<Record> recs;
 
-        auto txn = env.txn_rw(); // FIXME: split this into a read-only phase followed by a write
-        increaseModCounter(txn);
-
-        // Get filter
-
-        std::string filterStr;
-
+        // Read-only phase: fetch filter and collect matching events without
+        // blocking writers.
         {
-            auto view = env.lookup_NegentropyFilter(txn, treeId);
-            if (!view) throw herr("couldn't find treeId: ", treeId);
-            filterStr = view->filter();
+            auto txn = env.txn_ro();
+
+            std::string filterStr;
+
+            {
+                auto view = env.lookup_NegentropyFilter(txn, treeId);
+                if (!view) throw herr("couldn't find treeId: ", treeId);
+                filterStr = view->filter();
+            }
+
+            DBQuery query(tao::json::from_string(filterStr));
+
+            while (1) {
+                bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+                    auto ev = lookupEventByLevId(txn, levId);
+                    auto packed = PackedEventView(ev.buf);
+                    recs.emplace_back(packed.created_at(), packed.id());
+                });
+
+                if (complete) break;
+            }
         }
 
-        // Query all matching events
+        // Write phase: store collected records into the negentropy BTree.
+        {
+            auto txn = env.txn_rw();
+            increaseModCounter(txn);
 
-        DBQuery query(tao::json::from_string(filterStr));
+            negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, treeId);
 
-        while (1) {
-            bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
-                auto ev = lookupEventByLevId(txn, levId);
-                auto packed = PackedEventView(ev.buf);
-                recs.emplace_back(packed.created_at(), packed.id());
-                //memcpy(recs.back().id, packed.id().data(), 32);
-            });
+            for (const auto &r : recs) {
+                storage.insert(r.created_at, r.id.sv());
+            }
 
-            if (complete) break;
+            storage.flush();
+
+            txn.commit();
         }
-
-        // Store events in negentropy tree
-
-        negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, treeId);
-
-        for (const auto &r : recs) {
-            storage.insert(r.created_at, r.id.sv());
-        }
-
-        storage.flush();
-
-        txn.commit();
     }
 }
