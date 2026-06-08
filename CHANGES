@@ -1,4 +1,7 @@
 next
+  * Gate REQ/COUNT/NEG-OPEN behind NIP-42 AUTH for configured kinds via new
+    relay.auth.restrictedReadKinds and relay.auth.restrictReadToInvolvedPubkey
+    config options. Intended for locking down DM reads (kinds 4, 1059).
   * New --print-missing argument for strfry sync. This option tells sync to
     just print out the event IDs that you have and/or need, instead of actually
     trying to transfer them.
