@@ -45,7 +45,12 @@ sub test {
 
     my $redir = $ENV{VERBOSE} ? '' : '2>/dev/null';
 
-    my $cmd = qq{ zstdcat ../nostr-dumps/nostr-wellorder-early-500k-v1.jsonl.zst | head -$num | perl test/syncTest.pl $params $redir};
+    my $cmd = qq{
+    ./strfry --config test/cfgs/test.conf export 2>/dev/null |
+    head -$num |
+    perl test/syncTest.pl $params $redir
+    };
+    
     print "CMD: $cmd\n";
     system($cmd) && die "failed";
     print "\n";

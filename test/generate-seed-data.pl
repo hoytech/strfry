@@ -230,7 +230,7 @@ sub pick_other_user_idx {
 }
 
 sub next_ts {
-    $clock += 1 + rng_int(4);
+    $clock += rng_int(4);
     return $clock;
 }
 

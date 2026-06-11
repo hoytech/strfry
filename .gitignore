@@ -4,5 +4,7 @@
 /strfry
 /strfry-db/*.mdb
 .vscode/*
-/strfry-db-test/
+/strfry-db-test*
 /seeds/
+node_modules/
+.DS_Store
