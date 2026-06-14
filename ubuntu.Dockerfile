@@ -1,10 +1,11 @@
+# syntax=docker/dockerfile:1
 FROM ubuntu:jammy AS build
 
 ENV TZ=Europe/London
 
 WORKDIR /build
 
-RUN apt update && apt install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git g++ make pkg-config libtool ca-certificates \
     libssl-dev zlib1g-dev liblmdb-dev libflatbuffers-dev \
     libsecp256k1-dev libzstd-dev
@@ -12,7 +13,6 @@ RUN apt update && apt install -y --no-install-recommends \
 COPY . .
 
 RUN git submodule update --init
-
 RUN make setup-golpe
 
 RUN --mount=type=cache,target=/build/.cache \
@@ -22,13 +22,24 @@ FROM ubuntu:jammy AS runner
 
 WORKDIR /app
 
-RUN apt update && apt install -y --no-install-recommends \
-    liblmdb0 libflatbuffers1 libsecp256k1-0 libb2-1 libzstd1 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    liblmdb0 \
+    libsecp256k1-0 \
+    libzstd1 \
+    libflatbuffers1 \
+    libb2-1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /build/strfry strfry
-COPY --from=build /build/strfry.conf strfry.conf
-COPY --from=build /build/strfry-db strfry-db
+# Create a non-root user for security
+RUN useradd -m -d /app -s /bin/bash strfry && \
+    chown -R strfry:strfry /app
+
+# Switch to the unprivileged user
+USER strfry
+
+COPY --from=build --chown=strfry:strfry /build/strfry /app/strfry
+COPY --from=build --chown=strfry:strfry /build/strfry.conf /app/strfry.conf
+COPY --from=build --chown=strfry:strfry /build/strfry-db /app/strfry-db
 
 EXPOSE 7777
 
