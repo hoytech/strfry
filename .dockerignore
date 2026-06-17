@@ -1,0 +1,10 @@
+.vscode/
+.cache/
+build/
+strfry
+*.md
+*.Dockerfile
+Dockerfile
+.gitignore
+
+
