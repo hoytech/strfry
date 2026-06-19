@@ -65,11 +65,19 @@ On Debian/Ubuntu use these commands:
 
 FreeBSD has slightly different commands (warning: possibly out of date):
 
-    pkg install -y gcc gmake cmake git perl5 openssl lmdb flatbuffers libuv libinotify zstr secp256k1 zlib-ng
+    pkg install -y gmake git perl5 openssl lmdb flatbuffers libuv secp256k1 zstd
     git clone https://github.com/hoytech/strfry && cd strfry/
     git submodule update --init
     gmake setup-golpe
     gmake -j4
+
+macOS commands (using Homebrew):
+
+    brew install pkg-config libtool openssl zlib lmdb flatbuffers secp256k1 zstd libuv perl
+    git clone https://github.com/hoytech/strfry && cd strfry/
+    git submodule update --init
+    make setup-golpe
+    make -j4
 
 To upgrade strfry, do the following:
 
