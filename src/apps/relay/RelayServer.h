@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <algorithm>
+#include <shared_mutex>
 
 #include <hoytech/time.h>
 #include <hoytech/hex.h>
@@ -213,6 +214,18 @@ struct RelayServer {
 
     void runSignalHandler();
 
+    // Connection tracking
+
+    mutable std::shared_mutex connIdToIpMutex;
+    flat_hash_map<uint64_t, std::string> connIdToIp;
+
+    std::string getIpForConn(uint64_t connId) const {
+        std::shared_lock lock(connIdToIpMutex);
+        auto it = connIdToIp.find(connId);
+        if (it != connIdToIp.end()) return renderIP(it->second);
+        return "unknown";
+    }
+
     // Utils (can be called by any thread)
 
     void sendToConn(uint64_t connId, std::string &&payload) {
@@ -248,7 +261,7 @@ struct RelayServer {
 
     void sendNoticeError(uint64_t connId, std::string &&payload) {
         PROM_INC_RELAY_MSG("NOTICE");
-        LI << "sending error to [" << connId << "]: " << payload;
+        LI << "sending error to [" << connId << " " << getIpForConn(connId) << "]: " << payload;
         auto reply = tao::json::value::array({ "NOTICE", std::string("ERROR: ") + payload });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
         hubTrigger->send();
@@ -256,7 +269,7 @@ struct RelayServer {
 
     void sendClosedError(uint64_t connId, const std::string &subId, std::string &&payload) {
         PROM_INC_RELAY_MSG("CLOSED");
-        LI << "sending closed to [" << connId << "]: " << payload;
+        LI << "sending closed to [" << connId << " " << getIpForConn(connId) << "]: " << payload;
         auto reply = tao::json::value::array({ "CLOSED", subId, std::string("ERROR: ") + payload });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
         hubTrigger->send();
