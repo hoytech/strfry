@@ -6,6 +6,7 @@ on:
     paths-ignore: [ '**.md', 'docs/**' ]
   pull_request:
     branches: [ master ]
+    paths-ignore: [ '**.md', 'docs/**' ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
