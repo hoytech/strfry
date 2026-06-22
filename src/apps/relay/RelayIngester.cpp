@@ -34,7 +34,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             } catch (std::exception &e) {
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("invalid: ") + e.what());
-                                if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
+                                if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event from [" << msg->connId << "/" << renderIP(msg->ipAddr) << "]: " << e.what();
                             }
                         } else if (cmd == "AUTH") {
                             PROM_INC_CLIENT_MSG(cmd);
@@ -55,6 +55,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessReq(txn, rsctx, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
+                                LI << "Bad req from [" << msg->connId << "/" << renderIP(msg->ipAddr) << "]: " << e.what();
                                 if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
                                 else sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
                             }
@@ -65,6 +66,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessClose(txn, msg->connId, arr);
                             } catch (std::exception &e) {
+                                LI << "Bad close from [" << msg->connId << "/" << renderIP(msg->ipAddr) << "]: " << e.what();
                                 sendNoticeError(msg->connId, std::string("bad close: ") + e.what());
                             }
                         } else if (cmd == "NEG-OPEN" || cmd == "NEG-MSG" || cmd == "NEG-CLOSE") {
@@ -74,6 +76,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessNegentropy(txn, msg->connId, arr);
                             } catch (std::exception &e) {
+                                LI << "Negentropy error from [" << msg->connId << "/" << renderIP(msg->ipAddr) << "]: " << e.what();
                                 sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
                         } else {
@@ -86,6 +89,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                         throw herr("unparseable message");
                     }
                 } catch (std::exception &e) {
+                    LI << "Bad msg from [" << msg->connId << "/" << renderIP(msg->ipAddr) << "]: " << e.what();
                     sendNoticeError(msg->connId, std::string("bad msg: ") + e.what());
                 }
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
