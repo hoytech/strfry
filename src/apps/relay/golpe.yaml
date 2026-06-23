@@ -92,6 +92,9 @@ config:
   - name: relay__writePolicy__timeoutSeconds
     desc: "Number of seconds to wait for a plugin to respond"
     default: 10
+  - name: relay__writePolicy__restrictedWrites
+    desc: "NIP-11: Set to \"true\" to advertise restricted_writes, \"false\" to explicitly deny. Empty (default) warns at startup if a plugin is configured but not set."
+    default: ""
 
   - name: relay__compression__enabled
     desc: "Use permessage-deflate compression if supported by client. Reduces bandwidth, but slight increase in CPU"
