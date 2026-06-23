@@ -6,6 +6,9 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     Decompressor decomp;
     QueryScheduler queries;
 
+    // Wire up search provider for NIP-50 support
+    queries.searchProvider = searchProvider.get();
+
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
         if (sub.countOnly) return;
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
