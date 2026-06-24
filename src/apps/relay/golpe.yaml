@@ -21,6 +21,15 @@ config:
   - name: relay__auth__serviceUrl
     desc: "External relay URL (beginning with wss://). Required in order to validate challenge responses."
     default: ""
+  - name: relay__auth__prePlugin
+    desc: "If non-empty, path to an executable script implementing a pre-auth hook plugin"
+    default: ""
+  - name: relay__auth__postPlugin
+    desc: "If non-empty, path to an executable script implementing a post-auth hook plugin"
+    default: ""
+  - name: relay__auth__pluginTimeoutSeconds
+    desc: "Number of seconds to wait for an auth hook plugin response"
+    default: 10
 
   - name: relay__info__name
     desc: "NIP-11: Name of this server. Short/descriptive (< 30 characters)"

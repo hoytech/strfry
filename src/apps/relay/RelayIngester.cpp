@@ -1,6 +1,6 @@
+#include "PluginEventSifter.h"
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
-
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     RelayServerCtx rsctx;
@@ -41,8 +41,9 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAuth: " << msg->payload;
 
                             try {
-                                ingesterProcessAuth(rsctx, msg->connId, arr[1]);
+                                ingesterProcessAuth(rsctx, msg->connId, msg->ipAddr, arr[1]);
                             } catch (std::exception &e) {
+                                PrometheusMetrics::getInstance().authFailureTotal.inc();
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("error: ") + e.what());
                             }
@@ -91,7 +92,9 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
 
-                rsctx.connIdToAuthStatus.erase(connId);
+                PrometheusMetrics::getInstance().authenticatedConnections.dec();
+                rsctx.connIdToAuthSession.erase(connId);
+                
 
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
@@ -153,11 +156,13 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 return;
             }
 
-            auto it = rsctx.connIdToAuthStatus.find(connId);
-            if (it == rsctx.connIdToAuthStatus.end()) {
+            auto it = rsctx.connIdToAuthSession.find(connId);
+
+            if (it == rsctx.connIdToAuthSession.end()) {
                 // we haven't sent an AUTH event for this, so first we generate a challenge for this connection
                 auto challenge = rsctx.challengeGenerator.get();
-                rsctx.connIdToAuthStatus.emplace(connId, challenge);
+                
+                rsctx.connIdToAuthSession.emplace(connId, challenge);
 
                 LI << "[" << connId << "] Protected event, requesting AUTH: " << idHex;
                 sendAuthChallenge(connId, challenge);
@@ -240,8 +245,35 @@ static std::string normalizeRelayUrl(std::string_view url) {
     return result;
 }
 
-void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
+void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, std::string_view ipAddr,const tao::json::value &eventJson) {
     if (cfg().relay__auth__serviceUrl.empty()) throw herr("relay needs serviceUrl to be configured before AUTH can work");
+
+  static thread_local PluginEventSifter preAuthPlugin;
+  static thread_local PluginEventSifter postAuthPlugin;
+
+  auto sourceType =
+      ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
+
+  Bytes32 currAuthed;
+
+  if (auto it = rsctx.connIdToAuthSession.find(connId);
+      it != rsctx.connIdToAuthSession.end() && it->second.isAuthed()) {
+    currAuthed = it->second.authed;
+  }
+
+  {
+    std::string preAuthMsg;
+
+    auto preAuthResult = preAuthPlugin.preAuth(cfg().relay__auth__prePlugin,
+                                               eventJson, sourceType, ipAddr,
+                                               connId, currAuthed, preAuthMsg);
+
+    if (preAuthResult != PluginEventSifterResult::Accept) {
+      if (preAuthMsg.empty())
+        preAuthMsg = "blocked by pre-auth plugin";
+      throw herr(preAuthMsg);
+    }
+  }
 
     std::string packedStr, jsonStr;
     // Note: kind 22242 is ephemeral, so parseAndVerifyEvent() also applies
@@ -252,8 +284,8 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
 
     if (packed.kind() != 22242) throw herr("wrong event kind, expected 22242");
 
-    auto it = rsctx.connIdToAuthStatus.find(connId);
-    if (it == rsctx.connIdToAuthStatus.end()) throw herr("no auth status available for connection");
+    auto it = rsctx.connIdToAuthSession.find(connId);
+    if (it == rsctx.connIdToAuthSession.end()) throw herr("no auth status available for connection");
 
     auto &as = it->second;
 
@@ -280,7 +312,12 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     if (!foundCorrectRelayUrl) throw herr("incorrect or missing relay tag, expected: " + cfg().relay__auth__serviceUrl);
 
     // set the connection as authenticated with this pubkey
-    as.authed = packed.pubkey();
+    as.markAuthed(packed.pubkey());
+
+  postAuthPlugin.postAuth(cfg().relay__auth__postPlugin, eventJson, sourceType, ipAddr, connId, as.authed);
+
+    PrometheusMetrics::getInstance().authSuccessTotal.inc();
+    PrometheusMetrics::getInstance().authenticatedConnections.inc();
 
     LI << "[" << connId << "] AUTHed as " << to_hex(packed.pubkey());
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
