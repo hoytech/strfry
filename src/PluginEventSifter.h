@@ -62,7 +62,8 @@ struct PluginEventSifter {
         }
     };
 
-    std::unique_ptr<RunningPlugin> running; 
+  std::unique_ptr<RunningPlugin> running;
+  uint64_t nextRequestSeq = 1;
 
     PluginEventSifterResult acceptEvent(const std::string &pluginCmd, const tao::json::value &evJson, EventSourceType sourceType, std::string_view sourceInfo, const Bytes32 &authed, std::string &okMsg) {
         if (pluginCmd.size() == 0) {
@@ -70,22 +71,10 @@ struct PluginEventSifter {
             return PluginEventSifterResult::Accept;
         }
 
-        try {
-            if (running) {
-                if (pluginCmd != running->currPluginCmd) {
-                    running.reset();
-                } else if (pluginCmd.find(' ') == std::string::npos) {
-                    struct stat statbuf;
-                    if (stat(pluginCmd.c_str(), &statbuf)) throw herr("couldn't stat plugin: ", pluginCmd);
-                    if (statbuf.st_mtim.tv_sec != running->lastModTime.tv_sec || statbuf.st_mtim.tv_nsec != running->lastModTime.tv_nsec) {
-                        running.reset();
-                    }
-                }
-            }
+    try {
+      ensurePluginRunning(pluginCmd, "write policy");
 
-            if (!running) {
-                setupPlugin(pluginCmd);
-            }
+      auto requestId = makeRequestId();
 
             auto request = tao::json::value({
                 { "type", "new" },
@@ -97,37 +86,9 @@ struct PluginEventSifter {
 
             if (!authed.isNull()) request["authed"] = to_hex(authed.sv());
 
-            std::string output = tao::json::to_string(request);
-            output += "\n";
-
-            try {
-                running->streamWriter.write(output, cfg().relay__writePolicy__timeoutSeconds * 1'000);
-            } catch (std::exception &e) {
-                throw herr("Failed to write event: ", e.what(), ". Request was: ", output);
-            }
-
-            tao::json::value response;
-
-            while (1) {
-                std::string line;
-
-                try {
-                    line = running->streamReader.read(cfg().relay__writePolicy__timeoutSeconds * 1'000);
-                } catch (std::exception &e) {
-                    throw herr("Failed to read response: ", e.what(), ". Request was: ", output);
-                }
-
-                try {
-                    response = tao::json::from_string(line);
-                } catch (std::exception &e) {
-                    LW << "Got unparseable line from write policy plugin: " << line;
-                    continue;
-                }
-
-                if (response.at("id").get_string() != request.at("event").at("id").get_string()) throw herr("id mismatch");
-
-                break;
-            }
+      auto response =
+          callPlugin(pluginCmd, "write policy", request, requestId,
+                     cfg().relay__writePolicy__timeoutSeconds * 1'000);
 
             okMsg = response.optional<std::string>("msg").value_or("");
 
@@ -144,6 +105,97 @@ struct PluginEventSifter {
         }
     }
 
+  PluginEventSifterResult preAuth(const std::string &pluginCmd,
+                                  const tao::json::value &authEventJson,
+                                  EventSourceType sourceType,
+                                  std::string_view sourceInfo, uint64_t connId,
+                                  const Bytes32 &authed, std::string &okMsg) {
+    if (pluginCmd.size() == 0) {
+      running.reset();
+      return PluginEventSifterResult::Accept;
+    }
+
+    try {
+      ensurePluginRunning(pluginCmd, "pre-auth");
+
+      auto requestId = makeRequestId();
+
+      auto request = tao::json::value({
+          {"type", "authPre"},
+          {"id", requestId},
+          {"event", authEventJson},
+          {"receivedAt", ::time(nullptr)},
+          {"sourceType", eventSourceTypeToStr(sourceType)},
+          {"sourceInfo", sourceType == EventSourceType::IP4 ||
+                                 sourceType == EventSourceType::IP6
+                             ? renderIP(sourceInfo)
+                             : sourceInfo},
+          {"connId", connId},
+      });
+
+      if (!authed.isNull())
+        request["authed"] = to_hex(authed.sv());
+
+      auto response =
+          callPlugin(pluginCmd, "pre-auth", request, requestId,
+                     cfg().relay__auth__pluginTimeoutSeconds * 1'000);
+
+      okMsg = response.optional<std::string>("msg").value_or("");
+
+      auto action = response.at("action").get_string();
+      if (action == "accept")
+        return PluginEventSifterResult::Accept;
+      else if (action == "reject")
+        return PluginEventSifterResult::Reject;
+      else if (action == "shadowReject")
+        return PluginEventSifterResult::Reject;
+      else
+        throw herr("unknown action: ", action);
+    } catch (std::exception &e) {
+      LE << "Pre-auth plugin error: " << e.what();
+      running.reset();
+      okMsg = "error: internal error";
+      return PluginEventSifterResult::Reject;
+    }
+  }
+
+  void postAuth(const std::string &pluginCmd,
+                const tao::json::value &authEventJson,
+                EventSourceType sourceType, std::string_view sourceInfo,
+                uint64_t connId, const Bytes32 &authed) {
+    if (pluginCmd.size() == 0) {
+      running.reset();
+      return;
+    }
+
+    try {
+      ensurePluginRunning(pluginCmd, "post-auth");
+
+      auto requestId = makeRequestId();
+
+      auto request = tao::json::value({
+          {"type", "authPost"},
+          {"id", requestId},
+          {"event", authEventJson},
+          {"receivedAt", ::time(nullptr)},
+          {"sourceType", eventSourceTypeToStr(sourceType)},
+          {"sourceInfo", sourceType == EventSourceType::IP4 ||
+                                 sourceType == EventSourceType::IP6
+                             ? renderIP(sourceInfo)
+                             : sourceInfo},
+          {"connId", connId},
+      });
+
+      if (!authed.isNull())
+        request["authed"] = to_hex(authed.sv());
+
+      (void)callPlugin(pluginCmd, "post-auth", request, requestId,
+                       cfg().relay__auth__pluginTimeoutSeconds * 1'000);
+    } catch (std::exception &e) {
+      LE << "Post-auth plugin error: " << e.what();
+      running.reset();
+    }
+  }
 
     struct Pipe : NonCopyable {
         int fds[2] = { -1, -1 };
@@ -169,9 +221,80 @@ struct PluginEventSifter {
         }
     };
 
-  private:
-    void setupPlugin(const std::string &pluginCmd) {
-        LI << "Setting up write policy plugin: " << pluginCmd;
+private:
+  std::string makeRequestId() {
+    return std::to_string(::time(nullptr)) + ":" +
+           std::to_string(nextRequestSeq++);
+  }
+
+  void ensurePluginRunning(const std::string &pluginCmd,
+                           std::string_view pluginName) {
+    if (running) {
+      if (pluginCmd != running->currPluginCmd) {
+        running.reset();
+      } else if (pluginCmd.find(' ') == std::string::npos) {
+        struct stat statbuf;
+        if (stat(pluginCmd.c_str(), &statbuf))
+          throw herr("couldn't stat plugin: ", pluginCmd);
+        if (statbuf.st_mtim.tv_sec != running->lastModTime.tv_sec ||
+            statbuf.st_mtim.tv_nsec != running->lastModTime.tv_nsec) {
+          running.reset();
+        }
+      }
+    }
+
+    if (!running) {
+      setupPlugin(pluginCmd, pluginName);
+    }
+  }
+
+  tao::json::value callPlugin(const std::string &pluginCmd,
+                              std::string_view pluginName,
+                              const tao::json::value &request,
+                              std::string_view requestId, uint64_t timeoutMs) {
+    std::string output = tao::json::to_string(request);
+    output += "\n";
+
+    try {
+      running->streamWriter.write(output, timeoutMs);
+    } catch (std::exception &e) {
+      throw herr("Failed to write to ", pluginName, " plugin: ", e.what(),
+                 ". Request was: ", output);
+    }
+
+    while (1) {
+      std::string line;
+
+      try {
+        line = running->streamReader.read(timeoutMs);
+      } catch (std::exception &e) {
+        throw herr("Failed to read ", pluginName,
+                   " plugin response: ", e.what(), ". Request was: ", output);
+      }
+
+      tao::json::value response;
+
+      try {
+        response = tao::json::from_string(line);
+      } catch (std::exception &) {
+        LW << "Got unparseable line from " << pluginName << " plugin: " << line;
+        continue;
+      }
+
+      if (!response.is_object() || !response.at("id").is_string()) {
+        throw herr("plugin response missing string id");
+      }
+
+      if (response.at("id").get_string() != requestId) {
+        throw herr("plugin response id mismatch");
+      }
+
+      return response;
+    }
+  }
+
+  void setupPlugin(const std::string &pluginCmd, std::string_view pluginName) {
+    LI << "Setting up " << pluginName << " plugin: " << pluginCmd;
 
         Pipe outPipe;
         Pipe inPipe;

@@ -177,11 +177,10 @@ struct RelayServer {
     void runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr);
 
     void runIngester(ThreadPool<MsgIngester>::Thread &thr);
-    void ingesterProcessEvent(lmdb::txn &txn, uint64_t connId, flat_hash_map<uint64_t, AuthSession*> &connIdToAuthStatus, std::string ipAddr, secp256k1_context *secpCtx, const tao::json::value &origJson, std::vector<MsgWriter> &output);
     void ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, std::string ipAddr, const tao::json::value &origJson, std::vector<MsgWriter> &output);
     void ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr);
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr);
-    void ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson);
+    void ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, std::string_view ipAddr, const tao::json::value &eventJson);
     void ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
 
     void runWriter(ThreadPool<MsgWriter>::Thread &thr);

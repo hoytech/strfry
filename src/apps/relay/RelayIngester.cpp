@@ -1,6 +1,6 @@
+#include "PluginEventSifter.h"
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
-
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     RelayServerCtx rsctx;
@@ -41,7 +41,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAuth: " << msg->payload;
 
                             try {
-                                ingesterProcessAuth(rsctx, msg->connId, arr[1]);
+                                ingesterProcessAuth(rsctx, msg->connId, msg->ipAddr, arr[1]);
                             } catch (std::exception &e) {
                                 PrometheusMetrics::getInstance().authFailureTotal.inc();
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
@@ -245,8 +245,35 @@ static std::string normalizeRelayUrl(std::string_view url) {
     return result;
 }
 
-void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson) {
+void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, std::string_view ipAddr,const tao::json::value &eventJson) {
     if (cfg().relay__auth__serviceUrl.empty()) throw herr("relay needs serviceUrl to be configured before AUTH can work");
+
+  static thread_local PluginEventSifter preAuthPlugin;
+  static thread_local PluginEventSifter postAuthPlugin;
+
+  auto sourceType =
+      ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
+
+  Bytes32 currAuthed;
+
+  if (auto it = rsctx.connIdToAuthSession.find(connId);
+      it != rsctx.connIdToAuthSession.end() && it->second.isAuthed()) {
+    currAuthed = it->second.authed;
+  }
+
+  {
+    std::string preAuthMsg;
+
+    auto preAuthResult = preAuthPlugin.preAuth(cfg().relay__auth__prePlugin,
+                                               eventJson, sourceType, ipAddr,
+                                               connId, currAuthed, preAuthMsg);
+
+    if (preAuthResult != PluginEventSifterResult::Accept) {
+      if (preAuthMsg.empty())
+        preAuthMsg = "blocked by pre-auth plugin";
+      throw herr(preAuthMsg);
+    }
+  }
 
     std::string packedStr, jsonStr;
     // Note: kind 22242 is ephemeral, so parseAndVerifyEvent() also applies
@@ -286,6 +313,9 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
 
     // set the connection as authenticated with this pubkey
     as.markAuthed(packed.pubkey());
+
+  postAuthPlugin.postAuth(cfg().relay__auth__postPlugin, eventJson, sourceType, ipAddr, connId, as.authed);
+
     PrometheusMetrics::getInstance().authSuccessTotal.inc();
     PrometheusMetrics::getInstance().authenticatedConnections.inc();
 
