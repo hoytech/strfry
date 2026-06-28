@@ -171,6 +171,7 @@ struct AuthStatus {
 struct RelayServerCtx {
     secp256k1_context *secpCtx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     FilterValidator filterValidator;
+    ReadAuthGate readAuthGate;
     SessionToken::Generator challengeGenerator;
     flat_hash_map<uint64_t, AuthStatus> connIdToAuthStatus;
 };
@@ -199,7 +200,10 @@ struct RelayServer {
     void ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr);
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr);
     void ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson);
-    void ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &origJson);
+
+    // Returns rejection reason for REQ/COUNT/NEG-OPEN, or empty if allowed.
+    std::string checkReadAuth(RelayServerCtx &rsctx, uint64_t connId, const NostrFilterGroup &fg);
 
     void runWriter(ThreadPool<MsgWriter>::Thread &thr);
 
@@ -258,6 +262,20 @@ struct RelayServer {
         PROM_INC_RELAY_MSG("CLOSED");
         LI << "sending closed to [" << connId << "]: " << payload;
         auto reply = tao::json::value::array({ "CLOSED", subId, std::string("ERROR: ") + payload });
+        tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
+        hubTrigger->send();
+    }
+
+    void sendClosed(uint64_t connId, const std::string &subId, std::string_view reason) {
+        PROM_INC_RELAY_MSG("CLOSED");
+        auto reply = tao::json::value::array({ "CLOSED", subId, std::string(reason) });
+        tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
+        hubTrigger->send();
+    }
+
+    void sendNegErr(uint64_t connId, const std::string &subId, std::string_view reason) {
+        PROM_INC_RELAY_MSG("NEG-ERR");
+        auto reply = tao::json::value::array({ "NEG-ERR", subId, std::string(reason) });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
         hubTrigger->send();
     }
