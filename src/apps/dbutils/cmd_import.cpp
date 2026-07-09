@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 
 #include <iostream>
 
 #include <docopt.h>
 #include "golpe.h"
 
+#include "PackedEvent.h"
 #include "WriterPipeline.h"
 
 
@@ -29,6 +31,8 @@ EventToWrite parseFried(std::string_view lineSv) {
     if (!std::string_view(line).substr(0, i + 1).ends_with(",\"fried\":\"")) throw herr("fried parse error");
 
     std::string packed = from_hex(std::string_view(line).substr(i + 1, line.size() - i - 3));
+    if (packed.size() < PACKED_EVENT_HEADER_SIZE) throw herr("fried packed too short");
+    friedSwapEndianInPlace(packed);
 
     line[i - 9] = '}';
     line.resize(i - 8);
@@ -76,8 +80,6 @@ void cmd_import(const std::vector<std::string> &subArgs) {
         std::string_view line(buf, (size_t)numRead-1);
 
         if (fried) {
-            if (std::endian::native != std::endian::little) throw herr("--fried currently only supported on little-endian CPUs"); // FIXME
-
             try {
                 writer.write(parseFried(line));
             } catch (std::exception &e) {
