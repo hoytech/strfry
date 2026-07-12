@@ -1,8 +1,15 @@
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#include <io.h>
+#define isatty _isatty
+#define fileno _fileno
+#else
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <unistd.h>
+#endif
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
 
 #include <iostream>
 
@@ -16,6 +23,14 @@
 
 
 void onPreStartup(int argc, char **argv) {
+#ifdef _WIN32
+    WSADATA wsaData;
+    int wsaResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (wsaResult != 0) {
+        std::cerr << "WSAStartup failed: " << wsaResult << std::endl;
+        ::exit(1);
+    }
+#else
     if (getuid() == 0) {
         if (isatty(fileno(stderr))) {
             std::cerr << "\x1b[1;35mWARNING: Running as root is not recommended\x1b[0m" << std::endl;
@@ -23,6 +38,7 @@ void onPreStartup(int argc, char **argv) {
             std::cerr << "WARNING: Running as root is not recommended" << std::endl;
         }
     }
+#endif
 
     if (argc > 1) return;
 
@@ -78,6 +94,7 @@ static void dbCheck(lmdb::txn &txn, const std::string &cmd) {
 }
 
 static void setRLimits() {
+#ifndef _WIN32
     if (!cfg().relay__nofiles) return;
     struct rlimit curr;
 
@@ -101,6 +118,7 @@ static void setRLimits() {
 #endif
 
     if (setrlimit(RLIMIT_NOFILE, &curr)) throw herr("Failed setting NOFILES limit to ", cfg().relay__nofiles, ": ", strerror(errno));
+#endif
 }
 
 

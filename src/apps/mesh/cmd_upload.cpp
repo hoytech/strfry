@@ -5,6 +5,45 @@
 
 #include "golpe.h"
 
+#ifdef _WIN32
+#include <io.h>
+inline ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
+    if (lineptr == NULL || n == NULL || stream == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (*lineptr == NULL || *n == 0) {
+        *n = 128;
+        *lineptr = (char *)malloc(*n);
+        if (*lineptr == NULL) {
+            return -1;
+        }
+    }
+    size_t count = 0;
+    int c;
+    while ((c = fgetc(stream)) != EOF) {
+        if (count + 1 >= *n) {
+            size_t new_len = *n * 2;
+            char *new_ptr = (char *)realloc(*lineptr, new_len);
+            if (new_ptr == NULL) {
+                return -1;
+            }
+            *lineptr = new_ptr;
+            *n = new_len;
+        }
+        (*lineptr)[count++] = c;
+        if (c == '\n') {
+            break;
+        }
+    }
+    if (count == 0 && c == EOF) {
+        return -1;
+    }
+    (*lineptr)[count] = '\0';
+    return count;
+}
+#endif
+
 #include "WSConnection.h"
 
 

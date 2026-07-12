@@ -25,14 +25,20 @@ export XLDFLAGS  += $(BREW_LIBS)
 endif
 INCS += -Iexternal/negentropy/cpp
 
-build/StrfryTemplates.h: $(shell find src/tmpls/ -type f -name '*.tmpl')
-	PERL5LIB=golpe/vendor/ perl golpe/external/templar/templar.pl src/tmpls/ strfrytmpl $@
+build/StrfryTemplates.h: $(wildcard src/tmpls/*.tmpl)
+	perl -Igolpe/vendor golpe/external/templar/templar.pl src/tmpls/ strfrytmpl $@
 
 src/apps/relay/RelayWebsocket.o: build/StrfryTemplates.h
 
-.PHONY: test-subid
-test-subid: build/subid_tests
-	build/subid_tests
+ifeq ($(OS),Windows_NT)
+    TEST_BIN = build/subid_tests.exe
+else
+    TEST_BIN = build/subid_tests
+endif
 
-build/subid_tests: test/SubIdTests.cpp build/golpe.h
+.PHONY: test-subid
+test-subid: $(TEST_BIN)
+	$(TEST_BIN)
+
+$(TEST_BIN): test/SubIdTests.cpp build/golpe.h
 	$(CXX) $(CXXFLAGS) $(INCS) $< -o $@
