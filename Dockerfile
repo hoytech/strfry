@@ -47,9 +47,16 @@ RUN \
     libressl \
   && rm -rf /var/cache/apk/*
 
-COPY --from=build /build/strfry strfry
-COPY --from=build /build/strfry.conf strfry.conf
-COPY --from=build /build/strfry-db strfry-db
+# Create a non-root user for security
+RUN adduser -D -h /app -s /bin/sh strfry && \
+    chown -R strfry:strfry /app
+
+# Switch to the unprivileged user
+USER strfry
+
+COPY --from=build --chown=strfry:strfry /build/strfry /app/strfry
+COPY --from=build --chown=strfry:strfry /build/strfry.conf /app/strfry.conf
+COPY --from=build --chown=strfry:strfry /build/strfry-db /app/strfry-db
 
 EXPOSE 7777
 
