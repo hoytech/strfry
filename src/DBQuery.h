@@ -101,6 +101,9 @@ struct DBScan : NonCopyable {
     uint64_t nextInitIndex = 0;
     uint64_t approxWork = 0;
 
+    std::deque<CandidateEvent> refillBuffer;
+    std::deque<CandidateEvent> mergeBuffer;
+
     DBScan(const NostrFilter &f) : f(f) {
         indexOnly = f.indexOnlyScans;
 
@@ -268,12 +271,13 @@ struct DBScan : NonCopyable {
             cursors[ev.scanIndex()].outstanding--;
 
             if (cursors[ev.scanIndex()].outstanding == 0) {
-                std::deque<CandidateEvent> moreEvents;
-                std::deque<CandidateEvent> newEventQueue;
-                approxWork += cursors[ev.scanIndex()].collect(txn, *this, ev.scanIndex(), refillScanDepth, moreEvents);
+                refillBuffer.clear();
+                mergeBuffer.clear();
 
-                std::merge(eventQueue.begin(), eventQueue.end(), moreEvents.begin(), moreEvents.end(), std::back_inserter(newEventQueue), cmp);
-                eventQueue.swap(newEventQueue);
+                approxWork += cursors[ev.scanIndex()].collect(txn, *this, ev.scanIndex(), refillScanDepth, refillBuffer);
+
+                std::merge(eventQueue.begin(), eventQueue.end(), refillBuffer.begin(), refillBuffer.end(), std::back_inserter(mergeBuffer), cmp);
+                eventQueue.swap(mergeBuffer);
             }
         }
     }
