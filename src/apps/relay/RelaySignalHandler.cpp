@@ -17,7 +17,7 @@ void RelayServer::runSignalHandler() {
 
         if (sig == SIGUSR1) {
             tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::GracefulShutdown{}});
-            hubTrigger->send();
+            if (hubTrigger) hubTrigger->send();
         } else {
             LW << "Got unexpected signal: " << sig;
         }
