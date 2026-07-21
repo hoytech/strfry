@@ -72,7 +72,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
                             try {
-                                ingesterProcessNegentropy(txn, msg->connId, arr);
+                                ingesterProcessNegentropy(txn, rsctx, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
@@ -219,6 +219,11 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
         throw herr("filter validation failed: ", e.what());
     }
 
+    if (auto reason = checkReadAuth(rsctx, connId, filterGroup); !reason.empty()) {
+        sendClosed(connId, outSubIdStr, reason);
+        return;
+    }
+
     Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
@@ -286,7 +291,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 
-void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr) {
     const auto &vals = arr.get_array();
 
     if (vals.size() < 2) throw herr("negentropy query missing elements");
@@ -303,6 +308,12 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
         NostrFilterGroup filter(filterJson, maxFilterLimit);
+
+        if (auto reason = checkReadAuth(rsctx, connId, filter); !reason.empty()) {
+            sendNegErr(connId, subscriptionStr, reason);
+            return;
+        }
+
         Subscription sub(connId, subscriptionStr, std::move(filter));
 
         filterJson.get_object().erase("since");
@@ -322,4 +333,35 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
     } else {
         throw herr("unknown command");
     }
+}
+
+std::string RelayServer::checkReadAuth(RelayServerCtx &rsctx, uint64_t connId, const NostrFilterGroup &fg) {
+    rsctx.readAuthGate.ensureSetup();
+    if (rsctx.readAuthGate.empty()) return "";
+    if (!rsctx.readAuthGate.isGroupRestricted(fg)) return "";
+
+    if (!cfg().relay__auth__enabled || cfg().relay__auth__serviceUrl.empty()) {
+        LI << "[" << connId << "] restricted read kind requested but relay has no usable AUTH configuration";
+        return "blocked: restricted kind requires AUTH but relay has no serviceUrl configured";
+    }
+
+    auto it = rsctx.connIdToAuthStatus.find(connId);
+    if (it == rsctx.connIdToAuthStatus.end()) {
+        auto challenge = rsctx.challengeGenerator.get();
+        rsctx.connIdToAuthStatus.emplace(connId, challenge);
+        sendAuthChallenge(connId, challenge);
+        return "auth-required: restricted kind requires authentication";
+    }
+
+    const auto &as = it->second;
+    if (!as.isAuthed()) {
+        return "auth-required: restricted kind requires authentication";
+    }
+
+    if (cfg().relay__auth__restrictReadToInvolvedPubkey &&
+        !rsctx.readAuthGate.authedInvolvedInAllRestrictedFilters(fg, as.authed)) {
+        return "restricted: must include authenticated pubkey in authors or #p tag";
+    }
+
+    return "";
 }
