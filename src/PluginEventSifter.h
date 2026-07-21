@@ -179,6 +179,7 @@ struct PluginEventSifter {
         pid_t pid;
         const char * const argv[] = { "/bin/sh", "-c", pluginCmd.c_str(), nullptr, };
 
+        // FIXME: currently leaks. Should call posix_spawn_file_actions_destroy in a RAII wrapper
         posix_spawn_file_actions_t file_actions;
 
         if (
