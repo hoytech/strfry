@@ -34,7 +34,7 @@ struct FilterSetBytes : NonCopyable {
         for (size_t i = 0; i < arr.size(); i++) {
             const auto &item = arr[i];
             if (i > 0 && item == arr[i - 1]) continue; // remove duplicates
-            items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), (uint8_t)item[0] });
+            items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), item.empty() ? (uint8_t)0 : (uint8_t)item[0] });
             buf += item;
         }
 
