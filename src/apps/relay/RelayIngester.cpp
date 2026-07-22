@@ -94,7 +94,6 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
 
                 PrometheusMetrics::getInstance().authenticatedConnections.dec();
                 rsctx.connIdToAuthSession.erase(connId);
-                
 
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
@@ -224,6 +223,18 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
         throw herr("filter validation failed: ", e.what());
     }
 
+    if (filterGroup.includesDMKind()){
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        if (it == rsctx.connIdToAuthSession.end()) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            LI << "[" << connId << "] Requesting initial AUTH";
+            sendAuthChallenge(connId, challenge);
+            sendClosedError(connId, outSubIdStr, "auth-required: DM filter requires authentication");
+            return;
+        }
+    }
+
     Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
@@ -286,6 +297,8 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
 
     // set the connection as authenticated with this pubkey
     as.markAuthed(packed.pubkey());
+    tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::SetAuth{connId, packed.pubkey()}});
+    tpReqMonitor.dispatch(connId, MsgReqMonitor{MsgReqMonitor::SetAuth{connId, packed.pubkey()}});
     PrometheusMetrics::getInstance().authSuccessTotal.inc();
     PrometheusMetrics::getInstance().authenticatedConnections.inc();
 

@@ -1,13 +1,21 @@
 #include "RelayServer.h"
 #include "QueryScheduler.h"
+#include "DMFilter.h"
 
 
 void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     Decompressor decomp;
     QueryScheduler queries;
+    flat_hash_map<uint64_t, Bytes32> connIdToAuthedPubkey;
 
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
         if (sub.countOnly) return;
+        auto it = connIdToAuthedPubkey.find(sub.connId);
+        Bytes32 subscriberAuthedPubkey = it == connIdToAuthedPubkey.end() ? Bytes32() : it->second;
+        if (!DMFilter::shouldSendToSubscriber(eventPayload, subscriberAuthedPubkey)) {
+            return; 
+        }
+        
         sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
     };
 
@@ -48,10 +56,13 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
                 }
 
                 queries.process(txn);
+            } else if (auto msg = std::get_if<MsgReqWorker::SetAuth>(&newMsg.msg)) {
+                connIdToAuthedPubkey[msg->connId] = msg->authed;
             } else if (auto msg = std::get_if<MsgReqWorker::RemoveSub>(&newMsg.msg)) {
                 queries.removeSub(msg->connId, msg->subId);
                 tpReqMonitor.dispatch(msg->connId, MsgReqMonitor{MsgReqMonitor::RemoveSub{msg->connId, msg->subId}});
             } else if (auto msg = std::get_if<MsgReqWorker::CloseConn>(&newMsg.msg)) {
+                connIdToAuthedPubkey.erase(msg->connId);
                 queries.closeConn(msg->connId);
                 tpReqMonitor.dispatch(msg->connId, MsgReqMonitor{MsgReqMonitor::CloseConn{msg->connId}});
             }

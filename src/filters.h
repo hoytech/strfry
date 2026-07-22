@@ -292,6 +292,14 @@ struct NostrFilterGroup : NonCopyable {
         return false;
     }
 
+    bool includesDMKind() const {
+        for (const auto &f : filters) {
+            if (!f.kinds) return true;
+            if (f.kinds->doesMatch(4) || f.kinds->doesMatch(1059)) return true;
+        }
+        return false;
+    }
+
     size_t size() const {
         return filters.size();
     }
