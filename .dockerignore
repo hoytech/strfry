@@ -1,10 +1,21 @@
 .vscode/
 .cache/
+**/.cache/
 build/
+**/build/
 strfry
+strfry-db*
+**/strfry-db*
+node_modules/
+**/*.o
+**/*.d
+**/*.a
+**/*.so
+**/*_test
+**/timer_test
+**/zerocopy_test
 *.md
 *.Dockerfile
 Dockerfile
 .gitignore
-
 

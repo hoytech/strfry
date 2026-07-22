@@ -8,3 +8,5 @@
 /seeds/
 node_modules/
 .DS_Store
+__pycache__/
+*.pyc
