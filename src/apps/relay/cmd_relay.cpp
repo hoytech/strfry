@@ -29,6 +29,10 @@ static void checkConfig() {
     if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
         LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";
     }
+
+    if (!cfg().relay__writePolicy__plugin.empty() && cfg().relay__writePolicy__restrictedWrites.empty()) {
+        LW << "A writePolicy.plugin is configured but writePolicy.restrictedWrites is not set. Set it to true or false in strfry.conf to advertise the correct NIP-11 limitation.";
+    }
 }
 
 
