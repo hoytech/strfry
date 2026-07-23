@@ -14,6 +14,7 @@ class WSConnection : NonCopyable {
     uS::Async *hubTrigger = nullptr;
 
     uWS::WebSocket<uWS::CLIENT> *currWs = nullptr;
+    uS::Timer *reconnectTimer = nullptr; // pending non-blocking reconnect scheduled by scheduleReconnect()
 
 
   public:
@@ -38,7 +39,7 @@ class WSConnection : NonCopyable {
     std::string remoteAddr;
 
     ~WSConnection() {
-        if (hubGroup || hubTrigger || currWs) LW << "WSConnection destroyed before close";
+        if (hubGroup || hubTrigger || currWs || reconnectTimer) LW << "WSConnection destroyed before close";
     }
 
     void close() {
@@ -83,10 +84,12 @@ class WSConnection : NonCopyable {
     // it). Deferring via a non-blocking uS::Timer keeps the loop clock accurate.
     void scheduleReconnect(uint64_t delay) {
         if (shutdown) return;
-        uS::Timer *timer = new uS::Timer(hub.getLoop());
-        timer->setData(this);
-        timer->start([](uS::Timer *t){
+        if (reconnectTimer) return; // a reconnect is already pending; don't stack another timer
+        reconnectTimer = new uS::Timer(hub.getLoop());
+        reconnectTimer->setData(this);
+        reconnectTimer->start([](uS::Timer *t){
             WSConnection *self = (WSConnection *) t->getData();
+            self->reconnectTimer = nullptr;
             t->stop();
             t->close();
             self->connectNow();
@@ -218,6 +221,12 @@ class WSConnection : NonCopyable {
         if (currWs) {
             currWs->terminate();
             currWs = nullptr;
+        }
+
+        if (reconnectTimer) {
+            reconnectTimer->stop();
+            reconnectTimer->close();
+            reconnectTimer = nullptr;
         }
     }
 };
