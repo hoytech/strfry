@@ -147,6 +147,11 @@ struct MsgNegentropy : NonCopyable {
         std::string negPayload;
     };
 
+    struct SetAuth {
+        uint64_t connId;
+        Bytes32 authed;
+    };
+
     struct NegClose {
         uint64_t connId;
         SubId subId;
@@ -156,7 +161,7 @@ struct MsgNegentropy : NonCopyable {
         uint64_t connId;
     };
 
-    using Var = std::variant<NegOpen, NegMsg, NegClose, CloseConn>;
+    using Var = std::variant<NegOpen, SetAuth, NegMsg, NegClose, CloseConn>;
     Var msg;
     MsgNegentropy(Var &&msg_) : msg(std::move(msg_)) {}
 };
@@ -192,7 +197,7 @@ struct RelayServer {
     void ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr, bool countOnly, std::string &outSubIdStr);
     void ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr);
     void ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &eventJson);
-    void ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &origJson);
+    void ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &origJson);
 
     void runWriter(ThreadPool<MsgWriter>::Thread &thr);
 

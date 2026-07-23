@@ -1,6 +1,6 @@
 #include "RelayServer.h"
 #include "QueryScheduler.h"
-#include "DMFilter.h"
+#include "ReadRestrictor.h"
 
 
 void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
@@ -12,7 +12,7 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
         if (sub.countOnly) return;
         auto it = connIdToAuthedPubkey.find(sub.connId);
         Bytes32 subscriberAuthedPubkey = it == connIdToAuthedPubkey.end() ? Bytes32() : it->second;
-        if (!DMFilter::shouldSendToSubscriber(eventPayload, subscriberAuthedPubkey)) {
+        if (!ReadRestrictor::shouldSendToSubscriber(eventPayload, subscriberAuthedPubkey)) {
             return; 
         }
         

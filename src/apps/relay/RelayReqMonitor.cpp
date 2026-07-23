@@ -1,7 +1,7 @@
 #include "RelayServer.h"
 
 #include "ActiveMonitors.h"
-#include "DMFilter.h"
+#include "ReadRestrictor.h"
 
 
 
@@ -37,7 +37,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                 env.foreach_Event(txn, [&](auto &ev){
                     PackedEventView packed(ev.buf);
                     if (msg->sub.filterGroup.doesMatch(packed)) {
-                        if (DMFilter::shouldSendToSubscriber(packed, connAuthedPubkey)) {
+                        if (ReadRestrictor::shouldSendToSubscriber(packed, connAuthedPubkey)) {
                             sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
                         }
                     }
@@ -61,12 +61,12 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                 env.foreach_Event(txn, [&](auto &ev){
                     monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
                         PackedEventView packed(ev.buf);
-                        if (packed.kind() == 4 || packed.kind() == 1059) {
+                        if (ReadRestrictor::restrictedKinds.contains(packed.kind())) {
                             RecipientList filteredRecipients;
                             for (const auto &recipient : recipients) {
                                 auto it = connIdToAuthedPubkey.find(recipient.connId);
                                 Bytes32 authedPubkey = it == connIdToAuthedPubkey.end() ? Bytes32() : it->second;
-                                if (DMFilter::shouldSendToSubscriber(packed, authedPubkey)) {
+                                if (ReadRestrictor::shouldSendToSubscriber(packed, authedPubkey)) {
                                     filteredRecipients.emplace_back(recipient);
                                 }
                             }

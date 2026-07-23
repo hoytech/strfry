@@ -1,5 +1,6 @@
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
+#include "ReadRestrictor.h"
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
@@ -73,7 +74,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
                             try {
-                                ingesterProcessNegentropy(txn, msg->connId, arr);
+                                ingesterProcessNegentropy(txn, rsctx, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
@@ -223,14 +224,14 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
         throw herr("filter validation failed: ", e.what());
     }
 
-    if (filterGroup.includesDMKind()){
+    if (ReadRestrictor::includesRestrictedKind(filterGroup)) {
         auto it = rsctx.connIdToAuthSession.find(connId);
         if (it == rsctx.connIdToAuthSession.end()) {
             auto challenge = rsctx.challengeGenerator.get();
             rsctx.connIdToAuthSession.emplace(connId, challenge);
             LI << "[" << connId << "] Requesting initial AUTH";
             sendAuthChallenge(connId, challenge);
-            sendClosedError(connId, outSubIdStr, "auth-required: DM filter requires authentication");
+            sendClosedError(connId, outSubIdStr, "auth-required: requested filter requires authentication");
             return;
         }
     }
@@ -306,7 +307,7 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 
-void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr) {
     const auto &vals = arr.get_array();
 
     if (vals.size() < 2) throw herr("negentropy query missing elements");
@@ -323,6 +324,24 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
         NostrFilterGroup filter(filterJson, maxFilterLimit);
+
+        if(ReadRestrictor::includesRestrictedKind(filter)){
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        if (it == rsctx.connIdToAuthSession.end()) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            LI << "[" << connId << "] Requesting initial AUTH";
+            sendAuthChallenge(connId, challenge);
+            PROM_INC_RELAY_MSG("NEG-ERR");
+            sendToConn(connId, tao::json::to_string(tao::json::value::array({
+                "NEG-ERR",
+                subscriptionStr,
+                "auth-required: requested filter requires authentication"
+            })));
+            return;
+        }
+        }
+
         Subscription sub(connId, subscriptionStr, std::move(filter));
 
         filterJson.get_object().erase("since");
