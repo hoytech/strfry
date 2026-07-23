@@ -10,3 +10,11 @@ node_modules/
 .DS_Store
 __pycache__/
 *.pyc
+bench/alloc_tracker.so
+bench/allocs.txt
+bench/perf.txt
+bench/det_new.json
+bench/det_old.json
+bench/test_seed.jsonl
+benchmark_comparison.md
+benchmark_report*.md
