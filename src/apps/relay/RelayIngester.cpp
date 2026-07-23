@@ -1,5 +1,6 @@
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
+#include "ReadRestrictor.h"
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
@@ -43,6 +44,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessAuth(rsctx, msg->connId, arr[1]);
                             } catch (std::exception &e) {
+                                PrometheusMetrics::getInstance().authFailureTotal.inc();
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("error: ") + e.what());
                             }
@@ -72,7 +74,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             if (!cfg().relay__negentropy__enabled) throw herr("negentropy disabled");
 
                             try {
-                                ingesterProcessNegentropy(txn, msg->connId, arr);
+                                ingesterProcessNegentropy(txn, rsctx, msg->connId, arr);
                             } catch (std::exception &e) {
                                 sendNoticeError(msg->connId, std::string("negentropy error: ") + e.what());
                             }
@@ -91,7 +93,8 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
 
-                rsctx.connIdToAuthStatus.erase(connId);
+                PrometheusMetrics::getInstance().authenticatedConnections.dec();
+                rsctx.connIdToAuthSession.erase(connId);
 
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});
                 tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::CloseConn{connId}});
@@ -153,11 +156,13 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
                 return;
             }
 
-            auto it = rsctx.connIdToAuthStatus.find(connId);
-            if (it == rsctx.connIdToAuthStatus.end()) {
+            auto it = rsctx.connIdToAuthSession.find(connId);
+
+            if (it == rsctx.connIdToAuthSession.end()) {
                 // we haven't sent an AUTH event for this, so first we generate a challenge for this connection
                 auto challenge = rsctx.challengeGenerator.get();
-                rsctx.connIdToAuthStatus.emplace(connId, challenge);
+                
+                rsctx.connIdToAuthSession.emplace(connId, challenge);
 
                 LI << "[" << connId << "] Protected event, requesting AUTH: " << idHex;
                 sendAuthChallenge(connId, challenge);
@@ -219,6 +224,18 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
         throw herr("filter validation failed: ", e.what());
     }
 
+    if (ReadRestrictor::includesRestrictedKind(filterGroup)) {
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        if (it == rsctx.connIdToAuthSession.end()) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            LI << "[" << connId << "] Requesting initial AUTH";
+            sendAuthChallenge(connId, challenge);
+            sendClosedError(connId, outSubIdStr, "auth-required: requested filter requires authentication");
+            return;
+        }
+    }
+
     Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
@@ -252,8 +269,8 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
 
     if (packed.kind() != 22242) throw herr("wrong event kind, expected 22242");
 
-    auto it = rsctx.connIdToAuthStatus.find(connId);
-    if (it == rsctx.connIdToAuthStatus.end()) throw herr("no auth status available for connection");
+    auto it = rsctx.connIdToAuthSession.find(connId);
+    if (it == rsctx.connIdToAuthSession.end()) throw herr("no auth status available for connection");
 
     auto &as = it->second;
 
@@ -280,13 +297,17 @@ void RelayServer::ingesterProcessAuth(RelayServerCtx &rsctx, uint64_t connId, co
     if (!foundCorrectRelayUrl) throw herr("incorrect or missing relay tag, expected: " + cfg().relay__auth__serviceUrl);
 
     // set the connection as authenticated with this pubkey
-    as.authed = packed.pubkey();
+    as.markAuthed(packed.pubkey());
+    tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::SetAuth{connId, packed.pubkey()}});
+    tpReqMonitor.dispatch(connId, MsgReqMonitor{MsgReqMonitor::SetAuth{connId, packed.pubkey()}});
+    PrometheusMetrics::getInstance().authSuccessTotal.inc();
+    PrometheusMetrics::getInstance().authenticatedConnections.inc();
 
     LI << "[" << connId << "] AUTHed as " << to_hex(packed.pubkey());
     sendOKResponse(connId, to_hex(packed.id()), true, "successfully authenticated");
 }
 
-void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
+void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsctx, uint64_t connId, const tao::json::value &arr) {
     const auto &vals = arr.get_array();
 
     if (vals.size() < 2) throw herr("negentropy query missing elements");
@@ -303,6 +324,24 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, uint64_t connId, con
         if (!filterJson.is_object()) throw herr("negentropy filter must be an object");
 
         NostrFilterGroup filter(filterJson, maxFilterLimit);
+
+        if(ReadRestrictor::includesRestrictedKind(filter)){
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        if (it == rsctx.connIdToAuthSession.end()) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            LI << "[" << connId << "] Requesting initial AUTH";
+            sendAuthChallenge(connId, challenge);
+            PROM_INC_RELAY_MSG("NEG-ERR");
+            sendToConn(connId, tao::json::to_string(tao::json::value::array({
+                "NEG-ERR",
+                subscriptionStr,
+                "auth-required: requested filter requires authentication"
+            })));
+            return;
+        }
+        }
+
         Subscription sub(connId, subscriptionStr, std::move(filter));
 
         filterJson.get_object().erase("since");

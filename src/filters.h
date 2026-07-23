@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.h"
+#include "global.h"
 #include "golpe.h"
 
 #include "jsonParseUtils.h"
@@ -292,6 +294,14 @@ struct NostrFilterGroup : NonCopyable {
         return false;
     }
 
+    bool includesDMKind() const {
+        for (const auto &f : filters) {
+            if (!f.kinds) return true;
+            if (f.kinds->doesMatch(4) || f.kinds->doesMatch(1059)) return true;
+        }
+        return false;
+    }
+
     size_t size() const {
         return filters.size();
     }
@@ -306,27 +316,7 @@ struct FilterValidator : NonCopyable {
     flat_hash_set<uint64_t> allowedKinds;
 
     void setupValidator() {
-        allowedKinds.clear();
-
-        std::string allowedKindsStr = cfg().relay__filterValidation__allowedKinds;
-
-        if (!allowedKindsStr.empty()) {
-            size_t pos = 0;
-            while (pos < allowedKindsStr.size()) {
-                size_t nextComma = allowedKindsStr.find(',', pos);
-                if (nextComma == std::string::npos) nextComma = allowedKindsStr.size();
-
-                std::string kindStr = allowedKindsStr.substr(pos, nextComma - pos);
-                size_t start = kindStr.find_first_not_of(" \t");
-                size_t end = kindStr.find_last_not_of(" \t");
-                if (start != std::string::npos && end != std::string::npos) {
-                    kindStr = kindStr.substr(start, end - start + 1);
-                    if (!kindStr.empty()) allowedKinds.insert(std::stoull(kindStr));
-                }
-
-                pos = nextComma + 1;
-            }
-        }
+       parseCommaSeparatedKinds(cfg().relay__filterValidation__allowedKinds, allowedKinds);
     }
 
     void validate(const NostrFilterGroup &fg) {

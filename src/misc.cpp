@@ -12,7 +12,7 @@
 #include <openssl/sha.h>
 
 #include "golpe.h"
-
+#include "global.h"
 
 
 
@@ -126,4 +126,26 @@ void exitOnSigPipe() {
     memset(&act, 0, sizeof act);
     act.sa_sigaction = [](int, siginfo_t*, void*){ ::exit(1); };
     if (sigaction(SIGPIPE, &act, nullptr)) throw herr("couldn't run sigaction(): ", strerror(errno));
+}
+
+
+void parseCommaSeparatedKinds(std::string_view str, flat_hash_set<uint64_t> &out) {
+    out.clear();
+    if (str.empty()) return;
+
+    size_t pos = 0;
+    while (pos < str.size()) {
+        size_t nextComma = str.find(',', pos);
+        if (nextComma == std::string::npos) nextComma = str.size();
+
+        std::string_view kindStr = str.substr(pos, nextComma - pos);
+        size_t start = kindStr.find_first_not_of(" \t");
+        size_t end = kindStr.find_last_not_of(" \t");
+        if (start != std::string::npos && end != std::string::npos) {
+            kindStr = kindStr.substr(start, end - start + 1);
+            if (!kindStr.empty()) out.insert(std::stoull(std::string(kindStr)));
+        }
+
+        pos = nextComma + 1;
+    }
 }
