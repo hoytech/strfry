@@ -61,11 +61,12 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         if (!newEvents.size()) continue;
 
         // Do write
+        std::vector<uint64_t> deletedLevIds;
 
         try {
             auto t0 = std::chrono::steady_clock::now();
             auto txn = env.txn_rw();
-            writeEvents(txn, neFilterCache, newEvents);
+            writeEvents(txn, neFilterCache, newEvents, 1, &deletedLevIds);
             txn.commit();
             auto t1 = std::chrono::steady_clock::now();
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -86,6 +87,33 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
             }
 
             continue;
+        }
+
+        // Index events for search (NIP-50)
+        // Always index and run search when provider exists, regardless of healthy() status
+        // healthy() only gates NIP-11 advertisement
+        if (searchProvider) {
+            flat_hash_set<uint64_t> deletedSet(deletedLevIds.begin(), deletedLevIds.end());
+
+            for (auto &newEvent : newEvents) {
+                if (newEvent.status == EventWriteStatus::Written && !deletedSet.contains(newEvent.levId)) {
+                    PackedEventView packed(newEvent.packedStr);
+                    try {
+                        searchProvider->indexEvent(newEvent.levId, newEvent.jsonStr, packed.kind(), packed.created_at());
+                    } catch (std::exception &e) {
+                        // Don't fail writes if indexing fails, just log
+                        LE << "Search indexing failed for levId=" << newEvent.levId << ": " << e.what();
+                    }
+                }
+            }
+
+            for (uint64_t levId : deletedSet) {
+                try {
+                    searchProvider->deleteEvent(levId);
+                } catch (std::exception &e) {
+                    LE << "Search delete failed for levId=" << levId << ": " << e.what();
+                }
+            }
         }
 
         // Log

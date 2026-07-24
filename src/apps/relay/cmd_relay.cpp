@@ -4,6 +4,7 @@
 #include <docopt.h>
 
 #include "RelayServer.h"
+#include "search/LmdbSearchProvider.h"
 
 
 static const char USAGE[] =
@@ -48,6 +49,12 @@ void RelayServer::run() {
         if (s != 0) throw herr("Unable to set sigmask: ", strerror(errno));
     }
 
+    // Initialize search provider (NIP-50)
+    searchProvider = makeSearchProvider();
+    LI << "Search provider initialized: backend=" << cfg().relay__search__backend
+       << " enabled=" << cfg().relay__search__enabled
+       << " healthy=" << searchProvider->healthy();
+
     tpWebsocket.init("Websocket", 1, [this](auto &thr){
         runWebsocket(thr);
     });
@@ -80,6 +87,17 @@ void RelayServer::run() {
         runSignalHandler();
     });
 
+    // Start search catch-up indexer if LMDB backend is enabled
+    if (cfg().relay__search__enabled && cfg().relay__search__backend == "lmdb") {
+        auto *lmdbProvider = dynamic_cast<LmdbSearchProvider*>(searchProvider.get());
+        if (lmdbProvider) {
+            searchIndexerRunning = true;
+            searchIndexerThread = std::thread([this, lmdbProvider]{
+                lmdbProvider->runCatchupIndexer(searchIndexerRunning);
+            });
+        }
+    }
+
     // Monitor for config file reloads
 
     checkConfig();
@@ -99,4 +117,11 @@ void RelayServer::run() {
 
 
     tpWebsocket.join();
+
+    // Shutdown search indexer thread if running
+    if (searchIndexerThread.joinable()) {
+        searchIndexerRunning = false;
+        searchIndexerThread.join();
+        LI << "Search indexer thread shutdown complete";
+    }
 }

@@ -248,8 +248,8 @@ static bool isEventABeforeEventB(const PackedEventView &a, const PackedEventView
     return a.created_at() < b.created_at() || (a.created_at() == b.created_at() && a.id() > b.id());
 }
 
-
-void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, bool logDeletions) {
+void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vector<EventToWrite> &evs, uint64_t logLevel, std::vector<uint64_t> *outDeletedLevIds) {
+    bool logDeletions = logLevel > 0;
     std::sort(evs.begin(), evs.end(), [](auto &a, auto &b) {
         auto aC = a.createdAt();
         auto bC = b.createdAt();
@@ -384,6 +384,10 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                     if (!evToDel) continue; // already deleted
                     updateNegentropy(PackedEventView(evToDel->buf), false);
                     deleteEventBasic(txn, levId);
+
+                    if (outDeletedLevIds) {
+                        outDeletedLevIds->push_back(levId);
+                    }
                 }
 
                 levIdsToDelete.clear();
