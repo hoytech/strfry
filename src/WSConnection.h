@@ -14,6 +14,7 @@ class WSConnection : NonCopyable {
     uS::Async *hubTrigger = nullptr;
 
     uWS::WebSocket<uWS::CLIENT> *currWs = nullptr;
+    uS::Timer *reconnectTimer = nullptr; // pending non-blocking reconnect scheduled by scheduleReconnect()
 
 
   public:
@@ -38,7 +39,7 @@ class WSConnection : NonCopyable {
     std::string remoteAddr;
 
     ~WSConnection() {
-        if (hubGroup || hubTrigger || currWs) LW << "WSConnection destroyed before close";
+        if (hubGroup || hubTrigger || currWs || reconnectTimer) LW << "WSConnection destroyed before close";
     }
 
     void close() {
@@ -64,14 +65,44 @@ class WSConnection : NonCopyable {
         if (hubTrigger) hubTrigger->send();
     }
 
+    // Perform the actual connection attempt. Must run on the websocket (hub) thread.
+    void connectNow() {
+        if (shutdown) return;
+        LI << "Attempting to connect to " << url;
+        hub.connect(url, nullptr, {}, 5000, hubGroup);
+    }
+
+    // Schedule a reconnect after `delay` ms WITHOUT blocking the event loop.
+    // Previously doConnect() did std::this_thread::sleep_for(delay), which blocks the
+    // hub thread that also runs the uv loop. That stalls the loop's cached clock by
+    // `delay` ms; the subsequent hub.connect() then arms its connection-timeout timer
+    // against the stale clock, so the timer is already expired and fires immediately on
+    // the next loop tick, tearing the freshly-connected socket down before the WS
+    // handshake completes. The very first connect used doConnect(0) (no sleep) so it
+    // worked, but every reconnect after a disconnect wedged permanently (the process
+    // keeps retrying and failing forever, never exiting, so a supervisor never restarts
+    // it). Deferring via a non-blocking uS::Timer keeps the loop clock accurate.
+    void scheduleReconnect(uint64_t delay) {
+        if (shutdown) return;
+        if (reconnectTimer) return; // a reconnect is already pending; don't stack another timer
+        reconnectTimer = new uS::Timer(hub.getLoop());
+        reconnectTimer->setData(this);
+        reconnectTimer->start([](uS::Timer *t){
+            WSConnection *self = (WSConnection *) t->getData();
+            self->reconnectTimer = nullptr;
+            t->stop();
+            t->close();
+            self->connectNow();
+        }, delay, 0);
+    }
+
     void run() {
         hubGroup = hub.createGroup<uWS::CLIENT>(uWS::PERMESSAGE_DEFLATE | uWS::SLIDING_DEFLATE_WINDOW);
 
         auto doConnect = [&](uint64_t delay = 0){
-            if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
             if (shutdown) return;
-            LI << "Attempting to connect to " << url;
-            hub.connect(url, nullptr, {}, 5000, hubGroup);
+            if (delay) scheduleReconnect(delay);
+            else connectNow();
         };
 
 
@@ -190,6 +221,12 @@ class WSConnection : NonCopyable {
         if (currWs) {
             currWs->terminate();
             currWs = nullptr;
+        }
+
+        if (reconnectTimer) {
+            reconnectTimer->stop();
+            reconnectTimer->close();
+            reconnectTimer = nullptr;
         }
     }
 };
