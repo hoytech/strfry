@@ -12,6 +12,10 @@ let ids = [
     sec: "a0b459d9ff90e30dc9d1749b34c4401dfe80ac2617c7732925ff994e8d5203ff",
     pub: "cc49e2a58373abc226eee84bee9ba954615aa2ef1563c4f955a74c4606a3b1fa",
   },
+  {
+    sec: "3bf1d347477a4f8d2e6a3b1c9d5e7f0a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e",
+    pub: "e83f7c58291be6a4d05c13f78a2e94b61d37c085f4a2960db51c8ef73a41d9f2",
+  },
 ];
 
 function addEvent(evInput) {
@@ -49,8 +53,8 @@ function doTest(spec) {
   const eventIds = [];
 
   for (const ev of spec.events) {
-    ev.pub = ev.from === 1 ? ids[1].pub : ids[0].pub;
-    ev.sec = ev.from === 1 ? ids[1].sec : ids[0].sec;
+    ev.pub = ids[ev.from || 0].pub;
+    ev.sec = ids[ev.from || 0].sec;
 
     // deep clone
     const e = JSON.parse(JSON.stringify(ev));
@@ -108,6 +112,7 @@ function doTest(spec) {
 const d = (v) => ["d", v];
 const e = (v) => ["e", v];
 const a = (v) => ["a", v];
+const p = (v) => ["p", v];
 
 doTest({
   desc: "Basic insert",
@@ -542,6 +547,94 @@ doTest({
       content: "hi",
       kind: 30003,
       created_at: 5000,
+    },
+  ],
+  verify: [1],
+});
+
+// ---- NIP-59 GIFT WRAP TESTS ----
+
+doTest({
+  desc: "Gift wrap recipient can delete",
+  events: [
+    {
+      content: "wrapped",
+      kind: 1059,
+      created_at: 5000,
+      tags: [p(ids[1].pub)],
+    },
+    {
+      from: 1,
+      content: "",
+      kind: 5,
+      created_at: 6000,
+      tags: [e("EV_0")],
+    },
+  ],
+  verify: [1],
+});
+
+doTest({
+  desc: "Gift wrap deletion prevents re-add",
+  events: [
+    {
+      content: "wrapped",
+      kind: 1059,
+      created_at: 5000,
+      tags: [p(ids[1].pub)],
+    },
+    {
+      from: 1,
+      content: "",
+      kind: 5,
+      created_at: 6000,
+      tags: [e("EV_0")],
+    },
+    {
+      content: "wrapped",
+      kind: 1059,
+      created_at: 5000,
+      tags: [p(ids[1].pub)],
+    },
+  ],
+  verify: [1],
+});
+
+doTest({
+  desc: "Non-recipient can't delete gift wrap",
+  events: [
+    {
+      content: "wrapped",
+      kind: 1059,
+      created_at: 5000,
+      tags: [p(ids[1].pub)],
+    },
+    {
+      from: 2,
+      content: "",
+      kind: 5,
+      created_at: 6000,
+      tags: [e("EV_0")],
+    },
+  ],
+  verify: [0, 1],
+});
+
+doTest({
+  desc: "Ephemeral gift wrap (21059) recipient can delete",
+  events: [
+    {
+      content: "wrapped",
+      kind: 21059,
+      created_at: 5000,
+      tags: [p(ids[1].pub)],
+    },
+    {
+      from: 1,
+      content: "",
+      kind: 5,
+      created_at: 6000,
+      tags: [e("EV_0")],
     },
   ],
   verify: [1],
