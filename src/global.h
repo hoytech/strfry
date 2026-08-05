@@ -18,5 +18,6 @@ uint64_t parseUint64(const std::string &s);
 std::string parseIP(const std::string &ip);
 uint64_t getDBVersion(lmdb::txn &txn);
 void exitOnSigPipe();
+void parseCommaSeparatedKinds(std::string_view str, flat_hash_set<uint64_t> &out); 
 
 extern lmdb::dbi negentropyDbi;

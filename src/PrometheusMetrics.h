@@ -109,6 +109,12 @@ public:
     Gauge activeConnections;
     Counter slowClientTerminations;
 
+    // AUTH metrics
+    Counter authChallengesSentTotal;
+    Counter authSuccessTotal;
+    Counter authFailureTotal;
+    Gauge authenticatedConnections;
+
     // Generate Prometheus text format output
     std::string render() const {
         std::ostringstream out;
@@ -166,6 +172,23 @@ public:
         out << "# HELP strfry_slow_client_terminations_total Connections closed for exceeding relay.maxPendingOutboundBytes\n";
         out << "# TYPE strfry_slow_client_terminations_total counter\n";
         out << "strfry_slow_client_terminations_total " << slowClientTerminations.get() << "\n";
+
+        // AUTH metrics
+        out << "# HELP strfry_auth_challenges_sent_total AUTH challenges sent to clients\n";
+        out << "# TYPE strfry_auth_challenges_sent_total counter\n";
+        out << "strfry_auth_challenges_sent_total " << authChallengesSentTotal.get() << "\n";
+
+        out << "# HELP strfry_auth_success_total Successful AUTH responses\n";
+        out << "# TYPE strfry_auth_success_total counter\n";
+        out << "strfry_auth_success_total " << authSuccessTotal.get() << "\n";
+
+        out << "# HELP strfry_auth_failure_total Failed AUTH responses\n";
+        out << "# TYPE strfry_auth_failure_total counter\n";
+        out << "strfry_auth_failure_total " << authFailureTotal.get() << "\n";
+
+        out << "# HELP strfry_authenticated_connections_current Current number of AUTHed connections\n";
+        out << "# TYPE strfry_authenticated_connections_current gauge\n";
+        out << "strfry_authenticated_connections_current " << authenticatedConnections.get() << "\n";
 
         return out.str();
     }
