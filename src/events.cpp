@@ -276,6 +276,23 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 continue;
             }
 
+            // NIP-59: a gift wrap is signed by a random key, so its recipient (p-tag) may have
+            // deleted it via NIP-09. Block re-publication if such a deletion is on record.
+            if (packed.kind() == 1059 || packed.kind() == 21059) {
+                bool recipientDeleted = false;
+                packed.foreachTag([&](char tagName, std::string_view tagVal){
+                    if (tagName == 'p' && env.lookup_Event__deletion(txn, std::string(packed.id()) + std::string(tagVal))) {
+                        recipientDeleted = true;
+                        return false;
+                    }
+                    return true;
+                });
+                if (recipientDeleted) {
+                    ev.status = EventWriteStatus::Deleted;
+                    continue;
+                }
+            }
+
             if (isReplaceableKind(packed.kind()) || isParamReplaceableKind(packed.kind())) {
                 std::optional<std::string> replace;
 
@@ -332,9 +349,27 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 packed.foreachTag([&](char tagName, std::string_view tagVal){
                     if (tagName == 'e') {
                         auto otherEv = lookupEventById(txn, tagVal);
-                        if (otherEv && PackedEventView(otherEv->buf).pubkey() == packed.pubkey()) {
-                            if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
-                            levIdsToDelete.push_back(otherEv->primaryKeyId);
+                        if (otherEv) {
+                            auto otherPacked = PackedEventView(otherEv->buf);
+                            bool canDelete = otherPacked.pubkey() == packed.pubkey();
+
+                            // NIP-59: gift wraps (kind 1059/21059) are signed by a random one-time-use
+                            // key, so the recipient is never the author. Per NIP-59, relays SHOULD delete
+                            // such events whose p-tag matches the signer of a NIP-09 deletion.
+                            if (!canDelete && (otherPacked.kind() == 1059 || otherPacked.kind() == 21059)) {
+                                otherPacked.foreachTag([&](char otherTagName, std::string_view otherTagVal){
+                                    if (otherTagName == 'p' && otherTagVal == packed.pubkey()) {
+                                        canDelete = true;
+                                        return false;
+                                    }
+                                    return true;
+                                });
+                            }
+
+                            if (canDelete) {
+                                if (logDeletions) LI << "Deleting event (kind 5, e-tag). id=" << to_hex(tagVal);
+                                levIdsToDelete.push_back(otherEv->primaryKeyId);
+                            }
                         }
                     } else if (tagName == 'a') {
                         try { // parsing a-tag can fail
