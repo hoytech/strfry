@@ -11,8 +11,10 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
         if (sub.countOnly) return;
         auto it = connIdToAuthedPubkey.find(sub.connId);
+        auto ev = lookupEventByLevId(txn, levId);
+        PackedEventView packed(ev.buf);
         Bytes32 subscriberAuthedPubkey = it == connIdToAuthedPubkey.end() ? Bytes32() : it->second;
-        if (!ReadRestrictor::shouldSendToSubscriber(PackedEventView(eventPayload), subscriberAuthedPubkey)) {
+        if (!ReadRestrictor::shouldSendToSubscriber(packed, subscriberAuthedPubkey)) {
             return; 
         }
         
