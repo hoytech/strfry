@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import { buildEvent } from "./events.js";
+import { buildEvent } from "../utils/events.js";
 
 let ids = [
   {

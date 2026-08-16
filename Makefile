@@ -34,5 +34,5 @@ src/apps/relay/RelayWebsocket.o: build/StrfryTemplates.h
 test-subid: build/subid_tests
 	build/subid_tests
 
-build/subid_tests: test/SubIdTests.cpp build/golpe.h
+build/subid_tests: test/tests/SubIdTests.cpp build/golpe.h
 	$(CXX) $(CXXFLAGS) $(INCS) $< -o $@

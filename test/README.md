@@ -4,9 +4,8 @@ Tests should be run from the *root* of the project.
 
 ## Tests for event writing, including replacements, deletions, etc:
 
-    perl test/writeTest.pl
+    node test/writeTest.js
 
-Note that this script relies on [`nostril`](https://github.com/jb55/nostril) being installed in your path.
 
 ## Fuzz tests
 

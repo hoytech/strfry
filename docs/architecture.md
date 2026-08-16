@@ -154,7 +154,7 @@ The query engine is the most complicated part of the relay, so there is a differ
 
 To bootstrap the tests, we load in a set of [real-world nostr events](https://wiki.wellorder.net/wiki/nostr-datasets/).
 
-There is a simple but inefficient filter implementation in `test/dumbFilter.pl` that can be used to check if an event matches a filter. In a loop, we randomly generate a complicated filter group and pipe the entire DB's worth of events through the dumb filter and record which events it matched. Next, we perform the query using strfry's query engine (using a `strfry scan`) and ensure it matches. This gives us confidence that querying for "old" records in the DB will be performed correctly.
+There is a simple but inefficient filter implementation in `test/utils/dumbFilter.pl` that can be used to check if an event matches a filter. In a loop, we randomly generate a complicated filter group and pipe the entire DB's worth of events through the dumb filter and record which events it matched. Next, we perform the query using strfry's query engine (using a `strfry scan`) and ensure it matches. This gives us confidence that querying for "old" records in the DB will be performed correctly.
 
 Next, we need to verify that monitoring for "new" records will function also. For this, in a loop we create a set of hundreds of random filters and install them in the monitoring engine. One of which is selected as a sample. The entire DB's worth of events is "posted to the relay" (actually just iterated over in the DB using `strfry monitor`), and we record which events were matched. This is then compared against a full-DB scan using the same query.
 
