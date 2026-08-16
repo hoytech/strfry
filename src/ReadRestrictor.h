@@ -86,7 +86,7 @@ public:
 
     // Returns true if the event should be sent to the subscriber
     static bool shouldSendToSubscriber(const PackedEventView &packed, const Bytes32 &subscriberAuthedPubkey) {
-        if (!(restrictedKinds().contains(packed.kind()) && cfg().relay__auth__restrictReadToInvolvedPubkey)) {
+        if (!restrictedKinds().contains(packed.kind())) {
             return true;
         }
 
@@ -94,22 +94,21 @@ public:
             return false;
         }
 
-        Bytes32 recipientPubkey;
-        bool foundRecipient = false;
+        if(!cfg().relay__auth__restrictReadToInvolvedPubkey) return true;
+
+        bool involved = subscriberAuthedPubkey == packed.pubkey();
 
         packed.foreachTag([&](char tagName, std::string_view tagVal) {
             if (tagName == 'p' && tagVal.size() == 32) {
-                recipientPubkey = Bytes32(tagVal);
-                foundRecipient = true;
-                return false;
+                if (subscriberAuthedPubkey == Bytes32(tagVal)) {
+                    involved = true;
+                    return false;
+                }
             }
+
             return true;
         });
 
-        if (!foundRecipient) {
-            return false;
-        }
-
-        return subscriberAuthedPubkey == recipientPubkey || subscriberAuthedPubkey == packed.pubkey();
+        return involved;
     }
 };
