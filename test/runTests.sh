@@ -17,6 +17,11 @@ node "./test/tests/writeTest.js" \
   && pass "./test/tests/writeTest.js" \
   || fail "./test/tests/writeTest.js failed"
 
+info "running restricted read tests..."
+
+node "./test/tests/readRestrictTest.js" \
+  && pass "./test/tests/readRestrictTest.js" \
+  || fail "./test/tests/readRestrictTest.js failed"
 
 info "Seeding events..."
 

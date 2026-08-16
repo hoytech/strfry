@@ -2,63 +2,17 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { buildEvent } from "../utils/events.js";
-
-let ids = [
-  {
-    sec: "c1eee22f68dc218d98263cfecb350db6fc6b3e836b47423b66c62af7ae3e32bb",
-    pub: "003ba9b2c5bd8afeed41a4ce362a8b7fc3ab59c25b6a1359cae9093f296dac01",
-  },
-  {
-    sec: "a0b459d9ff90e30dc9d1749b34c4401dfe80ac2617c7732925ff994e8d5203ff",
-    pub: "cc49e2a58373abc226eee84bee9ba954615aa2ef1563c4f955a74c4606a3b1fa",
-  },
-  {
-    sec: "3bf1d347477a4f8d2e6a3b1c9d5e7f0a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e",
-    pub: "e83f7c58291be6a4d05c13f78a2e94b61d37c085f4a2960db51c8ef73a41d9f2",
-  },
-];
-
-function addEvent(evInput) {
-  const event = buildEvent(evInput);
-
-  spawnSync(
-    "./strfry",
-    ["--config", "test/cfgs/writeTest.conf", "import", "--no-verify"],
-    {
-      input: JSON.stringify(event) + "\n",
-      encoding: "utf-8",
-      stdio: ["pipe", "ignore", "ignore"],
-    },
-  );
-
-  if (process.env.DUMP_EVENTS) {
-    console.log(event);
-  }
-
-  return event.id;
-}
-
-function cleanDb() {
-  const dir = path.join(process.cwd(), "strfry-db-test");
-  const file = path.join(dir, "data.mdb");
-  mkdirSync(dir, { recursive: true });
-  rmSync(file, { force: true });
-}
+import { cleanDb, addEvent, runStrfry } from "../utils/relay.js";
+import ids from "../utils/dummyIds.json" with { type: "json" };
 
 function doTest(spec) {
   console.log("*", spec.desc || "unnamed");
 
-  cleanDb();
+  cleanDb(path.join(process.cwd(), "strfry-db-test"));
 
   const eventIds = [];
 
   for (const ev of spec.events) {
-    ev.pub = ids[ev.from || 0].pub;
-    ev.sec = ids[ev.from || 0].sec;
-
-    // deep clone
-    const e = JSON.parse(JSON.stringify(ev));
-
     const replaceEV = (v) => {
       if (typeof v === "string") {
         return v.replace(/EV_(\d+)/g, (_, i) => eventIds[Number(i)]);
@@ -70,9 +24,9 @@ function doTest(spec) {
       return v;
     };
 
-    replaceEV(e);
+    replaceEV(ev);
 
-    const id = addEvent(e);
+    const id = addEvent("test/cfgs/writeTest.conf", ev).id;
     eventIds.push(id);
   }
 
@@ -84,11 +38,7 @@ function doTest(spec) {
     }
   }
 
-  const result = spawnSync(
-    "./strfry",
-    ["--config", "test/cfgs/writeTest.conf", "export"],
-    { encoding: "utf-8" },
-  );
+  const result = runStrfry(["--config", "test/cfgs/writeTest.conf", "export"]);
 
   if (result.error) throw result.error;
 

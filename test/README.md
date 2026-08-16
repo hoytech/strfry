@@ -6,6 +6,9 @@ Tests should be run from the *root* of the project.
 
     node test/writeTest.js
 
+## Restricted read tests (REQ/COUNT/negentropy + ReadRestrictor logic):
+
+    node test/readRestrictTest.js
 
 ## Fuzz tests
 
