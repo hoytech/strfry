@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { buildEvent } from "./events.js";
-import { waitForRelay } from "./websocketClient.js";
+import { waitForRelay, openWebSocket, WsClient } from "./websocketClient.js";
 import ids from "./dummyIds.json" with { type: "json" };
 
 let ts = 1_700_000_000;
@@ -54,7 +54,6 @@ export function addEvent(configPath, evInput) {
 }
 
 export async function runRelaySuite({
-  config,
   relayConfigPath,
   relayPort,
   relayDbPath,
@@ -63,7 +62,6 @@ export async function runRelaySuite({
   const wsUrl = `ws://127.0.0.1:${relayPort}`;
 
   cleanDb(relayDbPath);
-  writeConfig(config, relayConfigPath);
   addEvent(relayConfigPath, { kind: 1, from: 0, content: "seed-public" });
   addEvent(relayConfigPath, {
     kind: 4,
@@ -84,14 +82,18 @@ export async function runRelaySuite({
     relayLogs += d.toString();
   });
 
+  let client;
   try {
     await waitForRelay(wsUrl);
-    await tests({ wsUrl, relayConfigPath });
+    const ws = await openWebSocket(wsUrl);
+    client = new WsClient(ws);
+    await tests({ wsUrl, client });
   } catch (e) {
     throw new Error(
       `${String(e && e.message ? e.message : e)}\n\nRelay logs:\n${relayLogs}`,
     );
   } finally {
+    if (client) await client.close();
     relayProc.kill("SIGTERM");
     await Promise.race([
       new Promise((resolve) => relayProc.once("exit", resolve)),
