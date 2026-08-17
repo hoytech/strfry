@@ -49,10 +49,13 @@ public:
 
     static bool isFilterAllowedToCount(const NostrFilterGroup &fg, Bytes32 pubkey) {
         if (restrictedKinds().empty()) return true;
+
+        bool pubkeyIsNull = pubkey.isNull();
+
         for (const auto &f: fg.filters) {
             if (!f.kinds) continue;
             bool hasSomeRestrictedKind = false;
-            for(size_t i = 0; i<f.kinds->size(); ++i) {
+            for (size_t i = 0; i < f.kinds->size(); ++i) {
                 uint64_t kind = f.kinds->at(i);
                 if (restrictedKinds().contains(kind)) {
                     hasSomeRestrictedKind = true;
@@ -60,8 +63,11 @@ public:
                 }
             }
             if (hasSomeRestrictedKind) {
-                if (pubkey.isNull()) {
+                if (pubkeyIsNull) {
                     return false;
+                }
+                if (!cfg().relay__auth__restrictReadToInvolvedPubkey) {
+                    continue;
                 }
                 bool authorScoped = f.authors && allPubkeysMatch(*f.authors, pubkey);
                 bool pScoped = false;

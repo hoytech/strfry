@@ -225,27 +225,34 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
     }
 
     auto it = rsctx.connIdToAuthSession.find(connId);
-    bool isAuthed = (it != rsctx.connIdToAuthSession.end());
-    bool requiresAuth = false;
+    bool hasSession = it != rsctx.connIdToAuthSession.end();
+    bool isAuthed = hasSession && !it->second.authed.isNull();
+    bool shouldRejectReq = false;
 
     if (countOnly) {
         // COUNT can't be filtered per event, so a restricted-kind filter must be
         // scoped to the client's own pubkeys via authors/#p.
-        requiresAuth = !ReadRestrictor::isFilterAllowedToCount(filterGroup, isAuthed ? it->second.authed : Bytes32());
+        shouldRejectReq = !ReadRestrictor::isFilterAllowedToCount(filterGroup, isAuthed ? it->second.authed : Bytes32());
     } else {
         // if the filter group contains no filter that has a kind that is not restricted,
         // that means an unauthenticated client won't be able to see anything
         if (ReadRestrictor::isFilterGroupFullyRestricted(filterGroup)) {
-            requiresAuth = !isAuthed;
+            shouldRejectReq = !isAuthed;
         }
     }
 
-    if (requiresAuth) {
-        auto challenge = rsctx.challengeGenerator.get();
-        rsctx.connIdToAuthSession.emplace(connId, challenge);
-        LI << "[" << connId << "] Requesting initial AUTH";
-        sendAuthChallenge(connId, challenge);
-        sendClosedError(connId, outSubIdStr, "auth-required: requested filter requires authentication");
+    if (shouldRejectReq) {
+        if (!hasSession) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            LI << "[" << connId << "] Requesting initial AUTH";
+            sendAuthChallenge(connId, challenge);
+            sendClosedError(connId, outSubIdStr, "auth-required: requested filter requires authentication");
+        } else if (countOnly && isAuthed) {
+            sendClosedError(connId, outSubIdStr, "count-failed: can only count events you are involved in");
+        } else {
+            sendClosedError(connId, outSubIdStr, "auth-required: requested filter requires authentication");
+        }
         return;
     }
 
@@ -342,11 +349,15 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsct
         // that means an unauthenticated client won't be able to see anything
         if (ReadRestrictor::isFilterGroupFullyRestricted(filter)) {
             auto it = rsctx.connIdToAuthSession.find(connId);
-            if (it == rsctx.connIdToAuthSession.end()) {
-                auto challenge = rsctx.challengeGenerator.get();
-                rsctx.connIdToAuthSession.emplace(connId, challenge);
-                LI << "[" << connId << "] Requesting initial AUTH";
-                sendAuthChallenge(connId, challenge);
+            bool hasSession = it != rsctx.connIdToAuthSession.end();
+            bool isAuthed = hasSession && !it->second.authed.isNull();
+            if (!isAuthed) {
+                if (!hasSession) {
+                    auto challenge = rsctx.challengeGenerator.get();
+                    rsctx.connIdToAuthSession.emplace(connId, challenge);
+                    LI << "[" << connId << "] Requesting initial AUTH";
+                    sendAuthChallenge(connId, challenge);
+                }
                 PROM_INC_RELAY_MSG("NEG-ERR");
                 sendToConn(connId, tao::json::to_string(tao::json::value::array({
                     "NEG-ERR",
