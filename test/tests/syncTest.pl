@@ -55,8 +55,8 @@ withRelay(sub {
     system("./strfry --config test/cfgs/syncTest2.conf sync ws://127.0.0.1:40551 --dir both --filter '$filter'");
 });
 
-my $hash1 = `./strfry --config test/cfgs/syncTest1.conf export | perl test/dumbFilter.pl '$filter' | sort | sha256sum`;
-my $hash2 = `./strfry --config test/cfgs/syncTest2.conf export | perl test/dumbFilter.pl '$filter' | sort | sha256sum`;
+my $hash1 = `./strfry --config test/cfgs/syncTest1.conf export | perl test/utils/dumbFilter.pl '$filter' | sort | sha256sum`;
+my $hash2 = `./strfry --config test/cfgs/syncTest2.conf export | perl test/utils/dumbFilter.pl '$filter' | sort | sha256sum`;
 
 die "hashes differ" unless $hash1 eq $hash2;
 

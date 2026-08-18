@@ -13,36 +13,41 @@ info() { echo -e "${YELLOW}[INFO]${NC} $*"; }
 
 info "running write tests..."
 
-node "./test/writeTest.js" \
-  && pass "./test/writeTest.js" \
-  || fail "./test/writeTest.js failed"
+node "./test/tests/writeTest.js" \
+  && pass "./test/tests/writeTest.js" \
+  || fail "./test/tests/writeTest.js failed"
 
+info "running restricted read tests..."
+
+node "./test/tests/readRestrictTest.js" \
+  && pass "./test/tests/readRestrictTest.js" \
+  || fail "./test/tests/readRestrictTest.js failed"
 
 info "Seeding events..."
 
-perl "./test/generate-seed-data.pl" -o - | ./strfry --config ./test/cfgs/test.conf import --no-verify
+perl "./test/utils/generate-seed-data.pl" -o - | ./strfry --config ./test/cfgs/test.conf import --no-verify
 
 info "running filterFuzzTest..."
 
-perl "./test/filterFuzzTest.pl" scan \
-&& pass "./test/filterFuzzTest.pl scan" \
-|| fail "./test/filterFuzzTest.pl scan failed"
+perl "./test/tests/filterFuzzTest.pl" scan \
+&& pass "./test/tests/filterFuzzTest.pl scan" \
+|| fail "./test/tests/filterFuzzTest.pl scan failed"
 
-perl "./test/filterFuzzTest.pl" scan-limit \
-&& pass "./test/filterFuzzTest.pl scan-limit" \
-|| fail "./test/filterFuzzTest.pl scan-limit failed"
+perl "./test/tests/filterFuzzTest.pl" scan-limit \
+&& pass "./test/tests/filterFuzzTest.pl scan-limit" \
+|| fail "./test/tests/filterFuzzTest.pl scan-limit failed"
 
-perl "./test/filterFuzzTest.pl" monitor \
-&& pass "./test/filterFuzzTest.pl monitor" \
-|| fail "./test/filterFuzzTest.pl monitor failed"
+perl "./test/tests/filterFuzzTest.pl" monitor \
+&& pass "./test/tests/filterFuzzTest.pl monitor" \
+|| fail "./test/tests/filterFuzzTest.pl monitor failed"
 
 
 # sync tests
 
 info "running sync tests..."
 
-perl "./test/runSyncTests.pl" \
-  && pass "./test/syncTests.pl" \
-  || fail "./test/runSyncTests.pl failed"
+perl "./test/tests/runSyncTests.pl" \
+  && pass "./test/tests/syncTests.pl" \
+  || fail "./test/tests/runSyncTests.pl failed"
 
 pass "All tests passed."

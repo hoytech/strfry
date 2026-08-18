@@ -49,10 +49,13 @@ public:
 
     static bool isFilterAllowedToCount(const NostrFilterGroup &fg, Bytes32 pubkey) {
         if (restrictedKinds().empty()) return true;
+
+        bool pubkeyIsNull = pubkey.isNull();
+
         for (const auto &f: fg.filters) {
             if (!f.kinds) continue;
             bool hasSomeRestrictedKind = false;
-            for(size_t i = 0; i<f.kinds->size(); ++i) {
+            for (size_t i = 0; i < f.kinds->size(); ++i) {
                 uint64_t kind = f.kinds->at(i);
                 if (restrictedKinds().contains(kind)) {
                     hasSomeRestrictedKind = true;
@@ -60,8 +63,11 @@ public:
                 }
             }
             if (hasSomeRestrictedKind) {
-                if (pubkey.isNull()) {
+                if (pubkeyIsNull) {
                     return false;
+                }
+                if (!cfg().relay__auth__restrictReadToInvolvedPubkey) {
+                    continue;
                 }
                 bool authorScoped = f.authors && allPubkeysMatch(*f.authors, pubkey);
                 bool pScoped = false;
@@ -86,7 +92,7 @@ public:
 
     // Returns true if the event should be sent to the subscriber
     static bool shouldSendToSubscriber(const PackedEventView &packed, const Bytes32 &subscriberAuthedPubkey) {
-        if (!(restrictedKinds().contains(packed.kind()) && cfg().relay__auth__restrictReadToInvolvedPubkey)) {
+        if (!restrictedKinds().contains(packed.kind())) {
             return true;
         }
 
@@ -94,22 +100,21 @@ public:
             return false;
         }
 
-        Bytes32 recipientPubkey;
-        bool foundRecipient = false;
+        if(!cfg().relay__auth__restrictReadToInvolvedPubkey) return true;
+
+        bool involved = subscriberAuthedPubkey == packed.pubkey();
 
         packed.foreachTag([&](char tagName, std::string_view tagVal) {
             if (tagName == 'p' && tagVal.size() == 32) {
-                recipientPubkey = Bytes32(tagVal);
-                foundRecipient = true;
-                return false;
+                if (subscriberAuthedPubkey == Bytes32(tagVal)) {
+                    involved = true;
+                    return false;
+                }
             }
+
             return true;
         });
 
-        if (!foundRecipient) {
-            return false;
-        }
-
-        return subscriberAuthedPubkey == recipientPubkey || subscriberAuthedPubkey == packed.pubkey();
+        return involved;
     }
 };

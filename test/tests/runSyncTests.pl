@@ -48,7 +48,7 @@ sub test {
     my $cmd = qq{
     ./strfry --config test/cfgs/test.conf export 2>/dev/null |
     head -$num |
-    perl test/syncTest.pl $params $redir
+    perl test/tests/syncTest.pl $params $redir
     };
     
     print "CMD: $cmd\n";
