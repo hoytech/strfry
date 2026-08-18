@@ -1,4 +1,6 @@
+#ifndef _WIN32
 #include <signal.h>
+#endif
 
 #include "RelayServer.h"
 
@@ -6,6 +8,7 @@
 void RelayServer::runSignalHandler() {
     setThreadName("signalHandler");
 
+#ifndef _WIN32
     sigset_t sigset;
     sigemptyset(&sigset);
     sigaddset(&sigset, SIGUSR1);
@@ -22,4 +25,9 @@ void RelayServer::runSignalHandler() {
             LW << "Got unexpected signal: " << sig;
         }
     }
+#else
+    while (1) {
+        std::this_thread::sleep_for(std::chrono::seconds(1000));
+    }
+#endif
 }
