@@ -26,6 +26,7 @@ jobs:
         run: |
           brew update
           brew install pkg-config libtool openssl zlib lmdb flatbuffers secp256k1 zstd libuv perl
+          cpan JSON::XS
 
       - name: Build strfry
         run: |
