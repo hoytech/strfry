@@ -70,6 +70,10 @@ struct EventToWrite {
     void *userData = nullptr;
     EventWriteStatus status = EventWriteStatus::Pending;
     uint64_t levId = 0;
+    // Set when the caller already probed this id via lookupEventById() from the same
+    // thread that will open writeEvents()'s txn_rw (e.g. WriterPipeline). Do not set
+    // from cross-thread paths (e.g. RelayIngester) where the probe snapshot may be stale.
+    bool preChecked = false;
 
     EventToWrite() {}
 
