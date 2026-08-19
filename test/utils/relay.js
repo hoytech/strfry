@@ -8,6 +8,42 @@ import ids from "./dummyIds.json" with { type: "json" };
 
 let ts = 1_700_000_000;
 
+export function config(
+  relayDb,
+  relayPort = 40553,
+  restrictReadToInvolvedPubkey = true,
+) {
+  return `
+db = "${relayDb}/"
+
+relay {
+  bind = "127.0.0.1"
+  port = ${relayPort}
+  nofiles = 0
+  autoPingSeconds = 0
+
+  auth {
+    enabled = true
+    serviceUrl = "wss://relay.test"
+    restrictedReadKinds = "4, 1059"
+    restrictReadToInvolvedPubkey = ${restrictReadToInvolvedPubkey ? "true" : "false"}
+  }
+
+  numThreads {
+    ingester = 1
+    reqWorker = 1
+    reqMonitor = 1
+    negentropy = 1
+  }
+
+  negentropy {
+    enabled = true
+    maxSyncEvents = 100000
+  }
+}
+`;
+}
+
 export function runStrfry(args, opts = {}) {
   const res = spawnSync("./strfry", args, {
     encoding: "utf-8",

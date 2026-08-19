@@ -1,14 +1,20 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { buildEvent } from "../utils/events.js";
-import { cleanDb, addEvent, runStrfry } from "../utils/relay.js";
+import { cleanDb, addEvent, runStrfry, writeConfig, config } from "../utils/relay.js";
 import ids from "../utils/dummyIds.json" with { type: "json" };
+
+const workDir = path.join(os.tmpdir(), "strfry-read-restrict-tests");
+const dbDir = path.join(workDir, "relay-db");
+const cfgPath = path.join(workDir, "writeTest.conf");
 
 function doTest(spec) {
   console.log("*", spec.desc || "unnamed");
 
-  cleanDb(path.join(process.cwd(), "strfry-db-test"));
+  cleanDb(dbDir);
+  writeConfig(config(dbDir), cfgPath);
 
   const eventIds = [];
 
@@ -26,7 +32,7 @@ function doTest(spec) {
 
     replaceEV(ev);
 
-    const id = addEvent("test/cfgs/writeTest.conf", ev).id;
+    const id = addEvent(cfgPath, ev).id;
     eventIds.push(id);
   }
 
@@ -38,7 +44,7 @@ function doTest(spec) {
     }
   }
 
-  const result = runStrfry(["--config", "test/cfgs/writeTest.conf", "export"]);
+  const result = runStrfry(["--config", cfgPath, "export"]);
 
   if (result.error) throw result.error;
 
