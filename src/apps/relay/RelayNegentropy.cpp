@@ -208,6 +208,9 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     return true;
                 });
 
+                queries.removeSub(connId, subId);
+                views.removeView(connId, subId);
+
                 LI << "[" << connId << "] negentropy NEW session=" << subId.sv() << " bytesIn=" << msg->negPayload.size() << " tree=" << (treeId ? std::to_string(*treeId) : "NONE");
 
                 if (treeId) {
