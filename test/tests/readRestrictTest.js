@@ -356,6 +356,7 @@ async function main() {
 
   cleanDb(syncDbDir);
   writeConfig(`db = "${syncDbDir}/"\n`, syncCfgPath);
+  writeConfig(config(relayDbDir, relayPort, false), relayCfgPath);
 
   await runRelaySuite({
     config: config(relayDbDir, relayPort, true),
@@ -363,7 +364,6 @@ async function main() {
     relayPort: relayPort,
     relayDbPath: relayDbDir,
     tests: async ({ wsUrl, client }) => {
-      writeConfig(config(relayDbDir, relayPort, false), relayCfgPath);
       await testRestrictedReqAndCountRequireAuth({ wsUrl, client });
       await testCountUnrestrictedAllowed({ wsUrl, client });
       await testReqWorkerFiltersRestrictedInitialScan({ wsUrl, client });
