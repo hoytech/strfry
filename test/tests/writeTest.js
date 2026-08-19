@@ -6,7 +6,7 @@ import { buildEvent } from "../utils/events.js";
 import { cleanDb, addEvent, runStrfry, writeConfig, config } from "../utils/relay.js";
 import ids from "../utils/dummyIds.json" with { type: "json" };
 
-const workDir = path.join(os.tmpdir(), "strfry-read-restrict-tests");
+const workDir = path.join(os.tmpdir(), "strfry-tests");
 const dbDir = path.join(workDir, "relay-db");
 const cfgPath = path.join(workDir, "writeTest.conf");
 

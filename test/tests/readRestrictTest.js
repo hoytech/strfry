@@ -12,7 +12,7 @@ import {
 import ids from "../utils/dummyIds.json" with { type: "json" };
 import { signEvent } from "../utils/events.js";
 
-const workDir = path.join(os.tmpdir(), "strfry-read-restrict-tests");
+const workDir = path.join(os.tmpdir(), "strfry-tests");
 const relayDbDir = path.join(workDir, "relay-db");
 const syncDbDir = path.join(workDir, "sync-db");
 const relayCfgPath = path.join(workDir, "readRestrictRelay.conf");
