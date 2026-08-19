@@ -43,6 +43,7 @@ jobs:
           node-version: 22
 
       - name: Install Node dependencies
+        working-directory: test
         run: npm ci
 
       - name: Run tests
