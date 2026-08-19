@@ -42,5 +42,8 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install Node dependencies
+        run: npm ci
+
       - name: Run tests
         run: ./test/runTests.sh

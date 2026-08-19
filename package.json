@@ -9,15 +9,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.22.0",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "dependencies": {
-    "@nostr/tools": "jsr:^2.24.2"
+    "@nostr/tools": "npm:@jsr/nostr__tools@^2.24.2"
   }
 }
