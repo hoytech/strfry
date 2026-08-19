@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <algorithm>
@@ -36,6 +37,11 @@ struct MsgWebsocket : NonCopyable {
         std::string payload;
     };
 
+    struct SendBatch {
+        uint64_t connId;
+        std::vector<std::string> payloads;
+    };
+
     struct SendEventToBatch {
         RecipientList list;
         std::string evJson;
@@ -44,7 +50,7 @@ struct MsgWebsocket : NonCopyable {
     struct GracefulShutdown {
     };
 
-    using Var = std::variant<Send, SendBinary, SendEventToBatch, GracefulShutdown>;
+    using Var = std::variant<Send, SendBinary, SendBatch, SendEventToBatch, GracefulShutdown>;
     Var msg;
     MsgWebsocket(Var &&msg_) : msg(std::move(msg_)) {}
 };
@@ -213,65 +219,72 @@ struct RelayServer {
 
     // Utils (can be called by any thread)
 
-    void sendToConn(uint64_t connId, std::string &&payload) {
+    void sendToConn(uint64_t connId, std::string &&payload, bool flush = true) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(payload)}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendToConnBinary(uint64_t connId, std::string &&payload) {
+    void sendToConnBinary(uint64_t connId, std::string &&payload, bool flush = true) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendBinary{connId, std::move(payload)}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendEvent(uint64_t connId, const SubId &subId, std::string_view evJson) {
-        PROM_INC_RELAY_MSG("EVENT");
-        auto subIdSv = subId.sv();
+    void sendToConnBatched(uint64_t connId, std::vector<std::string> &&payloads, bool flush = true) {
+        tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendBatch{connId, std::move(payloads)}});
+        if (flush) hubTrigger->send();
+    }
 
+    std::string buildEventReply(const SubId &subId, std::string_view evJson) {
+        auto subIdSv = subId.sv();
         std::string reply;
         reply.reserve(13 + subIdSv.size() + evJson.size());
-
         reply += "[\"EVENT\",\"";
         reply += subIdSv;
         reply += "\",";
         reply += evJson;
         reply += "]";
-
-        sendToConn(connId, std::move(reply));
+        return reply;
     }
 
-    void sendEventToBatch(RecipientList &&list, std::string &&evJson) {
+    void sendEvent(uint64_t connId, const SubId &subId, std::string_view evJson, bool flush = true) {
+        PROM_INC_RELAY_MSG("EVENT");
+        auto reply = buildEventReply(subId, evJson);
+        sendToConn(connId, std::move(reply), flush);
+    }
+
+    void sendEventToBatch(RecipientList &&list, std::string &&evJson, bool flush = true) {
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendEventToBatch{std::move(list), std::move(evJson)}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendNoticeError(uint64_t connId, std::string &&payload) {
+    void sendNoticeError(uint64_t connId, std::string &&payload, bool flush = true) {
         PROM_INC_RELAY_MSG("NOTICE");
         LI << "sending error to [" << connId << "]: " << payload;
         auto reply = tao::json::value::array({ "NOTICE", std::string("ERROR: ") + payload });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendClosedError(uint64_t connId, const std::string &subId, std::string &&payload) {
+    void sendClosedError(uint64_t connId, const std::string &subId, std::string &&payload, bool flush = true) {
         PROM_INC_RELAY_MSG("CLOSED");
         LI << "sending closed to [" << connId << "]: " << payload;
         auto reply = tao::json::value::array({ "CLOSED", subId, std::string("ERROR: ") + payload });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendOKResponse(uint64_t connId, std::string_view eventIdHex, bool written, std::string_view message) {
+    void sendOKResponse(uint64_t connId, std::string_view eventIdHex, bool written, std::string_view message, bool flush = true) {
         PROM_INC_RELAY_MSG("OK");
         auto reply = tao::json::value::array({ "OK", eventIdHex, written, message });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 
-    void sendAuthChallenge(uint64_t connId, std::string_view challenge) {
+    void sendAuthChallenge(uint64_t connId, std::string_view challenge, bool flush = true) {
         PROM_INC_RELAY_MSG("AUTH");
         PrometheusMetrics::getInstance().authChallengesSentTotal.inc();
         auto reply = tao::json::value::array({ "AUTH", challenge });
         tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{connId, std::move(tao::json::to_string(reply))}});
-        hubTrigger->send();
+        if (flush) hubTrigger->send();
     }
 };

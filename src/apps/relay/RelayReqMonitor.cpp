@@ -38,8 +38,9 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                     PackedEventView packed(ev.buf);
                     if (msg->sub.filterGroup.doesMatch(packed)) {
                         if (ReadRestrictor::shouldSendToSubscriber(packed, connAuthedPubkey)) {
-                            sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId));
+                            sendEvent(connId, msg->sub.subId, getEventJson(txn, decomp, ev.primaryKeyId), false);
                         }
+                        hubTrigger->send();
                     }
 
                     return true;
