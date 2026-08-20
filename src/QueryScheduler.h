@@ -7,6 +7,7 @@ struct QueryScheduler : NonCopyable {
     std::function<void(lmdb::txn &txn, const Subscription &sub, uint64_t levId, std::string_view eventPayload)> onEvent;
     std::function<void(lmdb::txn &txn, const Subscription &sub, const std::vector<uint64_t> &levIds)> onEventBatch;
     std::function<void(lmdb::txn &txn, Subscription &sub, uint64_t total)> onComplete;
+    std::function<void(lmdb::txn &txn)> onSliceComplete;
 
     // If false, then levIds returned to above callbacks can be stale (because they were deleted)
     // If false, then onEvent's eventPayload will always be ""
@@ -96,6 +97,8 @@ struct QueryScheduler : NonCopyable {
             onEventBatch(txn, q->sub, levIdBatch);
             levIdBatch.clear();
         }
+
+        if (onSliceComplete) onSliceComplete(txn);
 
         if (complete) {
             auto connId = q->sub.connId;
