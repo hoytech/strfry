@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import WebSocket from 'ws';
 
 export async function openWebSocket(url, timeoutMs = 4_000) {
   return await new Promise((resolve, reject) => {
