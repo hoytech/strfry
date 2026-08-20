@@ -26,6 +26,7 @@ jobs:
         run: |
           brew update
           brew install pkg-config libtool openssl zlib lmdb flatbuffers secp256k1 zstd libuv perl
+          cpan JSON::XS
 
       - name: Build strfry
         run: |
@@ -36,3 +37,15 @@ jobs:
              echo "Strfry build failed."
              exit 1
           fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install Node dependencies
+        working-directory: test
+        run: npm ci
+
+      - name: Run tests
+        run: ./test/runTests.sh

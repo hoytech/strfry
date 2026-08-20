@@ -8,6 +8,8 @@ pass() { echo -e "${GREEN}[PASS]${NC} $*"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*"; exit 1; }
 info() { echo -e "${YELLOW}[INFO]${NC} $*"; }
 
+mkdir -p "strfry-db-test"
+rm -f "strfry-db-test/data.mdb"
 
 # write tests
 

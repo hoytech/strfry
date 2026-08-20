@@ -7,11 +7,12 @@ import {
   cleanDb,
   runStrfry,
   runRelaySuite,
+  config,
 } from "../utils/relay.js";
 import ids from "../utils/dummyIds.json" with { type: "json" };
 import { signEvent } from "../utils/events.js";
 
-const workDir = path.join(os.tmpdir(), "strfry-read-restrict-tests");
+const workDir = path.join(os.tmpdir(), "strfry-tests");
 const relayDbDir = path.join(workDir, "relay-db");
 const syncDbDir = path.join(workDir, "sync-db");
 const relayCfgPath = path.join(workDir, "readRestrictRelay.conf");
@@ -136,7 +137,7 @@ async function testReqMonitorFiltersRestrictedLiveEvents({ wsUrl, client }) {
 
 function testNegentropyMixedFilterBlocksRestrictedWithoutAuth({ wsUrl }) {
   cleanDb(syncDbDir);
-  writeConfig(`db = "${syncDbDir}/"\n`, syncCfgPath);
+  writeConfig(config(syncDbDir, 40555), syncCfgPath);
 
   const syncRes = runStrfry(
     [
@@ -172,7 +173,7 @@ function testNegentropyMixedFilterBlocksRestrictedWithoutAuth({ wsUrl }) {
 
 function testNegentropyRestrictedFilterRequiresAuth({ wsUrl }) {
   cleanDb(syncDbDir);
-  writeConfig(`db = "${syncDbDir}/"\n`, syncCfgPath);
+  writeConfig(config(syncDbDir, 40555), syncCfgPath);
 
   const syncRes = runStrfry(
     [
@@ -315,38 +316,6 @@ async function testCountSuccessfulWhenFilterFullyScoped({ wsUrl, client }) {
   pass("testCountSuccessFulWhenFilterFullyScoped");
 }
 
-function config(relayDb, relayPort, restrictReadToInvolvedPubkey) {
-  return `
-db = "${relayDb}/"
-
-relay {
-  bind = "127.0.0.1"
-  port = ${relayPort}
-  nofiles = 0
-  autoPingSeconds = 0
-
-  auth {
-    enabled = true
-    serviceUrl = "wss://relay.test"
-    restrictedReadKinds = "4, 1059"
-    restrictReadToInvolvedPubkey = ${restrictReadToInvolvedPubkey ? "true" : "false"}
-  }
-
-  numThreads {
-    ingester = 1
-    reqWorker = 1
-    reqMonitor = 1
-    negentropy = 1
-  }
-
-  negentropy {
-    enabled = true
-    maxSyncEvents = 100000
-  }
-}
-`;
-}
-
 function expect(cond, msg) {
   if (!cond) throw new Error(msg);
 }
@@ -355,15 +324,14 @@ async function main() {
   console.log("* read restriction relay integration tests");
 
   cleanDb(syncDbDir);
-  writeConfig(`db = "${syncDbDir}/"\n`, syncCfgPath);
+  writeConfig(config(syncDbDir, 40555), syncCfgPath);
+  writeConfig(config(relayDbDir, relayPort, false), relayCfgPath);
 
   await runRelaySuite({
-    config: config(relayDbDir, relayPort, true),
     relayConfigPath: relayCfgPath,
     relayPort: relayPort,
     relayDbPath: relayDbDir,
     tests: async ({ wsUrl, client }) => {
-      writeConfig(config(relayDbDir, relayPort, false), relayCfgPath);
       await testRestrictedReqAndCountRequireAuth({ wsUrl, client });
       await testCountUnrestrictedAllowed({ wsUrl, client });
       await testReqWorkerFiltersRestrictedInitialScan({ wsUrl, client });

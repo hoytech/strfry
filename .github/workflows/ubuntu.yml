@@ -16,6 +16,7 @@ jobs:
   ubuntu:
     runs-on: ubuntu-latest
     name: A job to build and run strfry on Ubuntu
+
     steps:
       - name: Checkout strfry
         uses: actions/checkout@v6
@@ -30,8 +31,20 @@ jobs:
           git submodule update --init
           make setup-golpe
           make -j$(nproc)
+
           if ! [ -f ./strfry ]; then
              echo "Strfry build failed."
              exit 1
           fi
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install Node dependencies
+        working-directory: test
+        run: npm ci
+
+      - name: Run tests
+        run: ./test/runTests.sh
