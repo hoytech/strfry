@@ -17,7 +17,7 @@ The benchmarking infrastructure lives in the `bench/` directory and consists of:
 
 ## 2. Benchmark Suites
 
-The orchestrator executes 12 distinct benchmark suites:
+The orchestrator executes 13 distinct benchmark suites:
 
 1. **Storage (In-Core vs Out-of-Core)**: Measures sequential scan throughput and pagination latencies when the database fits in memory (In-Core) vs under strict memory limits (256MB Docker container out-of-core pagination).
 2. **Event Ingestion Pipeline**: Benchmarks write throughput (events/sec) for small (50B) payloads, large (10KB) payloads, and single-connection spam.
