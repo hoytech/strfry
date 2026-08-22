@@ -18,3 +18,12 @@ bench/det_old.json
 bench/test_seed.jsonl
 benchmark_comparison.md
 benchmark_report*.md
+bench/flamegraphs/
+bench/perf*.data*
+bench/seed_*.jsonl
+strfry-db-perf/
+strfry-db-det/
+strfry-db-negentropy*/
+bench/*_temp.*
+*.svg
+perf.data*

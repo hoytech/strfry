@@ -332,13 +332,17 @@ def suite_storage(manager, skip_heavy=False):
     manager.stop()
     
     # 2. Out-of-Core Test (Docker, 256MB memory limit)
-    drop_caches()
-    manager.use_docker = True
-    manager.memory_limit = "256m"
-    manager.start()
-    res = run_bench("paginate", ["ws://localhost:7777", "--depth", "10", "--concurrency", "2"])
-    results["out_of_core_time"] = res["elapsed"] if res else -1
-    manager.stop()
+    if check_docker():
+        drop_caches()
+        manager.use_docker = True
+        manager.memory_limit = "256m"
+        manager.start()
+        res = run_bench("paginate", ["ws://localhost:7777", "--depth", "10", "--concurrency", "2"])
+        results["out_of_core_time"] = res["elapsed"] if res else -1
+        manager.stop()
+    else:
+        print("[WARNING] Docker daemon not available. Skipping Out-of-Core test.")
+        results["out_of_core_time"] = -1
     
     try:
         mdb_res = subprocess.run(["mdb_stat", "-e", manager.db_dir], capture_output=True, text=True)
@@ -476,21 +480,30 @@ def suite_websockets(manager, skip_heavy=False):
         counts.append(5000)
         
     results["connection_memory"] = {}
-    
     for c in counts:
         print(f"[INFO] Testing {c} connection storm...")
         res = run_bench("connections", ["ws://localhost:7777", "-c", str(c)])
         rss = get_process_rss(manager.process.pid)
         results["connection_memory"][str(c)] = rss
         if res:
-            results[f"conn_storm_{c}_output"] = res["output"]
+            output = res["output"]
+            results[f"conn_storm_{c}_output"] = output
+            tps_m = re.search(r'\(([\d.]+)\s+conn/sec\)', output)
+            if tps_m:
+                results[f"conn_storm_{c}_tps"] = float(tps_m.group(1))
+            lat_m = re.search(r'P50:\s*([\d.]+).*P99:\s*([\d.]+)', output)
+            if lat_m:
+                results[f"conn_storm_{c}_p50_ms"] = float(lat_m.group(1))
+                results[f"conn_storm_{c}_p99_ms"] = float(lat_m.group(2))
         time.sleep(1) # Let strfry clean up
-        
     print("[INFO] Testing High Churn...")
     churn_count = 200 if skip_heavy else 10000
     res_churn = run_bench("churn", ["ws://localhost:7777", "-c", "50", "-n", str(churn_count)])
     if res_churn:
         results["churn_output"] = res_churn["output"]
+        tps_m = re.search(r'\(([\d.]+)\s+conn/sec\)', res_churn["output"])
+        if tps_m:
+            results["churn_tps"] = float(tps_m.group(1))
         
     results["time_wait_count"] = count_time_wait_sockets(7777)
 
@@ -834,10 +847,25 @@ def generate_report(results, report_path="benchmark_report.md"):
             r = results["suite_websockets"]
             f.write("### Connection Memory Scaling (VmRSS)\n")
             for c, mem in r.get('connection_memory', {}).items():
-                f.write(f"- **{c} connections:** {mem:.2f} MB\n")
-            f.write("\n### Connection Storm Performance\n```\n")
-            f.write(r.get('conn_storm_5000_output', r.get('conn_storm_1000_output', '')))
-            f.write("\n```\n\n")
+                f.write(f"- **Connection Memory ({c} conns):** {mem:.2f} MB\n")
+            conn_keys = sorted([k for k in r.keys() if k.startswith("conn_storm_") and k.endswith("_output")],
+                               key=lambda x: int(re.search(r'\d+', x).group(0)))
+            for conn_k in conn_keys:
+                c_val = re.search(r'\d+', conn_k).group(0)
+                tps_val = r.get(f"conn_storm_{c_val}_tps", -1)
+                p50_val = r.get(f"conn_storm_{c_val}_p50_ms", -1)
+                p99_val = r.get(f"conn_storm_{c_val}_p99_ms", -1)
+                if tps_val >= 0:
+                    f.write(f"- **Connection Storm ({c_val} conns) Throughput:** {tps_val:.2f} conn/sec\n")
+                if p50_val >= 0:
+                    f.write(f"- **Connection Storm ({c_val} conns) P50 Latency:** {p50_val:.2f} ms\n")
+                if p99_val >= 0:
+                    f.write(f"- **Connection Storm ({c_val} conns) P99 Latency:** {p99_val:.2f} ms\n")
+                f.write(f"\n### Connection Storm ({c_val} conns) Performance\n```\n")
+                f.write(r[conn_k])
+                f.write("\n```\n\n")
+            if "churn_tps" in r:
+                f.write(f"- **High Churn Throughput:** {r['churn_tps']:.2f} conn/sec\n")
             f.write("### High Churn Performance\n```\n")
             f.write(r.get('churn_output', ''))
             f.write("\n```\n")
@@ -970,17 +998,13 @@ def main():
             print(f"[ERROR] Unknown suite: {args.suite}")
             sys.exit(1)
     elif args.skip_heavy:
-        suites_to_run = [(name, func) for name, func in all_suites.items() if name not in ["storage", "stress"]]
+        suites_to_run = [(name, func) for name, func in all_suites.items() if name not in ["storage"]]
     else:
         suites_to_run = list(all_suites.items())
 
     docker_available = check_docker()
     if not docker_available:
-        print("[WARNING] Docker daemon is not running or not accessible. Docker-based storage suite will be skipped.")
-        suites_to_run = [(name, func) for name, func in suites_to_run if name != "storage"]
-        if not suites_to_run:
-            print("[INFO] No suites to run. Exiting.")
-            return
+        print("[WARNING] Docker daemon is not running or not accessible. Docker-based out-of-core storage test will be skipped.")
 
     if args.dry_run:
         print("[INFO] DRY RUN: Would execute the selected suites:")

@@ -128,7 +128,8 @@ def run_deterministic_benchmark(out_json_path):
 def main():
     parser = argparse.ArgumentParser(description="Strfry Local Relative A/B Benchmarking Script")
     parser.add_argument("--base", type=str, default="master", help="Base branch/commit to compare against (default: master)")
-    parser.add_argument("--skip-heavy", action="store_true", default=True, help="Skip heavy databases (default: True)")
+    parser.add_argument("--skip-heavy", action="store_true", help="Skip 1M event heavy database benchmark")
+    parser.add_argument("--full", action="store_true", help="Run all benchmark suites including 1M event storage test (recommended before opening a PR)")
     args = parser.parse_args()
 
     base_branch = args.base
@@ -165,7 +166,7 @@ def main():
         
         # Run stats
         report_new = os.path.join(STRFRY_DIR, "benchmark_report_new.md")
-        skip_flag = ["--skip-heavy"] if args.skip_heavy else []
+        skip_flag = [] if args.full else (["--skip-heavy"] if args.skip_heavy else [])
         
         subprocess.run(["python3", temp_run_stats_py] + skip_flag, check=True)
         if os.path.exists("benchmark_report.md"):
@@ -282,6 +283,8 @@ def main():
         f.write("| :--- | :--- | :--- | :--- | :--- |\n")
         
         for key in all_keys:
+            if key.lower() in ["status", "status:"]:
+                continue
             base_val = old_metrics.get(key, -1)
             pr_val = new_metrics.get(key, -1)
             
@@ -298,7 +301,7 @@ def main():
                     delta_str = f"{delta:+.2f}%"
                 
                 # Check if lower is better or higher is better
-                lower_better = any(x in key.lower() for x in ["time", "ms", "rss", "bytes", "amplification", "depth"])
+                lower_better = any(x in key.lower() for x in ["time", "ms", "rss", "bytes", "amplification", "depth", "memory", "sockets"])
                 
                 if abs(delta) < 1.0:
                     status = "⚪ Stable"

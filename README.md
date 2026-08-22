@@ -43,7 +43,8 @@ If you are using strfry, please [join our telegram chat](https://t.me/strfry_use
     * [Plugins](#plugins)
     * [Router](#router)
     * [Syncing](#syncing)
-    * [Compression Dictionaries](#compression-dictionaries)
+* [Compression Dictionaries](#compression-dictionaries)
+* [Benchmarking & Performance](#benchmarking--performance)
 * [Learn More](#learn-more)
 * [Author and Copyright](#author-and-copyright)
 
@@ -395,6 +396,9 @@ After building dictionaries, selections of events can be compressed with `strfry
 
 `strfry dict stats` can be used to print out stats for the various dictionaries, including size used by the dataset, compression ratios, etc.
 
+### Benchmarking & Performance
+
+strfry includes a comprehensive benchmarking and relative A/B comparison suite in `bench/`, supporting deterministic instruction/allocation tracking, WebSocket stress testing, and hardware flamegraph profiling. See [docs/benchmarking.md](docs/benchmarking.md) for detailed instructions on running benchmarks, profiling with `perf`, and interpreting results.
 
 
 ## Learn More
