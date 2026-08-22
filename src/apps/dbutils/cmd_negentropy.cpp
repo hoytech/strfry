@@ -73,53 +73,62 @@ void cmd_negentropy(const std::vector<std::string> &subArgs) {
     } else if (args["build"].asBool()) {
         uint64_t treeId = args["<treeId>"].asLong();
 
+        std::string filterStr;
+        {
+            auto txn = env.txn_ro();
+            auto view = env.lookup_NegentropyFilter(txn, treeId);
+            if (!view) throw herr("couldn't find treeId: ", treeId);
+            filterStr = view->filter();
+        }
+
+        NostrFilter f(tao::json::from_string(filterStr), MAX_U64);
+        DBScan scanner(f);
+
         struct Record {
             uint64_t created_at;
             Bytes32 id;
         };
 
         std::vector<Record> recs;
+        recs.reserve(10000);
 
-        // Read-only phase: fetch filter and collect matching events without
-        // blocking writers.
-        {
-            auto txn = env.txn_ro();
-
-            std::string filterStr;
-
+        while (1) {
+            // Read a batch of up to 10,000 matching events using a read-only transaction.
+            // This prevents blocking other database writers during the scan phase.
             {
-                auto view = env.lookup_NegentropyFilter(txn, treeId);
-                if (!view) throw herr("couldn't find treeId: ", treeId);
-                filterStr = view->filter();
-            }
-
-            DBQuery query(tao::json::from_string(filterStr));
-
-            while (1) {
-                bool complete = query.process(txn, [&](const auto &sub, uint64_t levId){
+                auto txn = env.txn_ro();
+                scanner.scan(txn, [&](uint64_t levId) {
                     auto ev = lookupEventByLevId(txn, levId);
                     auto packed = PackedEventView(ev.buf);
                     recs.emplace_back(packed.created_at(), packed.id());
-                });
-
-                if (complete) break;
-            }
-        }
-
-        // Write phase: store collected records into the negentropy BTree.
-        {
-            auto txn = env.txn_rw();
-            increaseModCounter(txn);
-
-            negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, treeId);
-
-            for (const auto &r : recs) {
-                storage.insert(r.created_at, r.id.sv());
+                    return recs.size() >= 10000;
+                }, [](uint64_t) { return false; });
             }
 
-            storage.flush();
+            if (recs.empty()) {
+                break;
+            }
 
-            txn.commit();
+            // Write the batch of events to the negentropy BTree.
+            // Holding the write lock only during BTree insertion keeps write lock windows short.
+            {
+                auto txn = env.txn_rw();
+                increaseModCounter(txn);
+
+                negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, treeId);
+                for (const auto &r : recs) {
+                    storage.insert(r.created_at, r.id.sv());
+                }
+                storage.flush();
+                txn.commit();
+            }
+
+            // If we fetched less than 10,000, we've scanned all matching events.
+            if (recs.size() < 10000) {
+                break;
+            }
+
+            recs.clear();
         }
     }
 }

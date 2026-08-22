@@ -2,7 +2,7 @@
 
 use strict;
 
-use JSON::XS;
+use JSON::PP;
 
 binmode(STDOUT, ":utf8");
 
