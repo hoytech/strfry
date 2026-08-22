@@ -13,7 +13,20 @@ The benchmarking infrastructure lives in the `bench/` directory and consists of:
 - **`bench/alloc_tracker.c`**: Shared library (`LD_PRELOAD`) hooked via `dlsym` to record exact heap allocation counts and total bytes allocated during execution without modifying strfry binaries.
 - **`strfry-bench`**: A multi-threaded Rust client designed to stress test Nostr relays via WebSocket connections (`ws://`), simulating events, NIP-45 counts, subscription fan-out, connection storms, high churn, and malicious traffic.
 
----
+### 1.1 Prerequisites & Requirements
+
+- **Linux `perf`**: Required for `perf stat` hardware instruction counting in A/B tests and `perf record` CPU profiling. Ensure unprivileged access is configured:
+  ```bash
+  sudo sysctl -w kernel.perf_event_paranoid=-1
+  ```
+- **`inferno` (Flamegraph Generator)**: Required for collapsing stack traces and rendering interactive SVG flamegraphs:
+  ```bash
+  cargo install inferno
+  ```
+- **`gcc` & `make`**: Required for compiling strfry and `bench/alloc_tracker.c` for `LD_PRELOAD` heap allocation tracking.
+- **Python 3**: Required to run `bench/run_stats.py` and `bench/ab_test.py` orchestrators.
+- **Docker** *(Optional)*: Required only if running out-of-core memory limit benchmark suites.
+
 
 ## 2. Benchmark Suites
 
