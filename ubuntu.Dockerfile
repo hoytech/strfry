@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create a non-root user for security
 RUN useradd -m -d /app -s /bin/bash strfry && \
+    mkdir -p /app/strfry-db && \
     chown -R strfry:strfry /app
 
 # Switch to the unprivileged user
@@ -39,7 +40,6 @@ USER strfry
 
 COPY --from=build --chown=strfry:strfry /build/strfry /app/strfry
 COPY --from=build --chown=strfry:strfry /build/strfry.conf /app/strfry.conf
-COPY --from=build --chown=strfry:strfry /build/strfry-db /app/strfry-db
 
 EXPOSE 7777
 

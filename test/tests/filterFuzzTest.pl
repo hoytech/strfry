@@ -2,7 +2,7 @@
 
 use strict;
 use Data::Dumper;
-use JSON::XS;
+use JSON::PP;
 use IPC::Open2;
 
 # ./strfry export|perl -MJSON::XS -nE '$z=decode_json($_); for my $t (@{$z->{tags}}) { say $t->[1] if $t->[0] eq "e"}'|sort|uniq -c|sort -rn|head -50|perl -nE '/\d+\s+(\w+)/ && say $1'

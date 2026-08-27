@@ -52,4 +52,7 @@ perl "./test/tests/runSyncTests.pl" \
   && pass "./test/tests/syncTests.pl" \
   || fail "./test/tests/runSyncTests.pl failed"
 
+info "cleaning up test databases..."
+rm -rf "strfry-db-test" "strfry-db-test-1" "strfry-db-test-2"
+
 pass "All tests passed."
