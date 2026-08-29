@@ -1,10 +1,5 @@
-#include <arpa/inet.h>
-#ifdef __FreeBSD__
-#include <sys/socket.h>
-#include <netinet/in.h>
-#endif
+#include "win32.h"
 #include <stdio.h>
-#include <signal.h>
 
 #include <algorithm>
 #include <string>
@@ -121,10 +116,12 @@ uint64_t getDBVersion(lmdb::txn &txn) {
 
 
 void exitOnSigPipe() {
+#ifndef _WIN32
     struct sigaction act;
     memset(&act, 0, sizeof act);
     act.sa_sigaction = [](int, siginfo_t*, void*){ ::exit(1); };
     if (sigaction(SIGPIPE, &act, nullptr)) throw herr("couldn't run sigaction(): ", strerror(errno));
+#endif
 }
 
 

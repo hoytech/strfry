@@ -4,6 +4,8 @@
 #include <hoytech/file_change_monitor.h>
 
 #include "golpe.h"
+#include "win32.h"
+
 
 #include "WSConnection.h"
 

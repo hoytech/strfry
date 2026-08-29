@@ -5,8 +5,10 @@
 
 #include <docopt.h>
 #include "golpe.h"
+#include "win32.h"
 
 #include "WriterPipeline.h"
+
 
 
 static const char USAGE[] =

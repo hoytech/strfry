@@ -1,5 +1,7 @@
+#ifndef _WIN32
 #include <pthread.h>
 #include <signal.h>
+#endif
 
 #include <docopt.h>
 
@@ -40,6 +42,7 @@ void cmd_relay(const std::vector<std::string> &subArgs) {
 }
 
 void RelayServer::run() {
+#ifndef _WIN32
     {
         sigset_t set;
         sigemptyset(&set);
@@ -47,6 +50,7 @@ void RelayServer::run() {
         int s = pthread_sigmask(SIG_BLOCK, &set, NULL);
         if (s != 0) throw herr("Unable to set sigmask: ", strerror(errno));
     }
+#endif
 
     tpWebsocket.init("Websocket", 1, [this](auto &thr){
         runWebsocket(thr);

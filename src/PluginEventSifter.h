@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <errno.h>
+#ifndef _WIN32
 #include <spawn.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -9,24 +10,31 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
+#endif
 
 #include <memory>
 
+#ifndef _WIN32
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
 #define st_mtim st_mtimespec
 #endif
+#endif
 
+#ifndef _WIN32
 #include "hoytech/stream.h"
+#endif
 
 #include "golpe.h"
 
 #include "events.h"
 
+#ifndef _WIN32
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
 extern char **environ;
 #elif defined(__APPLE__)
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
+#endif
 #endif
 
 
@@ -37,6 +45,26 @@ enum class PluginEventSifterResult {
     ShadowReject,
 };
 
+
+#ifdef _WIN32
+
+struct PluginEventSifter {
+    PluginEventSifterResult acceptEvent(const std::string &pluginCmd, const tao::json::value &evJson, EventSourceType sourceType, std::string_view sourceInfo, const Bytes32 &authed, std::string &okMsg) {
+        if (pluginCmd.size() == 0) {
+            return PluginEventSifterResult::Accept;
+        }
+
+        static bool warned = false;
+        if (!warned) {
+            LW << "Write policy plugins are not supported on Windows. All events are accepted by default.";
+            warned = true;
+        }
+
+        return PluginEventSifterResult::Accept;
+    }
+};
+
+#else
 
 struct PluginEventSifter {
     struct RunningPlugin {
@@ -198,3 +226,5 @@ struct PluginEventSifter {
         running = make_unique<RunningPlugin>(pid, inPipe.extractFd(0), outPipe.extractFd(1), pluginCmd);
     }
 };
+
+#endif

@@ -2,6 +2,7 @@
 *.d
 *.o
 /strfry
+/strfry.exe
 /strfry-db/*.mdb
 .vscode/*
 /strfry-db-test*
