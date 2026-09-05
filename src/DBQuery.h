@@ -226,7 +226,9 @@ struct DBScan : NonCopyable {
         refillScanDepth = 10 * initialScanDepth;
     }
 
-    bool scan(lmdb::txn &txn, const std::function<bool(uint64_t)> &handleEvent, const std::function<bool(uint64_t)> &doPause) {
+    template<typename EventCallback, typename PauseCallback>
+    requires std::is_invocable_r_v<bool, EventCallback&, uint64_t> && std::is_invocable_r_v<bool, PauseCallback&, uint64_t>
+    bool scan(lmdb::txn &txn, EventCallback &&handleEvent, PauseCallback &&doPause) {
         auto cmp = [](auto &a, auto &b){
             return a.created() == b.created() ? a.levId() > b.levId() : a.created() > b.created();
         };

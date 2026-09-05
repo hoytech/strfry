@@ -331,11 +331,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     std::function<void()> asyncCb = [&]{
         auto newMsgs = thr.inbox.pop_all_no_wait();
 
-        auto doSend = [&](uint64_t connId, std::string_view payload, uWS::OpCode opCode){
-            auto it = connIdToConnection.find(connId);
-            if (it == connIdToConnection.end()) return;
-            auto &c = *it->second;
-
+        auto doSendToConnection = [&](Connection &c, std::string_view payload, uWS::OpCode opCode) -> bool {
             // Track bytes still inside uWS's outbound path (either queued or
             // partially sent). Increment before send(), decrement in the
             // completion callback. The payload size is smuggled through the
@@ -380,8 +376,15 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                    << renderSize(maxPending) << ", terminating";
                 PrometheusMetrics::getInstance().slowClientTerminations.inc();
                 c.websocket->terminate();
-                return;
+                return false; // signal: connection is dead, stop sending to it
             }
+            return true;
+        };
+
+        auto doSend = [&](uint64_t connId, std::string_view payload, uWS::OpCode opCode){
+            auto it = connIdToConnection.find(connId);
+            if (it == connIdToConnection.end()) return;
+            doSendToConnection(*it->second, payload, opCode);
         };
 
         for (auto &newMsg : newMsgs) {
@@ -389,6 +392,13 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                 doSend(msg->connId, msg->payload, uWS::OpCode::TEXT);
             } else if (auto msg = std::get_if<MsgWebsocket::SendBinary>(&newMsg.msg)) {
                 doSend(msg->connId, msg->payload, uWS::OpCode::BINARY);
+            } else if (auto batch = std::get_if<MsgWebsocket::SendBatch>(&newMsg.msg)) {
+                    auto it = connIdToConnection.find(batch->connId);
+                    if (it == connIdToConnection.end()) continue;
+                    auto &c = *it->second;
+                    for (auto &payload : batch->payloads) {
+                        if (!doSendToConnection(c, payload, uWS::OpCode::TEXT)) break; // terminated, stop
+                }
             } else if (auto msg = std::get_if<MsgWebsocket::SendEventToBatch>(&newMsg.msg)) {
                 tempBuf.reserve(13 + MAX_SUBID_SIZE + msg->evJson.size());
                 tempBuf.resize(10 + MAX_SUBID_SIZE);

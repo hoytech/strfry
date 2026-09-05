@@ -8,6 +8,9 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     QueryScheduler queries;
     flat_hash_map<uint64_t, Bytes32> connIdToAuthedPubkey;
 
+    std::vector<std::string> pendingPayloads;
+    uint64_t pendingConnId = 0;
+
     queries.onEvent = [&](lmdb::txn &txn, const auto &sub, uint64_t levId, std::string_view eventPayload){
         if (sub.countOnly) return;
         auto it = connIdToAuthedPubkey.find(sub.connId);
@@ -15,10 +18,24 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
         PackedEventView packed(ev.buf);
         Bytes32 subscriberAuthedPubkey = it == connIdToAuthedPubkey.end() ? Bytes32() : it->second;
         if (!ReadRestrictor::shouldSendToSubscriber(packed, subscriberAuthedPubkey)) {
-            return; 
+            return;
         }
-        
-        sendEvent(sub.connId, sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr));
+        PROM_INC_RELAY_MSG("EVENT");
+        pendingConnId = sub.connId;
+        pendingPayloads.push_back(
+            buildEventReply(sub.subId, decodeEventPayload(txn, decomp, eventPayload, nullptr, nullptr))
+        );
+    };
+
+    queries.onSliceComplete = [&](lmdb::txn &){
+        if (pendingPayloads.empty()) return;
+        if (pendingPayloads.size() == 1) {
+            tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::Send{pendingConnId, std::move(pendingPayloads[0])}});
+        } else {
+            tpWebsocket.dispatch(0, MsgWebsocket{MsgWebsocket::SendBatch{pendingConnId, std::move(pendingPayloads)}});
+        }
+        pendingPayloads.clear();
+        hubTrigger->send();
     };
 
     queries.onComplete = [&](lmdb::txn &, Subscription &sub, uint64_t total){

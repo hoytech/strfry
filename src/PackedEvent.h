@@ -49,7 +49,9 @@ struct PackedEventView {
         return lmdb::from_sv<uint64_t>(buf.substr(80, 8));
     }
 
-    void foreachTag(const std::function<bool(char, std::string_view)> &cb) const {
+    template <typename Callback>
+    requires std::is_invocable_r_v<bool, Callback&, char, std::string_view>
+    void foreachTag(Callback &&cb) const {
         std::string_view b = buf.substr(88);
 
         while (b.size() >= 2) {

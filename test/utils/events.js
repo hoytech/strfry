@@ -52,20 +52,7 @@ export function buildEvent({
   return { ...evt, id, sig };
 }
 
-export function signEvent(authChallengeString, relayUrl, sec) {
+export function signEvent(event, sec) {
   const secBytes = hexToBytes(sec);
-  const authEvent = finalizeEvent(
-    {
-      kind: 22242,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ["relay", relayUrl],
-        ["challenge", authChallengeString],
-      ],
-      content: "",
-    },
-    secBytes,
-  );
-
-  return authEvent;
+  return finalizeEvent(event, secBytes);
 }
