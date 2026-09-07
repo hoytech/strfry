@@ -257,7 +257,7 @@ The following metrics are available:
 
 * **`nostr_client_messages_total{verb}`** - Total number of messages received from clients, broken down by verb (EVENT, REQ, CLOSE, NEG-OPEN, NEG-MSG, NEG-CLOSE)
 * **`nostr_relay_messages_total{verb}`** - Total number of messages sent to clients, broken down by verb (EVENT, OK, EOSE, NOTICE, NEG-MSG, NEG-ERR)
-* **`nostr_events_total{kind}`** - Total number of events processed, broken down by event kind (0, 1, 3, 4, etc.)
+* **`nostr_events_total{kind}`** - Total number of events persisted to the DB, broken down by event kind (0, 1, 3, 4, etc.). Rejected and duplicate events are not counted here; see `strfry_write_rejected_total`, `strfry_write_dups_total` and `strfry_invalid_events_total`
 
 To scrape these metrics with Prometheus, add a job to your `prometheus.yml`:
 
