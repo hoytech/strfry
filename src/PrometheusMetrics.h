@@ -101,6 +101,7 @@ public:
     // Write path performance metrics
     Counter writtenEventsTotal;
     Counter rejectedEventsTotal;
+    Counter invalidEventsTotal;  // EVENT messages that failed validation before reaching the writer
     Counter dupEventsTotal;
     Counter writeTimeUs;  // total microseconds spent in write transactions
     Gauge lastWriteBatchSize;
@@ -151,6 +152,10 @@ public:
         out << "# HELP strfry_write_rejected_total Total events rejected during write\n";
         out << "# TYPE strfry_write_rejected_total counter\n";
         out << "strfry_write_rejected_total " << rejectedEventsTotal.get() << "\n";
+
+        out << "# HELP strfry_invalid_events_total Total EVENT messages rejected before the write path because they failed validation\n";
+        out << "# TYPE strfry_invalid_events_total counter\n";
+        out << "strfry_invalid_events_total " << invalidEventsTotal.get() << "\n";
 
         out << "# HELP strfry_write_dups_total Total duplicate events skipped\n";
         out << "# TYPE strfry_write_dups_total counter\n";

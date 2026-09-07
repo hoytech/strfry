@@ -33,6 +33,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessEvent(txn, rsctx, msg->connId, msg->ipAddr, arr[1], writerMsgs);
                             } catch (std::exception &e) {
+                                PrometheusMetrics::getInstance().invalidEventsTotal.inc();
                                 sendOKResponse(msg->connId, arr[1].is_object() && arr[1].at("id").is_string() ? arr[1].at("id").get_string() : "?",
                                                false, std::string("invalid: ") + e.what());
                                 if (cfg().relay__logging__invalidEvents) LI << "Rejected invalid event: " << e.what();
