@@ -1,6 +1,24 @@
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
 #include "ReadRestrictor.h"
+#include <mutex>
+#include <unordered_map>
+
+// Optional rate limiting of REQ/COUNT messages, to defend against floods and
+// reconnection storms. Config-gated by relay__maxReqPerIPPerDecaSec and
+// relay__maxReqPerDecaSecGlobal (both 0 = disabled). Counters are tracked in
+// fixed 10-second windows; stale per-IP entries are pruned once per window.
+namespace reqRateLimit {
+    struct Window {
+        uint64_t windowStart = 0; // 10-second window index
+        uint64_t count = 0;
+        bool logged = false;
+    };
+
+    static std::mutex mtx;
+    static std::unordered_map<std::string, Window> perIP;
+    static Window global;
+}
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
@@ -55,6 +73,55 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             std::string subIdStr;
 
                             try {
+                                subIdStr = jsonGetString(arr[1], "subscription id was not a string");
+
+                                {
+                                    const uint64_t maxPerIP = cfg().relay__maxReqPerIPPerDecaSec;
+                                    const uint64_t maxGlobal = cfg().relay__maxReqPerDecaSecGlobal;
+
+                                    if (maxPerIP > 0 || maxGlobal > 0) {
+                                        const uint64_t win = hoytech::curr_time_us() / 10'000'000;
+                                        std::lock_guard<std::mutex> lock(reqRateLimit::mtx);
+
+                                        if (reqRateLimit::global.windowStart != win) {
+                                            // new window: reset global counter, prune per-IP entries stale for >60s
+                                            for (auto it = reqRateLimit::perIP.begin(); it != reqRateLimit::perIP.end(); ) {
+                                                if (win - it->second.windowStart > 6) it = reqRateLimit::perIP.erase(it);
+                                                else ++it;
+                                            }
+                                            reqRateLimit::global.windowStart = win;
+                                            reqRateLimit::global.count = 0;
+                                            reqRateLimit::global.logged = false;
+                                        }
+
+                                        if (maxGlobal > 0) reqRateLimit::global.count++;
+
+                                        if (maxPerIP > 0) {
+                                            auto &w = reqRateLimit::perIP[msg->ipAddr];
+                                            if (w.windowStart != win) { w.windowStart = win; w.count = 0; w.logged = false; }
+                                            w.count++;
+
+                                            if (w.count > maxPerIP) {
+                                                sendClosedError(msg->connId, subIdStr, "rate-limited: too many requests, slow down");
+                                                if (!w.logged) {
+                                                    LI << "REQ per-IP rate-limit: ip=" << renderIP(msg->ipAddr) << " connId=" << msg->connId << " count=" << w.count;
+                                                    w.logged = true;
+                                                }
+                                                continue;
+                                            }
+                                        }
+
+                                        if (maxGlobal > 0 && reqRateLimit::global.count > maxGlobal) {
+                                            sendClosedError(msg->connId, subIdStr, "rate-limited: server busy, retry later");
+                                            if (!reqRateLimit::global.logged) {
+                                                LI << "REQ global load-shed: ip=" << renderIP(msg->ipAddr) << " connId=" << msg->connId << " count=" << reqRateLimit::global.count;
+                                                reqRateLimit::global.logged = true;
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+
                                 ingesterProcessReq(txn, rsctx, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
                                 if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
