@@ -10,8 +10,9 @@
 
 struct ReadRestrictor {
 private:
-    inline static uint64_t configVer = 0;
-    inline static flat_hash_set<uint64_t> restrictedKinds_;
+    // Per-thread so a config reload on one relay thread can't rebuild the set while another reads it
+    inline static thread_local uint64_t configVer = 0;
+    inline static thread_local flat_hash_set<uint64_t> restrictedKinds_;
 
 public:
     static void init(){
