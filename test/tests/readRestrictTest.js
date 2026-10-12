@@ -38,8 +38,8 @@ async function testRestrictedReqAndCountRequireAuth({ wsUrl, client }) {
     (m) => m[0] === "CLOSED" && m[1] === "restricted-req",
   );
   expect(
-    String(closedReq[2]).includes("auth-required"),
-    "REQ must be closed with auth-required",
+    String(closedReq[2]).startsWith("auth-required:"),
+    `REQ must be closed with an "auth-required:" prefix, got: ${closedReq[2]}`,
   );
 
   client.send(["COUNT", "restricted-count", { kinds: [4] }]);
@@ -48,10 +48,22 @@ async function testRestrictedReqAndCountRequireAuth({ wsUrl, client }) {
     (m) => m[0] === "CLOSED" && m[1] === "restricted-count",
   );
   expect(
-    String(closedCount[2]).includes("auth-required"),
-    "COUNT must be closed with auth-required",
+    String(closedCount[2]).startsWith("auth-required:"),
+    `COUNT must be closed with an "auth-required:" prefix, got: ${closedCount[2]}`,
   );
   pass("testRestrictedReqAndCountRequireAuth");
+}
+
+async function testMalformedReqClosedWithInvalidPrefix({ wsUrl, client }) {
+  client.send(["REQ", "malformed-req", "not a filter"]);
+  const closed = await client.waitFor(
+    (m) => m[0] === "CLOSED" && m[1] === "malformed-req",
+  );
+  expect(
+    String(closed[2]).startsWith("invalid:"),
+    `malformed REQ must be closed with an "invalid:" prefix, got: ${closed[2]}`,
+  );
+  pass("testMalformedReqClosedWithInvalidPrefix");
 }
 
 async function testCountUnrestrictedAllowed({ wsUrl, client }) {
@@ -226,15 +238,20 @@ async function testRestrictedFilterReturnsAllIfAuthenticatedAndInvolvementNotReq
     "AUTH should return 'successfully authenticated' with 'ok' status",
   );
 
-  // send REQ with mixed filter
-  client.send(["REQ", "restricted-auth", { kinds: [4] }]);
+  // NIP-42: after AUTH, re-send the REQ that was CLOSED with "auth-required:"
+  client.send(["REQ", "restricted-req", { kinds: [4] }]);
   const msgs = await client.collectUntil(
-    (m) => m[0] === "EOSE" && m[1] === "restricted-auth",
+    (m) => m[0] === "EOSE" && m[1] === "restricted-req",
     4_000,
   );
 
+  expect(
+    !msgs.some((m) => m[0] === "CLOSED" && m[1] === "restricted-req"),
+    "re-sent REQ must not be CLOSED after successful AUTH",
+  );
+
   const events = msgs
-    .filter((m) => m[0] === "EVENT" && m[1] === "restricted-auth")
+    .filter((m) => m[0] === "EVENT" && m[1] === "restricted-req")
     .map((m) => m[2]);
 
   const kinds = events.map((ev) => ev.kind);
@@ -294,7 +311,10 @@ async function testCountFailsWhenFilterNotFullyScopedIfInvolvedRequired({
 
   const msg = await client.waitFor((m) => m[1] === "failing-count");
 
-  expect(String(msg[2]).includes("count-failed"));
+  expect(
+    msg[0] === "CLOSED" && String(msg[2]).startsWith("count-failed:"),
+    `COUNT must be closed with a "count-failed:" prefix, got: ${JSON.stringify(msg)}`,
+  );
 
   pass("testCountFailsWhenFilterNotFullyScopedIfInvolvedRequired");
 }
@@ -333,6 +353,7 @@ async function main() {
     relayDbPath: relayDbDir,
     tests: async ({ wsUrl, client }) => {
       await testRestrictedReqAndCountRequireAuth({ wsUrl, client });
+      await testMalformedReqClosedWithInvalidPrefix({ wsUrl, client });
       await testCountUnrestrictedAllowed({ wsUrl, client });
       await testReqWorkerFiltersRestrictedInitialScan({ wsUrl, client });
       await testReqMonitorFiltersRestrictedLiveEvents({ wsUrl, client });

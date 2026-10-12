@@ -13,6 +13,10 @@ next
     rejection reason are logged, preventing a potential DoS vector where
     oversized events could fill disks with log data.
   * Truncate large messages in sync error/warning logs to 512 bytes.
+  * CLOSED reasons no longer have an "ERROR: " prefix, so they start with a
+    machine-readable prefix as required by NIP-01. In particular, clients can
+    now detect "auth-required:" and re-send the REQ after AUTH (NIP-42).
+    Invalid REQs are now closed with "invalid: bad req: ..."
 
 1.1.2
   * Fix crashing bug where a negentropy subscription is created with the same
