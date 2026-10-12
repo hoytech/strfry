@@ -36,3 +36,10 @@ test-subid: build/subid_tests
 
 build/subid_tests: test/tests/SubIdTests.cpp build/golpe.h
 	$(CXX) $(CXXFLAGS) $(INCS) $< -o $@
+
+.PHONY: test-read-restrictor
+test-read-restrictor: build/read_restrictor_tests
+	build/read_restrictor_tests
+
+build/read_restrictor_tests: test/tests/ReadRestrictorTests.cpp src/misc.cpp src/ReadRestrictor.h build/golpe.h build/config.h build/defaultDb.h
+	$(CXX) $(CXXFLAGS) $(INCS) test/tests/ReadRestrictorTests.cpp src/misc.cpp $(LDFLAGS) -lcrypto -pthread -o $@
