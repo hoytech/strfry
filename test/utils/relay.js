@@ -12,6 +12,7 @@ export function config(
   relayDb,
   relayPort = 40553,
   restrictReadToInvolvedPubkey = true,
+  { authEnabled = true, serviceUrl = "wss://relay.test" } = {},
 ) {
   return `
 db = "${relayDb}/"
@@ -23,8 +24,8 @@ relay {
   autoPingSeconds = 0
 
   auth {
-    enabled = true
-    serviceUrl = "wss://relay.test"
+    enabled = ${authEnabled ? "true" : "false"}
+    serviceUrl = "${serviceUrl}"
     restrictedReadKinds = "4, 1059"
     restrictReadToInvolvedPubkey = ${restrictReadToInvolvedPubkey ? "true" : "false"}
   }

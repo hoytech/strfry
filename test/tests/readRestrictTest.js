@@ -316,6 +316,173 @@ async function testCountSuccessfulWhenFilterFullyScoped({ wsUrl, client }) {
   pass("testCountSuccessFulWhenFilterFullyScoped");
 }
 
+// auth unavailable (no serviceUrl, or auth disabled): restrictedReadKinds must not apply
+
+const restrictedKinds = [4, 1059];
+
+function addGiftWrap(content) {
+  return addEvent(relayCfgPath, {
+    kind: 1059,
+    from: 0,
+    tags: [["p", ids[1].pub]],
+    content,
+  });
+}
+
+async function expectReqNotRestricted(client, subId, kind, label) {
+  client.send(["REQ", subId, { kinds: [kind] }]);
+  const msgs = await client.collectUntil(
+    (m) => (m[0] === "EOSE" || m[0] === "CLOSED") && m[1] === subId,
+    4_000,
+  );
+  expect(
+    !msgs.some((m) => m[0] === "AUTH"),
+    `${label}: kind ${kind} REQ must not send an AUTH challenge`,
+  );
+  expect(
+    msgs[msgs.length - 1][0] === "EOSE",
+    `${label}: kind ${kind} REQ must not be CLOSED`,
+  );
+  expect(
+    msgs.some((m) => m[0] === "EVENT" && m[2].kind === kind),
+    `${label}: kind ${kind} REQ should return kind ${kind} events`,
+  );
+}
+
+async function expectReqRequiresAuth(client, subId, kind, label) {
+  client.send(["REQ", subId, { kinds: [kind] }]);
+  const closed = await client.waitFor(
+    (m) => m[0] === "CLOSED" && m[1] === subId,
+    4_000,
+  );
+  expect(
+    String(closed[2]).includes("auth-required"),
+    `${label}: kind ${kind} REQ must be closed with auth-required`,
+  );
+}
+
+async function testRestrictedKindsReadableWhenAuthUnavailable({ client }, label) {
+  addGiftWrap(`seed-giftwrap-${label}`);
+
+  for (const kind of restrictedKinds) {
+    await expectReqNotRestricted(client, `unavail-req-${kind}`, kind, label);
+
+    client.send(["COUNT", `unavail-count-${kind}`, { kinds: [kind] }]);
+    const count = await client.waitFor(
+      (m) => m[1] === `unavail-count-${kind}`,
+      4_000,
+    );
+    expect(
+      count[0] === "COUNT" && count[2].count >= 1,
+      `${label}: kind ${kind} COUNT should succeed without auth`,
+    );
+
+    client.send(["REQ", `unavail-live-${kind}`, { kinds: [kind] }]);
+    await client.waitFor(
+      (m) => m[0] === "EOSE" && m[1] === `unavail-live-${kind}`,
+      4_000,
+    );
+    addEvent(relayCfgPath, {
+      kind,
+      from: 0,
+      tags: [["p", ids[1].pub]],
+      content: `live-unavail-${label}-${kind}`,
+    });
+    await client.waitFor(
+      (m) =>
+        m[0] === "EVENT" &&
+        m[1] === `unavail-live-${kind}` &&
+        m[2].content === `live-unavail-${label}-${kind}`,
+      5_000,
+    );
+    client.send(["CLOSE", `unavail-live-${kind}`]);
+  }
+
+  pass(`testRestrictedKindsReadableWhenAuthUnavailable (${label})`);
+}
+
+function testNegentropyRestrictedReadableWhenAuthUnavailable({ wsUrl }, label) {
+  for (const kind of restrictedKinds) {
+    cleanDb(syncDbDir);
+    writeConfig(config(syncDbDir, 40555), syncCfgPath);
+
+    const syncRes = runStrfry(
+      [
+        "--config",
+        syncCfgPath,
+        "sync",
+        wsUrl,
+        "--filter",
+        JSON.stringify({ kinds: [kind] }),
+        "--print-missing",
+        "--timeout",
+        "10",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+
+    expect(
+      syncRes.status === 0,
+      `${label}: kind ${kind} negentropy sync should succeed: ${syncRes.stderr || syncRes.stdout}`,
+    );
+    const needLines = syncRes.stdout
+      .trim()
+      .split("\n")
+      .filter((line) => line.startsWith("need,"));
+    expect(
+      needLines.length >= 1,
+      `${label}: kind ${kind} negentropy sync should expose event ids`,
+    );
+  }
+  pass(`testNegentropyRestrictedReadableWhenAuthUnavailable (${label})`);
+}
+
+async function reloadConfig(auth) {
+  writeConfig(config(relayDbDir, relayPort, true, auth), relayCfgPath);
+  console.log("Writing new config, wait...");
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+}
+
+async function testRestrictionAppliesAfterServiceUrlConfigured({ client }) {
+  await reloadConfig({});
+
+  for (const kind of restrictedKinds) {
+    await expectReqRequiresAuth(
+      client,
+      `reloaded-req-${kind}`,
+      kind,
+      "serviceUrl configured",
+    );
+  }
+  pass("testRestrictionAppliesAfterServiceUrlConfigured");
+}
+
+async function testRestrictionLiftedWhenAuthBecomesUnavailable({ client }) {
+  addGiftWrap("seed-giftwrap-reverse");
+
+  for (const kind of restrictedKinds) {
+    await expectReqRequiresAuth(client, `before-${kind}`, kind, "auth usable");
+  }
+
+  const transitions = [
+    { label: "serviceUrl removed", auth: { serviceUrl: "" } },
+    { label: "auth disabled", auth: { authEnabled: false } },
+  ];
+
+  for (const { label, auth } of transitions) {
+    // restore usable auth between transitions so each one starts restricted
+    await reloadConfig({});
+    await expectReqRequiresAuth(client, `restored-${label}`, 4, "auth restored");
+
+    await reloadConfig(auth);
+    for (const kind of restrictedKinds) {
+      await expectReqNotRestricted(client, `after-${label}-${kind}`, kind, label);
+    }
+  }
+
+  pass("testRestrictionLiftedWhenAuthBecomesUnavailable");
+}
+
 function expect(cond, msg) {
   if (!cond) throw new Error(msg);
 }
@@ -353,6 +520,40 @@ async function main() {
       await testCountSuccessfulWhenFilterFullyScoped({ wsUrl, client });
     },
   });
+
+  const authUnavailableCases = [
+    { label: "no serviceUrl", auth: { serviceUrl: "" } },
+    { label: "auth disabled", auth: { authEnabled: false } },
+  ];
+
+  for (const { label, auth } of authUnavailableCases) {
+    writeConfig(config(relayDbDir, relayPort, true, auth), relayCfgPath);
+
+    await runRelaySuite({
+      relayConfigPath: relayCfgPath,
+      relayPort: relayPort,
+      relayDbPath: relayDbDir,
+      tests: async ({ wsUrl, client }) => {
+        await testRestrictedKindsReadableWhenAuthUnavailable({ client }, label);
+        testNegentropyRestrictedReadableWhenAuthUnavailable({ wsUrl }, label);
+        if (label === "no serviceUrl") {
+          await testRestrictionAppliesAfterServiceUrlConfigured({ client });
+        }
+      },
+    });
+  }
+
+  writeConfig(config(relayDbDir, relayPort, true), relayCfgPath);
+
+  await runRelaySuite({
+    relayConfigPath: relayCfgPath,
+    relayPort: relayPort,
+    relayDbPath: relayDbDir,
+    tests: async ({ client }) => {
+      await testRestrictionLiftedWhenAuthBecomesUnavailable({ client });
+    },
+  });
+
   console.log("All read restriction tests passed!");
 }
 

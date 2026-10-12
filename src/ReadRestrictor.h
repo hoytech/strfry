@@ -14,8 +14,18 @@ private:
     inline static flat_hash_set<uint64_t> restrictedKinds_;
 
 public:
+    // Same condition used to advertise NIP-42 in NIP-11. Without it, AUTH can never
+    // succeed, so restricting reads would make those kinds unreadable to everyone.
+    static bool authUsable() {
+        return cfg().relay__auth__enabled && cfg().relay__auth__serviceUrl.size() > 0;
+    }
+
     static void init(){
-        parseCommaSeparatedKinds(cfg().relay__auth__restrictedReadKinds, restrictedKinds_);
+        if (authUsable()) {
+            parseCommaSeparatedKinds(cfg().relay__auth__restrictedReadKinds, restrictedKinds_);
+        } else {
+            restrictedKinds_.clear();
+        }
     }
 
     static flat_hash_set<uint64_t>& restrictedKinds() {
