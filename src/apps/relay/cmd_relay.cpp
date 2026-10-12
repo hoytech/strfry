@@ -4,6 +4,7 @@
 #include <docopt.h>
 
 #include "RelayServer.h"
+#include "ReadRestrictor.h"
 
 
 static const char USAGE[] =
@@ -28,6 +29,10 @@ static void checkConfig() {
 
     if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
         LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";
+    }
+
+    if (cfg().relay__auth__restrictedReadKinds.size() && !ReadRestrictor::authUsable()) {
+        LW << "relay.auth.restrictedReadKinds is set but AUTH is unavailable (requires relay.auth.enabled and relay.auth.serviceUrl), so these kinds are NOT read-restricted: " << cfg().relay__auth__restrictedReadKinds;
     }
 }
 

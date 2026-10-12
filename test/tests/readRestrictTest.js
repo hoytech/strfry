@@ -316,6 +316,109 @@ async function testCountSuccessfulWhenFilterFullyScoped({ wsUrl, client }) {
   pass("testCountSuccessFulWhenFilterFullyScoped");
 }
 
+// auth unavailable (no serviceUrl, or auth disabled): restrictedReadKinds must not apply
+
+async function testRestrictedKindsReadableWhenAuthUnavailable({ client }, label) {
+  client.send(["REQ", "unavail-req", { kinds: [4] }]);
+  const msgs = await client.collectUntil(
+    (m) => (m[0] === "EOSE" || m[0] === "CLOSED") && m[1] === "unavail-req",
+    4_000,
+  );
+  expect(
+    !msgs.some((m) => m[0] === "AUTH"),
+    `${label}: REQ must not send an AUTH challenge`,
+  );
+  expect(
+    msgs[msgs.length - 1][0] === "EOSE",
+    `${label}: REQ must not be CLOSED`,
+  );
+  expect(
+    msgs.some((m) => m[0] === "EVENT" && m[2].kind === 4),
+    `${label}: REQ should return kind 4 events`,
+  );
+
+  client.send(["COUNT", "unavail-count", { kinds: [4] }]);
+  const count = await client.waitFor((m) => m[1] === "unavail-count", 4_000);
+  expect(
+    count[0] === "COUNT" && count[2].count >= 1,
+    `${label}: COUNT should succeed without auth`,
+  );
+
+  client.send(["REQ", "unavail-live", { kinds: [4] }]);
+  await client.waitFor(
+    (m) => m[0] === "EOSE" && m[1] === "unavail-live",
+    4_000,
+  );
+  addEvent(relayCfgPath, {
+    kind: 4,
+    from: 0,
+    tags: [["p", ids[1].pub]],
+    content: `live-unavail-${label}`,
+  });
+  await client.waitFor(
+    (m) =>
+      m[0] === "EVENT" &&
+      m[1] === "unavail-live" &&
+      m[2].content === `live-unavail-${label}`,
+    5_000,
+  );
+  client.send(["CLOSE", "unavail-live"]);
+
+  pass(`testRestrictedKindsReadableWhenAuthUnavailable (${label})`);
+}
+
+function testNegentropyRestrictedReadableWhenAuthUnavailable({ wsUrl }, label) {
+  cleanDb(syncDbDir);
+  writeConfig(config(syncDbDir, 40555), syncCfgPath);
+
+  const syncRes = runStrfry(
+    [
+      "--config",
+      syncCfgPath,
+      "sync",
+      wsUrl,
+      "--filter",
+      '{"kinds":[4]}',
+      "--print-missing",
+      "--timeout",
+      "10",
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  expect(
+    syncRes.status === 0,
+    `${label}: restricted negentropy sync should succeed: ${syncRes.stderr || syncRes.stdout}`,
+  );
+  const needLines = syncRes.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.startsWith("need,"));
+  expect(
+    needLines.length >= 1,
+    `${label}: restricted negentropy sync should expose kind 4 event ids`,
+  );
+  pass(`testNegentropyRestrictedReadableWhenAuthUnavailable (${label})`);
+}
+
+async function testRestrictionAppliesAfterServiceUrlConfigured({ client }) {
+  writeConfig(config(relayDbDir, relayPort, true), relayCfgPath);
+  console.log("Writing new config, wait...");
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  client.send(["REQ", "reloaded-req", { kinds: [4] }]);
+  await client.waitFor((m) => m[0] === "AUTH", 4_000);
+  const closed = await client.waitFor(
+    (m) => m[0] === "CLOSED" && m[1] === "reloaded-req",
+    4_000,
+  );
+  expect(
+    String(closed[2]).includes("auth-required"),
+    "REQ must be closed with auth-required once serviceUrl is configured",
+  );
+  pass("testRestrictionAppliesAfterServiceUrlConfigured");
+}
+
 function expect(cond, msg) {
   if (!cond) throw new Error(msg);
 }
@@ -353,6 +456,29 @@ async function main() {
       await testCountSuccessfulWhenFilterFullyScoped({ wsUrl, client });
     },
   });
+
+  const authUnavailableCases = [
+    { label: "no serviceUrl", auth: { serviceUrl: "" } },
+    { label: "auth disabled", auth: { authEnabled: false } },
+  ];
+
+  for (const { label, auth } of authUnavailableCases) {
+    writeConfig(config(relayDbDir, relayPort, true, auth), relayCfgPath);
+
+    await runRelaySuite({
+      relayConfigPath: relayCfgPath,
+      relayPort: relayPort,
+      relayDbPath: relayDbDir,
+      tests: async ({ wsUrl, client }) => {
+        await testRestrictedKindsReadableWhenAuthUnavailable({ client }, label);
+        testNegentropyRestrictedReadableWhenAuthUnavailable({ wsUrl }, label);
+        if (label === "no serviceUrl") {
+          await testRestrictionAppliesAfterServiceUrlConfigured({ client });
+        }
+      },
+    });
+  }
+
   console.log("All read restriction tests passed!");
 }
 
