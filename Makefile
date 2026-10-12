@@ -41,5 +41,5 @@ build/subid_tests: test/tests/SubIdTests.cpp build/golpe.h
 test-read-restrictor: build/read_restrictor_tests
 	build/read_restrictor_tests
 
-build/read_restrictor_tests: test/ReadRestrictorTests.cpp src/misc.cpp src/ReadRestrictor.h build/golpe.h build/config.h build/defaultDb.h
-	$(CXX) $(CXXFLAGS) $(INCS) test/ReadRestrictorTests.cpp src/misc.cpp $(LDFLAGS) -lcrypto -pthread -o $@
+build/read_restrictor_tests: test/tests/ReadRestrictorTests.cpp src/misc.cpp src/ReadRestrictor.h build/golpe.h build/config.h build/defaultDb.h
+	$(CXX) $(CXXFLAGS) $(INCS) test/tests/ReadRestrictorTests.cpp src/misc.cpp $(LDFLAGS) -lcrypto -pthread -o $@

@@ -14,6 +14,8 @@ namespace {
 
 void publishConfig(uint64_t ver) {
     auto *c = new ConfigValues(ver);
+    c->relay__auth__enabled = true;
+    c->relay__auth__serviceUrl = "ws://127.0.0.1:7777";
     c->relay__auth__restrictedReadKinds = "4, 1059";
     currentCfg.store(c); // old configs are leaked, like a live reload
 }
