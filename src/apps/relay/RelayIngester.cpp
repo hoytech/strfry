@@ -57,7 +57,10 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
                             try {
                                 ingesterProcessReq(txn, rsctx, msg->connId, arr, cmd == "COUNT", subIdStr);
                             } catch (std::exception &e) {
-                                if (subIdStr.size()) sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
+                                if (subIdStr.size()) {
+                                    if (cmd == "REQ") ingesterRemoveRejectedSub(msg->connId, subIdStr);
+                                    sendClosedError(msg->connId, subIdStr, std::string("bad req: ") + e.what());
+                                }
                                 else sendNoticeError(msg->connId, std::string("bad req: ") + e.what());
                             }
                         } else if (cmd == "CLOSE") {
@@ -242,6 +245,8 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
     }
 
     if (shouldRejectReq) {
+        if (!countOnly) ingesterRemoveRejectedSub(connId, outSubIdStr);
+
         if (!hasSession) {
             auto challenge = rsctx.challengeGenerator.get();
             rsctx.connIdToAuthSession.emplace(connId, challenge);
@@ -261,6 +266,17 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
     Subscription sub(connId, outSubIdStr, std::move(filterGroup), countOnly);
 
     tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::NewSub{std::move(sub)}});
+}
+
+// A REQ replaces any existing subscription with the same id, so a rejected REQ
+// must still end the old one. Otherwise it keeps sending events under an id the
+// client was just told is CLOSED.
+void RelayServer::ingesterRemoveRejectedSub(uint64_t connId, std::string_view subIdStr) {
+    try {
+        tpReqWorker.dispatch(connId, MsgReqWorker{MsgReqWorker::RemoveSub{connId, SubId(subIdStr)}});
+    } catch (std::exception &) {
+        // invalid id: no subscription can exist under it
+    }
 }
 
 void RelayServer::ingesterProcessClose(lmdb::txn &txn, uint64_t connId, const tao::json::value &arr) {
