@@ -58,6 +58,21 @@ config:
   - name: relay__info__nips
     desc: "List of supported lists as JSON array, or empty string to use default. Example: \"[1,2]\""
     default: ""
+  - name: relay__info__paymentsUrl
+    desc: "NIP-11: URL where users can pay for access (payments_url)"
+    default: ""
+  - name: relay__info__fees
+    desc: "NIP-11: Fee schedule (fees) as a JSON object with optional admission, subscription and publication arrays, or empty string for none. Validated at startup"
+    default: ""
+  - name: relay__info__authRequired
+    desc: "NIP-11: Override limitation.auth_required: \"true\", \"false\", or empty string for automatic (false)"
+    default: ""
+  - name: relay__info__paymentRequired
+    desc: "NIP-11: Override limitation.payment_required: \"true\", \"false\", or empty string for automatic (false)"
+    default: ""
+  - name: relay__info__restrictedWrites
+    desc: "NIP-11: Override limitation.restricted_writes: \"true\", \"false\", or empty string for automatic (true if relay.writePolicy.plugin is set)"
+    default: ""
 
   - name: relay__maxWebsocketPayloadSize
     desc: "Maximum accepted incoming websocket frame size (should be larger than max event)"

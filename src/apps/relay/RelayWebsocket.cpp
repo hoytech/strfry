@@ -1,4 +1,5 @@
 #include "RelayServer.h"
+#include "Nip11.h"
 
 #include "StrfryTemplates.h"
 #include "app_git_version.h"
@@ -98,8 +99,35 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
                     { "max_message_length", cfg().relay__maxWebsocketPayloadSize },
                     { "max_subscriptions", cfg().relay__maxSubsPerConnection },
                     { "max_limit", cfg().relay__maxFilterLimit },
+                    { "max_subid_length", MAX_SUBID_SIZE },
+                    { "max_event_tags", cfg().events__maxNumTags },
+                    { "created_at_lower_limit", cfg().events__rejectEventsOlderThanSeconds },
+                    { "created_at_upper_limit", cfg().events__rejectEventsNewerThanSeconds },
+                    { "default_limit", cfg().relay__maxFilterLimit }, // filters without a limit are clamped to max_limit
                 }) },
             });
+
+            auto &limitation = nip11["limitation"];
+            auto setFlag = [&](const char *field, const std::string &param, const char *paramName, bool automatic){
+                bool v = automatic;
+                try {
+                    if (auto o = nip11::parseOverride(param)) v = *o;
+                } catch (std::exception &e) {
+                    LE << "Unable to parse config param " << paramName << ", using automatic value: " << e.what();
+                }
+                limitation[field] = v;
+            };
+            setFlag("auth_required", cfg().relay__info__authRequired, "relay.info.authRequired", false);
+            setFlag("payment_required", cfg().relay__info__paymentRequired, "relay.info.paymentRequired", false);
+            setFlag("restricted_writes", cfg().relay__info__restrictedWrites, "relay.info.restrictedWrites", cfg().relay__writePolicy__plugin.size() > 0);
+
+            if (cfg().relay__info__paymentsUrl.size()) nip11["payments_url"] = cfg().relay__info__paymentsUrl;
+
+            try {
+                if (auto fees = nip11::parseFees(cfg().relay__info__fees)) nip11["fees"] = *fees;
+            } catch (std::exception &e) {
+                LE << "Unable to parse config param relay.info.fees, omitting fees: " << e.what();
+            }
 
             if (cfg().relay__info__name.size()) nip11["name"] = cfg().relay__info__name;
             if (cfg().relay__info__description.size()) nip11["description"] = cfg().relay__info__description;

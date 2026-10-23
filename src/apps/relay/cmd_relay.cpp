@@ -4,6 +4,7 @@
 #include <docopt.h>
 
 #include "RelayServer.h"
+#include "Nip11.h"
 
 
 static const char USAGE[] =
@@ -13,6 +14,31 @@ R"(
 )";
 
 
+
+// Fatal at startup (before any threads are running); only logged on config reload,
+// where the NIP-11 document falls back to automatic values and omits invalid fees.
+static void checkNip11Config(bool fatal) {
+    auto report = [&](const std::string &msg){
+        if (fatal) throw herr(msg);
+        LE << msg;
+    };
+
+    try {
+        nip11::parseFees(cfg().relay__info__fees);
+    } catch (std::exception &e) {
+        report(std::string("Invalid relay.info.fees: ") + e.what());
+    }
+
+    for (const auto &[name, val] : { std::pair{"relay.info.authRequired", cfg().relay__info__authRequired},
+                                     std::pair{"relay.info.paymentRequired", cfg().relay__info__paymentRequired},
+                                     std::pair{"relay.info.restrictedWrites", cfg().relay__info__restrictedWrites} }) {
+        try {
+            nip11::parseOverride(val);
+        } catch (std::exception &e) {
+            report(std::string("Invalid ") + name + ": " + e.what());
+        }
+    }
+}
 
 static void checkConfig() {
     if (cfg().relay__info__pubkey.size()) {
@@ -26,6 +52,8 @@ static void checkConfig() {
         }
     }
 
+    checkNip11Config(false);
+
     if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
         LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";
     }
@@ -34,6 +62,8 @@ static void checkConfig() {
 
 void cmd_relay(const std::vector<std::string> &subArgs) {
     docopt::docopt(USAGE, subArgs, true, "");
+
+    checkNip11Config(true);
 
     RelayServer s;
     s.run();
