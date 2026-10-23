@@ -229,6 +229,12 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
     bool isAuthed = hasSession && !it->second.authed.isNull();
     bool shouldRejectReq = false;
 
+    auto allow = rsctx.readAllowlist.check(isAuthed ? it->second.authed : Bytes32());
+    if (allow == ReadAllowlist::Result::NotAllowed) {
+        sendClosedError(connId, outSubIdStr, "restricted: this pubkey is not allowed to read from this relay");
+        return;
+    }
+
     if (countOnly) {
         // COUNT can't be filtered per event, so a restricted-kind filter must be
         // scoped to the client's own pubkeys via authors/#p.
@@ -240,6 +246,8 @@ void RelayServer::ingesterProcessReq(lmdb::txn &txn, RelayServerCtx &rsctx, uint
             shouldRejectReq = !isAuthed;
         }
     }
+
+    if (allow == ReadAllowlist::Result::AuthRequired) shouldRejectReq = true;
 
     if (shouldRejectReq) {
         if (!hasSession) {
@@ -347,12 +355,24 @@ void RelayServer::ingesterProcessNegentropy(lmdb::txn &txn, RelayServerCtx &rsct
 
         NostrFilterGroup filter(filterJson, maxFilterLimit);
 
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        bool hasSession = it != rsctx.connIdToAuthSession.end();
+        bool isAuthed = hasSession && !it->second.authed.isNull();
+        auto allow = rsctx.readAllowlist.check(isAuthed ? it->second.authed : Bytes32());
+
+        if (allow == ReadAllowlist::Result::NotAllowed) {
+            PROM_INC_RELAY_MSG("NEG-ERR");
+            sendToConn(connId, tao::json::to_string(tao::json::value::array({
+                "NEG-ERR",
+                subscriptionStr,
+                "restricted: this pubkey is not allowed to read from this relay"
+            })));
+            return;
+        }
+
         // if the filter group contains no filter that has a kind that is not restricted,
         // that means an unauthenticated client won't be able to see anything
-        if (ReadRestrictor::isFilterGroupFullyRestricted(filter)) {
-            auto it = rsctx.connIdToAuthSession.find(connId);
-            bool hasSession = it != rsctx.connIdToAuthSession.end();
-            bool isAuthed = hasSession && !it->second.authed.isNull();
+        if (allow == ReadAllowlist::Result::AuthRequired || ReadRestrictor::isFilterGroupFullyRestricted(filter)) {
             if (!isAuthed) {
                 std::string challenge;
                 if (!hasSession) {

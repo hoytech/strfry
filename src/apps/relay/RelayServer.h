@@ -21,6 +21,7 @@
 #include "Decompressor.h"
 #include "PrometheusMetrics.h"
 #include "AuthSession.h"
+#include "ReadAllowlist.h"
 
 
 
@@ -171,6 +172,7 @@ struct RelayServerCtx {
     FilterValidator filterValidator;
     SessionToken::Generator challengeGenerator;
     flat_hash_map<uint64_t, AuthSession> connIdToAuthSession;
+    ReadAllowlist readAllowlist;
 };
 
 struct RelayServer {
