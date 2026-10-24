@@ -1,13 +1,24 @@
+#include <tao/json/events/limit_nesting_depth.hpp>
+
 #include "RelayServer.h"
 #include "jsonParseUtils.h"
 #include "ReadRestrictor.h"
+
+
+// Client-supplied JSON is parsed on a fixed-size thread stack. Without a
+// limit, a deeply nested array/object can overflow that stack and raise
+// SIGSEGV, which cannot be caught by the try/catch below. Normal Nostr
+// messages are only a handful of levels deep, so 256 is comfortably above
+// anything legitimate while remaining far below the stack limit.
+template <typename Consumer>
+using JsonWithNestingLimit = tao::json::events::limit_nesting_depth<Consumer, 256>;
 
 
 void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
     RelayServerCtx rsctx;
 
     while(1) {
-        auto newMsgs = thr.inbox.pop_all();
+        auto newMsgs = thr.popAll();
 
         auto txn = env.txn_ro();
 
@@ -17,7 +28,7 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
             if (auto msg = std::get_if<MsgIngester::ClientMessage>(&newMsg.msg)) {
                 try {
                     if (msg->payload.starts_with('[')) {
-                        auto payload = tao::json::from_string(msg->payload);
+                        auto payload = tao::json::from_string<JsonWithNestingLimit>(msg->payload);
 
                         if (cfg().relay__logging__dumpInAll) LI << "[" << msg->connId << "] dumpInAll: " << msg->payload; 
 
@@ -93,7 +104,14 @@ void RelayServer::runIngester(ThreadPool<MsgIngester>::Thread &thr) {
             } else if (auto msg = std::get_if<MsgIngester::CloseConn>(&newMsg.msg)) {
                 auto connId = msg->connId;
 
-                PrometheusMetrics::getInstance().authenticatedConnections.dec();
+                // Only decrement the gauge for connections that actually
+                // completed AUTH. Unauthenticated connections were never
+                // incremented, so decrementing unconditionally drove the
+                // gauge negative.
+                auto authIt = rsctx.connIdToAuthSession.find(connId);
+                if (authIt != rsctx.connIdToAuthSession.end() && authIt->second.isAuthed()) {
+                    PrometheusMetrics::getInstance().authenticatedConnections.dec();
+                }
                 rsctx.connIdToAuthSession.erase(connId);
 
                 tpWriter.dispatch(connId, MsgWriter{MsgWriter::CloseConn{connId}});

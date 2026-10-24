@@ -21,7 +21,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
     uint64_t currEventId = MAX_U64;
 
     while (1) {
-        auto newMsgs = thr.inbox.pop_all();
+        auto newMsgs = thr.popAll();
 
         auto txn = env.txn_ro();
 
@@ -29,6 +29,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
         if (currEventId > latestEventId) currEventId = latestEventId;
 
         for (auto &newMsg : newMsgs) {
+          try {
             if (auto msg = std::get_if<MsgReqMonitor::NewSub>(&newMsg.msg)) {
                 auto connId = msg->sub.connId;
                 auto it = connIdToAuthedPubkey.find(connId);
@@ -61,7 +62,7 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
                 env.foreach_Event(txn, [&](auto &ev){
                     monitors.process(txn, ev, [&](RecipientList &&recipients, uint64_t levId){
                         PackedEventView packed(ev.buf);
-                        if (ReadRestrictor::restrictedKinds().contains(packed.kind())) {
+                        if (ReadRestrictor::restrictedKinds()->contains(packed.kind())) {
                             RecipientList filteredRecipients;
                             for (const auto &recipient : recipients) {
                                 auto it = connIdToAuthedPubkey.find(recipient.connId);
@@ -82,6 +83,9 @@ void RelayServer::runReqMonitor(ThreadPool<MsgReqMonitor>::Thread &thr) {
 
                 currEventId = latestEventId;
             }
+          } catch (std::exception &e) {
+            LE << "Error handling reqMonitor message: " << e.what();
+          }
         }
     }
 }

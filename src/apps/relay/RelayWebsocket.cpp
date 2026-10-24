@@ -83,7 +83,14 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         if (ver != cfg().version()) {
             auto maybeNpub = [](std::string_view sv){
                 if (sv.starts_with("npub1")) {
-                    return to_hex(decodeBech32Simple(sv));
+                    // Config values are validated at load time, but a typo
+                    // must never be able to abort the relay from an HTTP
+                    // request. Fall back to the raw configured string.
+                    try {
+                        return to_hex(decodeBech32Simple(sv));
+                    } catch (std::exception &) {
+                        return std::string(sv);
+                    }
                 } else {
                     return std::string(sv);
                 }
@@ -302,7 +309,9 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
            << " Pending: " << renderSize(c->stats.pendingOutbound)
         ;
 
-        tpIngester.dispatch(connId, MsgIngester{MsgIngester::CloseConn{connId}});
+        // Teardown must never be dropped: use the unbounded control path so
+        // connection state is always cleaned up.
+        tpIngester.dispatchUnbounded(connId, MsgIngester{MsgIngester::CloseConn{connId}});
 
         connIdToConnection.erase(connId);
         delete c;
@@ -321,15 +330,34 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
     hubGroup->onMessage2([&](uWS::WebSocket<uWS::SERVER> *ws, char *message, size_t length, uWS::OpCode opCode, size_t compressedSize) {
         auto &c = *(Connection*)ws->getUserData();
 
+        // uWebSockets' compressed-input fast path can return a single
+        // decompressed chunk of up to LARGE_BUFFER_SIZE without checking it
+        // against maxPayload. Enforce the configured limit here as well so
+        // a small compressed frame cannot smuggle in a much larger message.
+        if (length > cfg().relay__maxWebsocketPayloadSize) {
+            LW << "[" << c.connId << "] Message too large: " << renderSize(length)
+               << " exceeds relay.maxWebsocketPayloadSize "
+               << renderSize(cfg().relay__maxWebsocketPayloadSize) << ", terminating";
+            c.websocket->close(1009, "message too big", 15);
+            return;
+        }
+
         c.stats.bytesDown += length;
         c.stats.bytesDownCompressed += compressedSize;
 
-        tpIngester.dispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, c.ipAddr, std::string(message, length)}});
+        // Apply back-pressure without blocking the websocket thread: if the
+        // ingester queue is full, shed this connection instead of growing
+        // memory without bound. Blocking here could deadlock when the
+        // ingester and writer queues are also full.
+        if (!tpIngester.tryDispatch(c.connId, MsgIngester{MsgIngester::ClientMessage{c.connId, c.ipAddr, std::string(message, length)}})) {
+            LW << "[" << c.connId << "] Ingester queue full, terminating connection";
+            c.websocket->close(1013, "server overloaded", 16);
+        }
     });
 
 
     std::function<void()> asyncCb = [&]{
-        auto newMsgs = thr.inbox.pop_all_no_wait();
+        auto newMsgs = thr.popAllNoWait();
 
         auto doSend = [&](uint64_t connId, std::string_view payload, uWS::OpCode opCode){
             auto it = connIdToConnection.find(connId);

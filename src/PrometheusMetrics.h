@@ -50,9 +50,15 @@ public:
         }
     };
 
-    // Labeled counter - allows multiple counters with different label values
+    // Labeled counter - allows multiple counters with different label values.
+    // The label set is capped so client-controlled labels (notably event
+    // kinds) cannot grow the map without bound. Overflow is bucketed into
+    // "other" instead of being silently dropped.
     class LabeledCounter {
     private:
+        static constexpr size_t MAX_LABELS = 1000;
+        static constexpr const char *OVERFLOW_LABEL = "other";
+
         mutable std::shared_mutex mutex;
         std::map<std::string, Counter> counters;
         
@@ -70,7 +76,16 @@ public:
             
             // Need to create new counter
             std::unique_lock<std::shared_mutex> lock(mutex);
-            counters[label].inc(n);
+
+            // Another thread may have inserted the label while we waited.
+            auto it = counters.find(label);
+            if (it != counters.end()) {
+                it->second.inc(n);
+                return;
+            }
+
+            std::string key = counters.size() >= MAX_LABELS ? std::string(OVERFLOW_LABEL) : label;
+            counters[key].inc(n);
         }
         
         std::map<std::string, uint64_t> getAll() const {

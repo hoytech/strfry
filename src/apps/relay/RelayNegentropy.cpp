@@ -12,6 +12,7 @@ struct NegentropyViews {
         std::string initialMsg;
         negentropy::storage::Vector storageVector;
         std::vector<uint64_t> levIds;
+        bool tooLarge = false;
         uint64_t startTime = hoytech::curr_time_us();
     };
 
@@ -132,7 +133,16 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         auto *view = std::get_if<NegentropyViews::MemoryView>(userView);
         if (!view) throw herr("bad variant, expected memory view");
 
+        // Stop accumulating as soon as we know the result set is too large,
+        // rather than storing every match and checking only in onComplete.
+        // Keep maxSyncEvents + 1 so onComplete can distinguish "exactly at
+        // the limit" from "over the limit".
+        uint64_t maxSyncEvents = cfg().relay__negentropy__maxSyncEvents;
         for (auto levId : levIds) {
+            if (view->levIds.size() > maxSyncEvents) {
+                view->tooLarge = true;
+                break;
+            }
             view->levIds.push_back(levId);
         }
     };
@@ -147,7 +157,7 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
         LI << "[" << sub.connId << "] negentropy QUERY matched " << view->levIds.size() << " events in "
            << (hoytech::curr_time_us() - view->startTime) << "us";
 
-        if (view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
+        if (view->tooLarge || view->levIds.size() > cfg().relay__negentropy__maxSyncEvents) {
             LI << "[" << sub.connId << "] negentropy QUERY size exceeded " << cfg().relay__negentropy__maxSyncEvents;
 
             PROM_INC_RELAY_MSG("NEG-ERR");
@@ -190,11 +200,12 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
 
 
     while(1) {
-        auto newMsgs = queries.running.empty() ? thr.inbox.pop_all() : thr.inbox.pop_all_no_wait();
+        auto newMsgs = queries.running.empty() ? thr.popAll() : thr.popAllNoWait();
 
         auto txn = env.txn_ro();
 
         for (auto &newMsg : newMsgs) {
+          try {
             if (auto msg = std::get_if<MsgNegentropy::NegOpen>(&newMsg.msg)) {
                 auto connId = msg->sub.connId;
                 auto subId = msg->sub.subId;
@@ -210,6 +221,20 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
 
                 queries.removeSub(connId, subId);
                 views.removeView(connId, subId);
+
+                // An empty filter group (for example {"ids":[]}) has no
+                // filters[0]. Both the stateless and memory paths below use
+                // filters.at(0) or assume at least one filter, so reject it
+                // cleanly instead of throwing std::out_of_range.
+                if (msg->sub.filterGroup.filters.empty()) {
+                    PROM_INC_RELAY_MSG("NEG-ERR");
+                    sendToConn(connId, tao::json::to_string(tao::json::value::array({
+                        "NEG-ERR",
+                        subId.str(),
+                        "blocked: empty filter"
+                    })));
+                    continue;
+                }
 
                 LI << "[" << connId << "] negentropy NEW session=" << subId.sv() << " bytesIn=" << msg->negPayload.size() << " tree=" << (treeId ? std::to_string(*treeId) : "NONE");
 
@@ -258,6 +283,17 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                     }
                     handleReconcile(msg->connId, msg->subId, view->storageVector, msg->negPayload);
                 } else if (auto *view = std::get_if<NegentropyViews::StatelessView>(userView)) {
+                    if (view->sub.filterGroup.filters.empty()) {
+                        PROM_INC_RELAY_MSG("NEG-ERR");
+                        sendToConn(msg->connId, tao::json::to_string(tao::json::value::array({
+                            "NEG-ERR",
+                            msg->subId.str(),
+                            "blocked: empty filter"
+                        })));
+                        views.removeView(msg->connId, msg->subId);
+                        continue;
+                    }
+
                     negentropy::storage::BTreeLMDB storage(txn, negentropyDbi, view->treeId);
 
                     const auto &f = view->sub.filterGroup.filters.at(0);
@@ -273,9 +309,14 @@ void RelayServer::runNegentropy(ThreadPool<MsgNegentropy>::Thread &thr) {
                 queries.removeSub(msg->connId, msg->subId);
                 views.removeView(msg->connId, msg->subId);
             } else if (auto msg = std::get_if<MsgNegentropy::CloseConn>(&newMsg.msg)) {
+                connIdToAuthedPubkey.erase(msg->connId);
                 queries.closeConn(msg->connId);
                 views.closeConn(msg->connId);
             }
+          } catch (std::exception &e) {
+            // A single malformed message must not terminate the whole relay.
+            LE << "Error handling negentropy message: " << e.what();
+          }
         }
 
         queries.process(txn);

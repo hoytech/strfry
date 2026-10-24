@@ -1,5 +1,8 @@
 #pragma once
 
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <string_view>
 
 #include "PackedEvent.h"
@@ -10,37 +13,58 @@
 
 struct ReadRestrictor {
 private:
-    inline static uint64_t configVer = 0;
-    inline static flat_hash_set<uint64_t> restrictedKinds_;
+    using KindSet = flat_hash_set<uint64_t>;
+
+    // Immutable snapshots are published atomically so worker threads can read
+    // the restriction set without racing a concurrent config reload. The old
+    // implementation cleared and refilled a shared flat_hash_set from multiple
+    // threads while others were iterating it (undefined behaviour).
+    inline static std::atomic<std::shared_ptr<const KindSet>> restrictedKinds_{
+        std::make_shared<const KindSet>()
+    };
+    inline static std::atomic<uint64_t> configVer{0};
+    inline static std::mutex initMutex;
 
 public:
-    static void init(){
-        parseCommaSeparatedKinds(cfg().relay__auth__restrictedReadKinds, restrictedKinds_);
-    }
+    static std::shared_ptr<const KindSet> restrictedKinds() {
+        uint64_t ver = cfg().version();
 
-    static flat_hash_set<uint64_t>& restrictedKinds() {
-        if (configVer != cfg().version()) {
-            init();
-            configVer = cfg().version();
+        auto current = restrictedKinds_.load(std::memory_order_acquire);
+        if (configVer.load(std::memory_order_acquire) == ver) return current;
+
+        std::lock_guard<std::mutex> lock(initMutex);
+
+        // Another thread may have refreshed the snapshot while we waited.
+        if (configVer.load(std::memory_order_acquire) == ver) {
+            return restrictedKinds_.load(std::memory_order_acquire);
         }
-        return restrictedKinds_;
+
+        auto next = std::make_shared<KindSet>();
+        parseCommaSeparatedKinds(cfg().relay__auth__restrictedReadKinds, *next);
+
+        restrictedKinds_.store(std::move(next), std::memory_order_release);
+        configVer.store(ver, std::memory_order_release);
+
+        return restrictedKinds_.load(std::memory_order_acquire);
     }
 
     static bool isFilterGroupFullyRestricted(const NostrFilterGroup &fg) {
-        if (restrictedKinds().empty() || fg.filters.empty()) return false;
+        auto restricted = restrictedKinds();
+        if (restricted->empty() || fg.filters.empty()) return false;
+
         for (const auto& f : fg.filters) {
-            if (!isFilterFullyRestricted(f)) return false;
+            if (!isFilterFullyRestricted(f, *restricted)) return false;
         }
         return true;
     }
 
-    static bool isFilterFullyRestricted(const NostrFilter &filter) {
+    static bool isFilterFullyRestricted(const NostrFilter &filter, const KindSet &restricted) {
         if (!filter.kinds) return false;
 
         for (size_t i = 0; i < filter.kinds->size(); ++i) {
             uint64_t kind = filter.kinds->at(i);
 
-            if (!restrictedKinds().contains(kind)) {
+            if (!restricted.contains(kind)) {
                 return false;
             }
         }
@@ -48,20 +72,29 @@ public:
     }
 
     static bool isFilterAllowedToCount(const NostrFilterGroup &fg, Bytes32 pubkey) {
-        if (restrictedKinds().empty()) return true;
+        auto restricted = restrictedKinds();
+        if (restricted->empty()) return true;
 
         bool pubkeyIsNull = pubkey.isNull();
 
         for (const auto &f: fg.filters) {
-            if (!f.kinds) continue;
             bool hasSomeRestrictedKind = false;
-            for (size_t i = 0; i < f.kinds->size(); ++i) {
-                uint64_t kind = f.kinds->at(i);
-                if (restrictedKinds().contains(kind)) {
-                    hasSomeRestrictedKind = true;
-                    break;
+
+            if (!f.kinds) {
+                // A filter without "kinds" matches every kind, including the
+                // restricted ones. COUNT cannot filter individual events, so
+                // treat it as containing all restricted kinds.
+                hasSomeRestrictedKind = true;
+            } else {
+                for (size_t i = 0; i < f.kinds->size(); ++i) {
+                    uint64_t kind = f.kinds->at(i);
+                    if (restricted->contains(kind)) {
+                        hasSomeRestrictedKind = true;
+                        break;
+                    }
                 }
             }
+
             if (hasSomeRestrictedKind) {
                 if (pubkeyIsNull) {
                     return false;
@@ -92,7 +125,8 @@ public:
 
     // Returns true if the event should be sent to the subscriber
     static bool shouldSendToSubscriber(const PackedEventView &packed, const Bytes32 &subscriberAuthedPubkey) {
-        if (!restrictedKinds().contains(packed.kind())) {
+        auto restricted = restrictedKinds();
+        if (!restricted->contains(packed.kind())) {
             return true;
         }
 

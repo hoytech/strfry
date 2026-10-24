@@ -10,6 +10,11 @@ Tests should be run from the *root* of the project.
 
     node test/readRestrictTest.js
 
+## Security regression tests (nesting depth, NIP-11 config, negentropy,
+## long tags, metrics, compressed payload limits, COUNT restrictions):
+
+    node test/tests/securityTest.js
+
 ## Fuzz tests
 
 Note that these tests need a well populated DB. For best coverage, use the [wellordered 500k](https://wiki.wellorder.net/wiki/nostr-datasets/) data-set:

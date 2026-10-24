@@ -25,6 +25,12 @@ node "./test/tests/readRestrictTest.js" \
   && pass "./test/tests/readRestrictTest.js" \
   || fail "./test/tests/readRestrictTest.js failed"
 
+info "running security regression tests..."
+
+node "./test/tests/securityTest.js" \
+  && pass "./test/tests/securityTest.js" \
+  || fail "./test/tests/securityTest.js failed"
+
 info "Seeding events..."
 
 perl "./test/utils/generate-seed-data.pl" -o - | ./strfry --config ./test/cfgs/test.conf import --no-verify

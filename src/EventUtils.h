@@ -29,6 +29,28 @@ inline bool isEphemeralKind(uint64_t kind) {
 }
 
 
+// Tag values can be up to events.maxTagValSize (1024 by default), which is
+// larger than LMDB's maximum key size. Use a fixed-size hash as the index key
+// so all tag values can be indexed without changing LMDB's key-size limit.
+inline std::string makeTagIndexKey(char tagName, std::string_view tagVal) {
+    std::string buf;
+    buf.reserve(1 + tagVal.size());
+    buf += tagName;
+    buf += tagVal;
+    return sha256(buf).str();
+}
+
+// Replaceable events are keyed by pubkey + d-tag. Hash this as well so long
+// d-tag values do not collide with the empty virtual d-tag or overflow LMDB
+// key limits.
+inline std::string makeReplaceIndexKey(std::string_view pubkey, std::string_view dTag) {
+    std::string buf;
+    buf.reserve(pubkey.size() + dTag.size());
+    buf += pubkey;
+    buf += dTag;
+    return sha256(buf).str();
+}
+
 inline std::tuple<uint64_t, std::string, std::string> parseATag(std::string_view input) {
     size_t firstColon = input.find(':');
     if (firstColon == std::string::npos) throw herr("parse error");

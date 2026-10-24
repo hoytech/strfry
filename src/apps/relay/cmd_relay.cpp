@@ -4,6 +4,7 @@
 #include <docopt.h>
 
 #include "RelayServer.h"
+#include "Bech32Utils.h"
 
 
 static const char USAGE[] =
@@ -15,16 +16,24 @@ R"(
 
 
 static void checkConfig() {
-    if (cfg().relay__info__pubkey.size()) {
+    auto checkPubkeyConfig = [](const char *name, const std::string &value) {
+        if (value.empty()) return;
+
         try {
-            if (!cfg().relay__info__pubkey.starts_with("npub1")) {
-                auto p = from_hex(cfg().relay__info__pubkey);
+            if (value.starts_with("npub1")) {
+                auto p = decodeBech32Simple(value);
+                if (p.size() != 32) throw herr("bad size");
+            } else {
+                auto p = from_hex(value);
                 if (p.size() != 32) throw herr("bad size");
             }
-        } catch (std::exception &e) {
-            LW << "Your relay.info.pubkey is incorrectly formatted. It should be an npub or 64 hex digits.";
+        } catch (std::exception &) {
+            LW << "Your " << name << " is incorrectly formatted. It should be an npub or 64 hex digits.";
         }
-    }
+    };
+
+    checkPubkeyConfig("relay.info.pubkey", cfg().relay__info__pubkey);
+    checkPubkeyConfig("relay.info.self", cfg().relay__info__self);
 
     if (cfg().events__rejectEphemeralEventsOlderThanSeconds >= cfg().events__ephemeralEventsLifetimeSeconds) {
         LW << "rejectEphemeralEventsOlderThanSeconds is >= ephemeralEventsLifetimeSeconds, which could result in unnecessary disk activity";

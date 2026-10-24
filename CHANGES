@@ -1,4 +1,30 @@
 next
+  * Security: limit JSON nesting depth when parsing client messages. Deeply
+    nested payloads could overflow the ingester thread stack and crash the
+    relay (SF-01).
+  * Security: handle invalid npub values in NIP-11 without aborting the relay,
+    and validate both relay.info.pubkey and relay.info.self at startup (SF-02).
+  * Security: reject empty negentropy filter groups instead of calling
+    filters.at(0), and prevent malformed messages from terminating worker
+    threads (SF-03).
+  * Fix a negentropy AUTH map memory leak on connection close (SF-04).
+  * Fix the authenticated-connections gauge going negative on unauthenticated
+    disconnects (SF-05).
+  * Support tag values up to events.maxTagValSize by hashing tag/replace index
+    keys, fixing unqueryable long tags and long d-tag collisions. The packed
+    event format and DB version changed, so existing databases must be
+    exported and re-imported (SF-06).
+  * Bound Prometheus label cardinality for event kinds (SF-07).
+  * Fix a config-reload data race in ReadRestrictor (SF-08).
+  * Bound worker queues, add early negentropy size checks, and avoid storing
+    levIds for single-filter COUNT queries (SF-09).
+  * Enforce maxWebsocketPayloadSize for compressed frames that bypass the
+    uWebSockets one-chunk inflate fast path (SF-10).
+  * Treat an explicitly provided until=0 as a real bound instead of unbounded
+    (SF-11).
+  * Make COUNT filters without "kinds" respect restricted-read rules (SF-12).
+  * Make renderIP tolerate empty/invalid addresses instead of throwing from a
+    uWebSockets callback (SF-13).
   * New --print-missing argument for strfry sync. This option tells sync to
     just print out the event IDs that you have and/or need, instead of actually
     trying to transfer them.
