@@ -15,8 +15,8 @@
 //
 // each tag:
 //   0: tag char (1)
-//   1: length (1)
-//   2: value (variable)
+//   1: length (2, native-endian uint16)
+//   3: value (variable)
 
 struct PackedEventView {
     std::string_view buf;
@@ -52,15 +52,15 @@ struct PackedEventView {
     void foreachTag(const std::function<bool(char, std::string_view)> &cb) const {
         std::string_view b = buf.substr(88);
 
-        while (b.size() >= 2) {
+        while (b.size() >= 3) {
             char tagName = b[0];
-            size_t tagLen = (uint8_t)b[1];
+            size_t tagLen = lmdb::from_sv<uint16_t>(b.substr(1, 2));
             
-            if (tagLen > b.size() - 2) break;
+            if (tagLen > b.size() - 3) break;
 
-            bool ret = cb(tagName, b.substr(2, tagLen));
+            bool ret = cb(tagName, b.substr(3, tagLen));
             if (!ret) break;
-            b = b.substr(2 + tagLen);
+            b = b.substr(3 + tagLen);
         }
     }
 };
@@ -69,10 +69,10 @@ struct PackedEventTagBuilder {
     std::string buf;
 
     void add(char tagKey, std::string_view tagVal) {
-        if (tagVal.size() > 255) throw hoytech::error("tagVal too long");
+        if (tagVal.size() > 65535) throw hoytech::error("tagVal too long");
 
         buf += tagKey;
-        buf += (unsigned char) tagVal.size();
+        buf += lmdb::to_sv<uint16_t>(tagVal.size());
         buf += tagVal;
     }
 };

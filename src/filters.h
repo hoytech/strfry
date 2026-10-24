@@ -8,8 +8,8 @@
 
 struct FilterSetBytes : NonCopyable {
     struct Item {
-        uint16_t offset;
-        uint8_t size;
+        uint32_t offset;
+        uint32_t size;
         uint8_t firstByte;
     };
 
@@ -19,7 +19,7 @@ struct FilterSetBytes : NonCopyable {
     // Sizes are post-hex decode 
 
     FilterSetBytes(const tao::json::value &arrHex, bool hexDecode, size_t minSize, size_t maxSize) {
-        if (maxSize > MAX_INDEXED_TAG_VAL_SIZE) throw herr("maxSize bigger than max indexed tag size");
+        if (maxSize > 65535) throw herr("maxSize bigger than maximum filter item size");
 
         std::vector<std::string> arr;
 
@@ -35,7 +35,7 @@ struct FilterSetBytes : NonCopyable {
         for (size_t i = 0; i < arr.size(); i++) {
             const auto &item = arr[i];
             if (i > 0 && item == arr[i - 1]) continue; // remove duplicates
-            items.emplace_back(Item{ (uint16_t)buf.size(), (uint8_t)item.size(), item.empty() ? (uint8_t)0 : (uint8_t)item[0] });
+            items.emplace_back(Item{ (uint32_t)buf.size(), (uint32_t)item.size(), item.empty() ? (uint8_t)0 : (uint8_t)item[0] });
             buf += item;
         }
 
@@ -118,6 +118,8 @@ struct NostrFilter : NonCopyable {
     uint64_t since = 0;
     uint64_t until = MAX_U64;
     uint64_t limit = MAX_U64;
+    bool sinceSet = false;
+    bool untilSet = false;
     bool neverMatch = false;
     bool indexOnlyScans = false;
 
@@ -185,7 +187,7 @@ struct NostrFilter : NonCopyable {
                         if (tag == 'p' || tag == 'e') {
                             tags.emplace(tag, FilterSetBytes(v, true, 32, 32));
                         } else {
-                            tags.emplace(tag, FilterSetBytes(v, false, 0, MAX_INDEXED_TAG_VAL_SIZE));
+                            tags.emplace(tag, FilterSetBytes(v, false, 0, cfg().events__maxTagValSize));
                         }
                     } else {
                         throw herr("unindexed tag filter");
@@ -195,8 +197,10 @@ struct NostrFilter : NonCopyable {
                 }
             } else if (k == "since") {
                 since = jsonGetUnsigned(v, "error parsing since");
+                sinceSet = true;
             } else if (k == "until") {
                 until = jsonGetUnsigned(v, "error parsing until");
+                untilSet = true;
             } else if (k == "limit") {
                 limit = jsonGetUnsigned(v, "error parsing limit");
             } else {
@@ -212,8 +216,8 @@ struct NostrFilter : NonCopyable {
     }
 
     bool doesMatchTimes(uint64_t created) const {
-        if (created < since) return false;
-        if (created > until) return false;
+        if (sinceSet && created < since) return false;
+        if (untilSet && created > until) return false;
         return true;
     }
 

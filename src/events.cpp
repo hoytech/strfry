@@ -45,9 +45,10 @@ std::string nostrJsonToPackedEvent(const tao::json::value &v) {
                 if (tagPubkey != pubkey) throw herr("can't delete other user's events");
             }
 
-            if (tagVal.size() <= MAX_INDEXED_TAG_VAL_SIZE) {
-                tagBuilder.add(tagName[0], tagVal);
-            }
+            // Store all accepted tag values. Index keys are hashed (see
+            // makeTagIndexKey), so values larger than the old 255-byte limit
+            // are queryable instead of silently disappearing.
+            tagBuilder.add(tagName[0], tagVal);
         } else if (tagName == "expiration") {
             if (expiration == 0) {
                 expiration = parseUint64(tagVal);
@@ -303,7 +304,7 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                 });
 
                 if (replace) {
-                    auto searchStr = std::string(packed.pubkey()) + *replace;
+                    auto searchStr = makeReplaceIndexKey(packed.pubkey(), *replace);
                     auto searchKey = makeKey_StringUint64(searchStr, packed.kind());
 
                     // Check if there is a newer event in the DB, or an older event to replace
@@ -376,7 +377,7 @@ void writeEvents(lmdb::txn &txn, NegentropyFilterCache &neFilterCache, std::vect
                             auto [kind, pubkey, dTag] = parseATag(tagVal);
 
                             if (isParamReplaceableKind(kind) && pubkey == packed.pubkey()) {
-                                auto searchKey = makeKey_StringUint64(pubkey + dTag, kind);
+                                auto searchKey = makeKey_StringUint64(makeReplaceIndexKey(pubkey, dTag), kind);
 
                                 env.generic_foreachFull(txn, env.dbi_Event__replace, searchKey, lmdb::to_sv<uint64_t>(MAX_U64), [&](auto k, auto v) {
                                     if (k != searchKey) return false;

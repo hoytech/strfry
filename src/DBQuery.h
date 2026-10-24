@@ -59,13 +59,13 @@ struct DBScan : NonCopyable {
                         ParsedKey_StringUint64 parsedKey(k);
                         created = parsedKey.n;
 
-                        if (s.f.since && created < s.f.since) {
+                        if (s.f.sinceSet && created < s.f.since) {
                             resumeKey = makeKey_StringUint64(parsedKey.s, 0);
                             resumeVal = 0;
                             return false;
                         }
 
-                        if (s.f.until && created > s.f.until) {
+                        if (s.f.untilSet && created > s.f.until) {
                             resumeKey = makeKey_StringUint64(parsedKey.s, s.f.until);
                             resumeVal = MAX_U64;
                             return false;
@@ -139,9 +139,9 @@ struct DBScan : NonCopyable {
 
             cursors.reserve(filterSet.size());
             for (uint64_t i = 0; i < filterSet.size(); i++) {
-                std::string search;
-                search += tagName;
-                search += filterSet.at(i);
+                // The tag index stores hashes of tagName + tagVal so values
+                // larger than LMDB's key limit are still indexable.
+                std::string search = makeTagIndexKey(tagName, filterSet.at(i));
 
                 cursors.emplace_back(
                     search + std::string(8, '\xFF'),
@@ -288,6 +288,7 @@ struct DBQuery : NonCopyable {
     bool dead = false; // external flag
     flat_hash_set<uint64_t> sentEventsFull;
     flat_hash_set<uint64_t> sentEventsCurr;
+    uint64_t countOnlyTotal = 0;
     uint64_t lastWorkChecked = 0;
 
     uint64_t currScanTime = 0;
@@ -314,7 +315,14 @@ struct DBQuery : NonCopyable {
                 if (levId > sub.latestEventId) return false;
 
                 if (sentEventsFull.find(levId) == sentEventsFull.end()) {
-                    sentEventsFull.insert(levId);
+                    // COUNT does not need to retain levIds when there is only
+                    // one filter, since an event can only be produced once by
+                    // that scan. Avoid the per-query levId set for the common
+                    // COUNT {} case to bound memory usage.
+                    if (!sub.countOnly || sub.filterGroup.size() > 1) {
+                        sentEventsFull.insert(levId);
+                    }
+                    if (sub.countOnly) countOnlyTotal++;
                     cb(sub, levId);
                 }
 

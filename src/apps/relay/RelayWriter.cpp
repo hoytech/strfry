@@ -9,7 +9,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
     NegentropyFilterCache neFilterCache;
 
     while(1) {
-        auto newMsgs = thr.inbox.pop_all();
+        auto newMsgs = thr.popAll();
 
         // Filter out messages from already closed sockets
 
@@ -38,6 +38,7 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         std::vector<EventToWrite> newEvents;
 
         for (auto &newMsg : newMsgs) {
+          try {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
                 EventSourceType sourceType = msg->ipAddr.size() == 4 ? EventSourceType::IP4 : EventSourceType::IP6;
                 std::string okMsg;
@@ -56,6 +57,9 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
                     sendOKResponse(msg->connId, eventIdHex, res == PluginEventSifterResult::ShadowReject, okMsg);
                 }
             }
+          } catch (std::exception &e) {
+            LE << "Error preparing event for write: " << e.what();
+          }
         }
 
         if (!newEvents.size()) continue;

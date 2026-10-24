@@ -30,7 +30,10 @@ std::string renderIP(std::string_view ipBytes) {
     } else if (ipBytes.size() == 16) {
         inet_ntop(AF_INET6, ipBytes.data(), buf, sizeof(buf));
     } else {
-        throw herr("invalid size of ipBytes, unable to render IP");
+        // getpeername() can fail and parseIP() can return an empty string
+        // for an invalid header. Do not let logging a connection abort the
+        // relay: an exception escaping a uWebSockets callback is fatal.
+        return "unknown";
     }
 
     return std::string(buf);

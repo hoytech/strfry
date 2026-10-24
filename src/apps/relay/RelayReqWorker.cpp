@@ -45,11 +45,12 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
     };
 
     while(1) {
-        auto newMsgs = queries.running.empty() ? thr.inbox.pop_all() : thr.inbox.pop_all_no_wait();
+        auto newMsgs = queries.running.empty() ? thr.popAll() : thr.popAllNoWait();
 
         auto txn = env.txn_ro();
 
         for (auto &newMsg : newMsgs) {
+          try {
             if (auto msg = std::get_if<MsgReqWorker::NewSub>(&newMsg.msg)) {
                 auto connId = msg->sub.connId;
 
@@ -68,6 +69,9 @@ void RelayServer::runReqWorker(ThreadPool<MsgReqWorker>::Thread &thr) {
                 queries.closeConn(msg->connId);
                 tpReqMonitor.dispatch(msg->connId, MsgReqMonitor{MsgReqMonitor::CloseConn{msg->connId}});
             }
+          } catch (std::exception &e) {
+            LE << "Error handling reqWorker message: " << e.what();
+          }
         }
 
         queries.process(txn);

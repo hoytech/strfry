@@ -101,7 +101,7 @@ struct QueryScheduler : NonCopyable {
             auto connId = q->sub.connId;
             removeSub(connId, q->sub.subId);
 
-            if (onComplete) onComplete(txn, q->sub, q->sentEventsFull.size());
+            if (onComplete) onComplete(txn, q->sub, q->sub.countOnly ? q->countOnlyTotal : q->sentEventsFull.size());
 
             delete q;
         } else {

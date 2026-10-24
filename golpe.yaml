@@ -63,10 +63,12 @@ tables:
         pubkeyKind = makeKey_StringUint64Uint64(packed.pubkey(), packed.kind(), indexTime);
 
         packed.foreachTag([&](char tagName, std::string_view tagVal){
-            tag.push_back(makeKey_StringUint64(std::string(1, tagName) + std::string(tagVal), indexTime));
+            // Hash tag values so any accepted tag value can be indexed
+            // without exceeding LMDB's maximum key size.
+            tag.push_back(makeKey_StringUint64(makeTagIndexKey(tagName, tagVal), indexTime));
 
             if (tagName == 'd' && replace.size() == 0) {
-                replace.push_back(makeKey_StringUint64(std::string(packed.pubkey()) + std::string(tagVal), packed.kind()));
+                replace.push_back(makeKey_StringUint64(makeReplaceIndexKey(packed.pubkey(), tagVal), packed.kind()));
             } else if (tagName == 'e') {
                 if (packed.kind() == 5) {
                     deletion.push_back(std::string(tagVal) + std::string(packed.pubkey()));
