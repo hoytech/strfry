@@ -909,7 +909,7 @@ struct TopicEvents {
             PackedEventView packed(ev.buf);
 
             if (packed.kind() != 1) return true;
-            if (packed.created_at() > now) return true;
+            if (packed.created_at() > resumeTime) return true;
             if (!isRootEvent(txn, packed)) return true;
 
             eventsAll.push_back(TopicEventScores(txn, ev, packed));
@@ -917,7 +917,7 @@ struct TopicEvents {
             if (showAll) {
                 if (eventsAll.size() >= EVENTS_PER_PAGE) return false;
             } else {
-                if (now - resumeTime > LOOKBACK_SECONDS && eventsAll.size() >= EVENTS_PER_PAGE) return false;
+                if (resumeTime - packed.created_at() > LOOKBACK_SECONDS && eventsAll.size() >= EVENTS_PER_PAGE) return false;
                 if (eventsAll.size() > MAX_EVENTS_TO_SCAN) return false;
             }
 
