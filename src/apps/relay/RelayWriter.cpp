@@ -3,6 +3,14 @@
 #include "PluginEventSifter.h"
 #include "PrometheusMetrics.h"
 
+#include <chrono>
+
+
+namespace {
+constexpr std::size_t kWriteFlushMaxEvents = 500;
+constexpr auto kWriteFlushInterval = std::chrono::milliseconds(200);
+}
+
 
 void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
     PluginEventSifter writePolicyPlugin;
@@ -36,6 +44,76 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
         // Prepare messages
 
         std::vector<EventToWrite> newEvents;
+        auto lastFlush = std::chrono::steady_clock::now();
+
+        auto flushEvents = [&]() {
+            if (!newEvents.size()) return;
+
+            // Do write
+
+            try {
+                auto t0 = std::chrono::steady_clock::now();
+                auto txn = env.txn_rw();
+                writeEvents(txn, neFilterCache, newEvents);
+                txn.commit();
+                auto t1 = std::chrono::steady_clock::now();
+                auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                PrometheusMetrics::getInstance().writeTimeUs.inc(us);
+                PrometheusMetrics::getInstance().lastWriteBatchSize.set(newEvents.size());
+            } catch (std::exception &e) {
+                LE << "Error writing " << newEvents.size() << " events: " << e.what();
+
+                for (auto &newEvent : newEvents) {
+                    PackedEventView packed(newEvent.packedStr);
+                    auto eventIdHex = to_hex(packed.id());
+                    MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
+
+                    std::string message = "Write error: ";
+                    message += e.what();
+
+                    sendOKResponse(addEventMsg->connId, eventIdHex, false, message);
+                }
+
+                newEvents.clear();
+                return;
+            }
+
+            // Log
+
+            for (auto &newEvent : newEvents) {
+                PackedEventView packed(newEvent.packedStr);
+                auto eventIdHex = to_hex(packed.id());
+                std::string message;
+                bool written = false;
+
+                if (newEvent.status == EventWriteStatus::Written) {
+                    LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
+                    written = true;
+                    PrometheusMetrics::getInstance().writtenEventsTotal.inc();
+                    PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
+                } else if (newEvent.status == EventWriteStatus::Duplicate) {
+                    message = "duplicate: have this event";
+                    written = true;
+                    PrometheusMetrics::getInstance().dupEventsTotal.inc();
+                } else if (newEvent.status == EventWriteStatus::Replaced) {
+                    message = "replaced: have newer event";
+                    PrometheusMetrics::getInstance().rejectedEventsTotal.inc();
+                } else if (newEvent.status == EventWriteStatus::Deleted) {
+                    message = "deleted: user requested deletion";
+                    PrometheusMetrics::getInstance().rejectedEventsTotal.inc();
+                }
+
+                if (newEvent.status != EventWriteStatus::Written) {
+                    LI << "Rejected event. " << message << ", id=" << eventIdHex;
+                }
+
+                MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
+
+                sendOKResponse(addEventMsg->connId, eventIdHex, written, message);
+            }
+
+            newEvents.clear();
+        };
 
         for (auto &newMsg : newMsgs) {
             if (auto msg = std::get_if<MsgWriter::AddEvent>(&newMsg.msg)) {
@@ -55,71 +133,17 @@ void RelayServer::runWriter(ThreadPool<MsgWriter>::Thread &thr) {
 
                     sendOKResponse(msg->connId, eventIdHex, res == PluginEventSifterResult::ShadowReject, okMsg);
                 }
+
+                if (newEvents.size()) {
+                    auto now = std::chrono::steady_clock::now();
+                    if (newEvents.size() >= kWriteFlushMaxEvents || now - lastFlush >= kWriteFlushInterval) {
+                        flushEvents();
+                        lastFlush = now;
+                    }
+                }
             }
         }
 
-        if (!newEvents.size()) continue;
-
-        // Do write
-
-        try {
-            auto t0 = std::chrono::steady_clock::now();
-            auto txn = env.txn_rw();
-            writeEvents(txn, neFilterCache, newEvents);
-            txn.commit();
-            auto t1 = std::chrono::steady_clock::now();
-            auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-            PrometheusMetrics::getInstance().writeTimeUs.inc(us);
-            PrometheusMetrics::getInstance().lastWriteBatchSize.set(newEvents.size());
-        } catch (std::exception &e) {
-            LE << "Error writing " << newEvents.size() << " events: " << e.what();
-
-            for (auto &newEvent : newEvents) {
-                PackedEventView packed(newEvent.packedStr);
-                auto eventIdHex = to_hex(packed.id());
-                MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
-
-                std::string message = "Write error: ";
-                message += e.what();
-
-                sendOKResponse(addEventMsg->connId, eventIdHex, false, message);
-            }
-
-            continue;
-        }
-
-        // Log
-
-        for (auto &newEvent : newEvents) {
-            PackedEventView packed(newEvent.packedStr);
-            auto eventIdHex = to_hex(packed.id());
-            std::string message;
-            bool written = false;
-
-            if (newEvent.status == EventWriteStatus::Written) {
-                LI << "Inserted event. id=" << eventIdHex << " levId=" << newEvent.levId;
-                written = true;
-                PrometheusMetrics::getInstance().writtenEventsTotal.inc();
-                PROM_INC_EVENT_KIND(std::to_string(packed.kind()));
-            } else if (newEvent.status == EventWriteStatus::Duplicate) {
-                message = "duplicate: have this event";
-                written = true;
-                PrometheusMetrics::getInstance().dupEventsTotal.inc();
-            } else if (newEvent.status == EventWriteStatus::Replaced) {
-                message = "replaced: have newer event";
-                PrometheusMetrics::getInstance().rejectedEventsTotal.inc();
-            } else if (newEvent.status == EventWriteStatus::Deleted) {
-                message = "deleted: user requested deletion";
-                PrometheusMetrics::getInstance().rejectedEventsTotal.inc();
-            }
-
-            if (newEvent.status != EventWriteStatus::Written) {
-                LI << "Rejected event. " << message << ", id=" << eventIdHex;
-            }
-
-            MsgWriter::AddEvent *addEventMsg = static_cast<MsgWriter::AddEvent*>(newEvent.userData);
-
-            sendOKResponse(addEventMsg->connId, eventIdHex, written, message);
-        }
+        flushEvents();
     }
 }
