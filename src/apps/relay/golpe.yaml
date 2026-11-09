@@ -21,6 +21,9 @@ config:
   - name: relay__auth__serviceUrl
     desc: "External relay URL (beginning with wss://). Required in order to validate challenge responses."
     default: ""
+  - name: relay__auth__challengeOnWrite
+    desc: "Send a NIP-42 challenge to a connection the first time it publishes an event, so that a client refused by a write policy with auth-required can authenticate and try again"
+    default: false
   - name: relay__auth__restrictedReadKinds
     desc: "Comma-separated list of event kinds that require NIP-42 AUTH to read via REQ/COUNT/NEG-OPEN. Example for DMs: '4,1059'."
     default: "4, 1059"

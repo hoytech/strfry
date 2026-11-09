@@ -188,6 +188,19 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         }
     }
 
+    if (authedPubkey.isNull()) {
+        // not a protected event: the write policy plugin still gets to know who the connection is
+        auto it = rsctx.connIdToAuthSession.find(connId);
+
+        if (it != rsctx.connIdToAuthSession.end()) {
+            if (it->second.isAuthed()) authedPubkey = it->second.authed;
+        } else if (cfg().relay__auth__challengeOnWrite && cfg().relay__auth__enabled && !cfg().relay__auth__serviceUrl.empty()) {
+            auto challenge = rsctx.challengeGenerator.get();
+            rsctx.connIdToAuthSession.emplace(connId, challenge);
+            sendAuthChallenge(connId, challenge);
+        }
+    }
+
     {
         auto existing = lookupEventById(txn, packed.id());
         if (existing) {
