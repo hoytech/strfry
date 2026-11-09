@@ -25,6 +25,12 @@ node "./test/tests/readRestrictTest.js" \
   && pass "./test/tests/readRestrictTest.js" \
   || fail "./test/tests/readRestrictTest.js failed"
 
+info "running write policy plugin authed key tests..."
+
+node "./test/tests/pluginAuthedTest.js" \
+  && pass "./test/tests/pluginAuthedTest.js" \
+  || fail "./test/tests/pluginAuthedTest.js failed"
+
 info "Seeding events..."
 
 perl "./test/utils/generate-seed-data.pl" -o - | ./strfry --config ./test/cfgs/test.conf import --no-verify

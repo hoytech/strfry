@@ -188,6 +188,12 @@ void RelayServer::ingesterProcessEvent(lmdb::txn &txn, RelayServerCtx &rsctx, ui
         }
     }
 
+    if (authedPubkey.isNull()) {
+        // not a protected event: the write policy plugin still gets to know who the connection is
+        auto it = rsctx.connIdToAuthSession.find(connId);
+        if (it != rsctx.connIdToAuthSession.end() && it->second.isAuthed()) authedPubkey = it->second.authed;
+    }
+
     {
         auto existing = lookupEventById(txn, packed.id());
         if (existing) {
