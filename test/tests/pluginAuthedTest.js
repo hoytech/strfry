@@ -19,11 +19,16 @@ function expect(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-function relayConfig() {
-  return config(relayDbDir, relayPort).replace(
-    "numThreads {",
-    `writePolicy {\n    plugin = "${plugin}"\n  }\n\n  numThreads {`,
-  );
+function relayConfig(challengeOnWrite) {
+  return config(relayDbDir, relayPort)
+    .replace(
+      "numThreads {",
+      `writePolicy {\n    plugin = "${plugin}"\n  }\n\n  numThreads {`,
+    )
+    .replace(
+      "auth {",
+      `auth {\n    challengeOnWrite = ${challengeOnWrite}`,
+    );
 }
 
 function eventFrom(who) {
@@ -75,9 +80,33 @@ async function testAuthedKeyForAnotherAuthorsEvent({ client }) {
   pass("testAuthedKeyForAnotherAuthorsEvent");
 }
 
+async function testChallengeOnWrite({ client }) {
+  const msgs = await publish(client, eventFrom(1));
+  const challenge = msgs.find((m) => m[0] === "AUTH");
+  expect(challenge, `a write should get a challenge: ${JSON.stringify(msgs)}`);
+  expect(
+    msgs.at(-1)[3] === "blocked: authed=none",
+    `plugin should get no key before AUTH: ${JSON.stringify(msgs)}`,
+  );
+
+  const again = await publish(client, eventFrom(1));
+  expect(
+    !again.some((m) => m[0] === "AUTH"),
+    "a connection should be challenged once",
+  );
+
+  await authenticate(client, challenge[1], 0);
+  const after = await publish(client, eventFrom(1));
+  expect(
+    after.at(-1)[3] === `blocked: authed=${ids[0].pub}`,
+    `plugin should get the authenticated key: ${JSON.stringify(after)}`,
+  );
+  pass("testChallengeOnWrite");
+}
+
 async function main() {
   console.log("* write policy plugin authed key tests");
-  writeConfig(relayConfig(), relayCfgPath);
+  writeConfig(relayConfig(false), relayCfgPath);
 
   await runRelaySuite({
     relayConfigPath: relayCfgPath,
@@ -86,6 +115,17 @@ async function main() {
     tests: async ({ client }) => {
       await testNothingBeforeAuth({ client });
       await testAuthedKeyForAnotherAuthorsEvent({ client });
+    },
+  });
+
+  writeConfig(relayConfig(true), relayCfgPath);
+
+  await runRelaySuite({
+    relayConfigPath: relayCfgPath,
+    relayPort,
+    relayDbPath: relayDbDir,
+    tests: async ({ client }) => {
+      await testChallengeOnWrite({ client });
     },
   });
   console.log("All plugin authed key tests passed!");
