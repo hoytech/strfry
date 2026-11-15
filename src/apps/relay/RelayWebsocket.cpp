@@ -159,8 +159,10 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
         return std::string_view(rendered); // memory only valid until next call
     };
 
-    auto getNodeInfoHttpResponse = [ver = uint64_t(0), rendered = std::string("")](std::string host) mutable {
-        if (ver != cfg().version()) {
+    // Cache NodeInfo by config version *and* Host. Caching only on cfg().version()
+    // lets the first request's Host poison /.well-known/nodeinfo for later clients.
+    auto getNodeInfoHttpResponse = [ver = uint64_t(0), cachedHost = std::string(), rendered = std::string("")](std::string host) mutable {
+        if (ver != cfg().version() || cachedHost != host) {
             tao::json::value nodeinfo = tao::json::value({
                 { "links", tao::json::value::array({
                     tao::json::value({
@@ -171,6 +173,7 @@ void RelayServer::runWebsocket(ThreadPool<MsgWebsocket>::Thread &thr) {
             });
 
             rendered = preGenerateHttpResponse("application/json", tao::json::to_string(nodeinfo));
+            cachedHost = std::move(host);
             ver = cfg().version();
         }
 
